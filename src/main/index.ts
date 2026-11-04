@@ -1,0 +1,260 @@
+import { app, BrowserWindow, ipcMain, nativeTheme, shell } from "electron"
+import { basename, join } from "node:path"
+import { createHash } from "node:crypto"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { installMenu } from "./menu"
+import { loadSettings, saveSettings, type Settings } from "./settings"
+import type { ConnectionResult, FileText } from "../shared/bridge"
+import { restoreWindowState, trackWindowState } from "./window-state"
+import { Tunnel } from "./tunnel"
+import { AuthError, authedFetch, authRequired, forgetAuthMode, signIn, signOut, wsTicket } from "./auth"
+import { ensureRemoteBackend, stopRemoteBackend } from "./remote"
+import { installThemeIpc } from "./themes"
+
+// macOS only. Nothing here tries to be cross-platform.
+
+let mainWindow: BrowserWindow | null = null
+const tunnel = new Tunnel()
+
+// The official Hermes desktop app owns ~/Library/Application Support/Hermes.
+// Keep our own folder so we never share its settings or its single-instance lock.
+// The folder keeps its pre-Kitab name so existing settings survive the rename.
+app.setPath("userData", join(app.getPath("appData"), "hermes-desktop"))
+
+if (!app.requestSingleInstanceLock()) app.quit()
+
+// Dev only: lets tooling drive and inspect the renderer (Chrome DevTools Protocol on 127.0.0.1).
+if (!app.isPackaged) app.commandLine.appendSwitch("remote-debugging-port", "9339")
+
+function createWindow(): BrowserWindow {
+  const bounds = restoreWindowState()
+  const win = new BrowserWindow({
+    ...bounds,
+    minWidth: 880,
+    minHeight: 560,
+    show: false,
+    title: "Kitab",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 18 },
+    vibrancy: "sidebar",
+    visualEffectState: "followWindow",
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: join(import.meta.dirname, "../preload/index.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      spellcheck: true,
+      scrollBounce: true,
+    },
+  })
+
+  trackWindowState(win)
+  win.once("ready-to-show", () => win.show())
+
+  // Links open in the default browser, never inside the app.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: "deny" }
+  })
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url !== win.webContents.getURL()) {
+      event.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
+
+  // Three-finger swipe (when macOS "Swipe between pages" uses three fingers).
+  win.on("swipe", (_e, direction) => {
+    if (direction === "right") win.webContents.send("menu", "back")
+    if (direction === "left") win.webContents.send("menu", "forward")
+  })
+
+  const fullscreen = (value: boolean) => win.webContents.send("window:fullscreen", value)
+  win.on("enter-full-screen", () => fullscreen(true))
+  win.on("leave-full-screen", () => fullscreen(false))
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void win.loadFile(join(import.meta.dirname, "../renderer/index.html"))
+  }
+  return win
+}
+
+function send(channel: string, ...args: unknown[]) {
+  const win = BrowserWindow.getFocusedWindow() ?? mainWindow
+  win?.webContents.send(channel, ...args)
+}
+
+ipcMain.handle("settings:get", () => loadSettings())
+ipcMain.handle("settings:set", async (_e, next: Settings) => {
+  saveSettings(next)
+  current = null
+  return loadSettings()
+})
+
+// Two ways to reach Hermes:
+//  - SSH host (default): our own private `hermes serve` on that host, reached
+//    through a tunnel, authenticated with the session token we minted.
+//  - URL: an existing dashboard; if it requires login we sign in via the browser.
+type Target =
+  | { kind: "ssh"; host: string; label: string; baseUrl: string; token: string }
+  | { kind: "url"; server: string; label: string; baseUrl: string }
+
+let current: Target | null = null
+
+async function tokenWorks(baseUrl: string, token: string) {
+  try {
+    const res = await fetch(`${baseUrl}/api/sessions?limit=1`, { headers: { "x-hermes-session-token": token } })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+let resolving: Promise<Target> | null = null
+function resolveTarget(): Promise<Target> {
+  resolving ??= resolveTargetOnce().finally(() => (resolving = null))
+  return resolving
+}
+
+async function resolveTargetOnce(): Promise<Target> {
+  const s = loadSettings()
+  if (s.sshHost) {
+    const host = s.sshHost
+    console.log("[connect] ensuring backend on", host)
+    const backend = await ensureRemoteBackend(host, async (b) => {
+      const port = await tunnel.open(host, b.remotePort)
+      const ok = await tokenWorks(`http://127.0.0.1:${port}`, b.token)
+      console.log("[connect] reuse check pid", b.pid, "port", b.remotePort, ok ? "ok" : "rejected")
+      return ok
+    })
+    console.log("[connect] backend pid", backend.pid, "remote port", backend.remotePort)
+    const port = await tunnel.open(host, backend.remotePort)
+    current = { kind: "ssh", host, label: host, baseUrl: `http://127.0.0.1:${port}`, token: backend.token }
+  } else {
+    const url = s.baseUrl.replace(/\/+$/, "")
+    current = { kind: "url", server: url, label: new URL(url).host, baseUrl: url }
+  }
+  return current
+}
+
+const target = async () => current ?? resolveTarget()
+
+// Everything the renderer needs to open the gateway socket.
+ipcMain.handle("connection:open", async (): Promise<ConnectionResult> => {
+  try {
+    const t = await resolveTarget()
+    const status = (await (await fetch(`${t.baseUrl}/api/status`)).json()) as { version?: string }
+    const ws = new URL("/api/ws", t.baseUrl.replace(/^http/, "ws"))
+    if (t.kind === "ssh") {
+      ws.searchParams.set("token", t.token)
+    } else {
+      forgetAuthMode(t.baseUrl)
+      if (await authRequired(t.baseUrl)) ws.searchParams.set("ticket", await wsTicket(t.server, t.baseUrl))
+    }
+    console.log("[connect] ready:", t.baseUrl)
+    const files = t.kind === "ssh" ? { base: t.baseUrl, token: t.token } : undefined
+    return { ok: true, wsUrl: ws.toString(), label: t.label, version: status.version, files }
+  } catch (e) {
+    console.error("[connection]", e)
+    current = null
+    return {
+      ok: false,
+      needsSignIn: e instanceof AuthError && e.needsSignIn,
+      message: e instanceof Error ? e.message : String(e),
+    }
+  }
+})
+
+ipcMain.handle("auth:signIn", async () => {
+  const t = await target()
+  if (t.kind === "url") await signIn(t.server, t.baseUrl)
+})
+ipcMain.handle("auth:signOut", async () => {
+  const t = await target()
+  if (t.kind === "url") signOut(t.server)
+})
+
+// Stops our private backend on the SSH host; the next connect starts a fresh one.
+ipcMain.handle("server:restart", async () => {
+  const s = loadSettings()
+  tunnel.close()
+  current = null
+  if (s.sshHost) await stopRemoteBackend(s.sshHost)
+})
+
+// Authenticated REST reads (cron jobs, runs, session lists) go through here.
+ipcMain.handle("api:get", async (_e, path: string) => {
+  if (typeof path !== "string" || !path.startsWith("/api/")) throw new Error("Only /api/ paths")
+  const t = await target()
+  if (t.kind === "ssh") {
+    const res = await fetch(`${t.baseUrl}${path}`, { headers: { "x-hermes-session-token": t.token } })
+    if (!res.ok) throw new Error(`GET ${path} → ${res.status}`)
+    return res.json()
+  }
+  return (await authedFetch(t.server, t.baseUrl, path)).json()
+})
+
+async function download(path: string, name: string): Promise<Buffer> {
+  const t = await target()
+  const url = `/api/files/download?path=${encodeURIComponent(path)}`
+  const res =
+    t.kind === "ssh"
+      ? await fetch(`${t.baseUrl}${url}`, { headers: { "x-hermes-session-token": t.token } })
+      : await authedFetch(t.server, t.baseUrl, url)
+  if (!res.ok) throw new Error(`Couldn't download ${name} (${res.status})`)
+  return Buffer.from(await res.arrayBuffer())
+}
+
+// Quick Look for a file that lives on the server: download into a cache, then preview natively.
+ipcMain.handle("files:quickLook", async (e, path: string, name: string) => {
+  const data = await download(path, name)
+  const dir = join(app.getPath("userData"), "files", createHash("sha1").update(path).digest("hex").slice(0, 12))
+  mkdirSync(dir, { recursive: true })
+  const safeName = basename(name).replace(/[/\\]/g, "_") || "file"
+  const local = join(dir, safeName)
+  writeFileSync(local, data)
+  const win = BrowserWindow.fromWebContents(e.sender)
+  win?.previewFile(local, safeName)
+})
+
+// Text of a server file for the side panel. Binary files come back as text: null.
+const READ_LIMIT = 5 * 1024 * 1024
+ipcMain.handle("files:read", async (_e, path: string): Promise<FileText> => {
+  const data = await download(path, basename(path))
+  const head = data.subarray(0, 8192)
+  if (head.includes(0)) return { text: null, size: data.length, truncated: false }
+  const truncated = data.length > READ_LIMIT
+  return { text: data.subarray(0, READ_LIMIT).toString("utf8"), size: data.length, truncated }
+})
+
+ipcMain.handle("connection:close", () => tunnel.close())
+
+ipcMain.handle("window:isFullscreen", (e) => BrowserWindow.fromWebContents(e.sender)?.isFullScreen() ?? false)
+ipcMain.on("app:badge", (_e, count: number) => app.dock?.setBadge(count > 0 ? String(count) : ""))
+ipcMain.on("app:bounce", () => app.dock?.bounce("informational"))
+
+installThemeIpc()
+
+app.whenReady().then(() => {
+  nativeTheme.themeSource = "system"
+  installMenu(send)
+  mainWindow = createWindow()
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
+    else mainWindow?.show()
+  })
+})
+
+app.on("second-instance", () => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.focus()
+})
+
+// Mac convention: closing the window keeps the app alive in the dock.
+app.on("window-all-closed", () => {})
+app.on("before-quit", () => tunnel.close())
