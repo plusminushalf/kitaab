@@ -13,7 +13,8 @@
     "package": "electron-vite build && node scripts/package-mac.mjs",
     "install-app": "electron-vite build && node scripts/package-mac.mjs --install",
     "start": "node scripts/dev-electron.mjs && env -u ELECTRON_RUN_AS_NODE ELECTRON_EXEC_PATH=node_modules/.kitab-electron/Kitab.app/Contents/MacOS/Electron electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dmg": "electron-vite build && node scripts/package-mac.mjs && node scripts/make-dmg.mjs"
   },
   "packageManager": "pnpm@10.34.5",
   "dependencies": {
