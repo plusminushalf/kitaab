@@ -23,6 +23,7 @@ const api: HermesBridge = {
   },
   api: {
     get: <T,>(path: string): Promise<T> => ipcRenderer.invoke("api:get", path),
+    put: <T,>(path: string, body: unknown): Promise<T> => ipcRenderer.invoke("api:put", path, body),
   },
   window: {
     isFullscreen: (): Promise<boolean> => ipcRenderer.invoke("window:isFullscreen"),

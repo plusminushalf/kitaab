@@ -3,6 +3,7 @@ import { Gateway, type GatewayEvent, type ServerRequest } from "./gateway"
 import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, ToolCall } from "./model"
 import { store, type Backend } from "./store"
 import { humanSchedule } from "./schedule"
+import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
 import { setFileAccess } from "./server-files"
 import { splitUserText } from "./user-text"
 
@@ -59,7 +60,9 @@ function lastAssistant(threadId: Id, fn: (m: Message) => Message) {
       if (messages[i].role === "user") break
     }
     // No assistant message for this turn yet: start one.
-    messages.push(fn({ id: `a-${Date.now()}`, role: "assistant", text: "", createdAt: Date.now(), streaming: true }))
+    messages.push(
+      fn({ id: `a-${Date.now()}`, role: "assistant", text: "", createdAt: Date.now(), streaming: true, personalityId: speakerFor(threadId) }),
+    )
     return { ...d, messages }
   })
 }
@@ -147,7 +150,7 @@ const toThread = (p: string, s: any): Thread => ({
   projectId: p,
   title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
-  cast: [],
+  cast: threadCast(s.id),
   status: "idle",
   preview: s.preview,
 })
@@ -242,7 +245,7 @@ async function loadThreads(p: string) {
         projectId: p,
         title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
         updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
-        cast: [],
+        cast: threadCast(s.id),
         // `is_active` only means "recently active". Live events decide "working".
         status: "idle",
         preview: s.preview,
@@ -254,7 +257,7 @@ async function loadThreads(p: string) {
         projectId: p,
         title: v.title,
         updatedAt: v.updatedAt,
-        cast: [],
+        cast: threadCast(id),
         status: "idle",
         fromRun: { routineId: v.routineId, runId: id },
       }),
@@ -276,16 +279,6 @@ async function loadRoutines() {
   const res = await api<any[] | { jobs: any[] }>(`/api/cron/jobs?profile=all`)
   const jobs = Array.isArray(res) ? res : res.jobs
   store.set({ routines: jobs.map(toRoutine) })
-}
-
-async function loadPersonality(p: string) {
-  try {
-    const r = await gw.call<{ value?: string }>("config.get", { key: "personality", profile: p })
-    const name = typeof r.value === "string" && r.value && r.value !== "none" ? r.value : null
-    store.set({ personalities: name ? [{ id: name, name, description: "Active personality for this project" }] : [] })
-  } catch {
-    store.set({ personalities: [] })
-  }
 }
 
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -315,7 +308,16 @@ function onEvent(e: GatewayEvent) {
         ...d,
         messages: [
           ...d.messages,
-          { id: `live-${e.seq ?? Date.now()}`, role: "assistant", text: "", tools: [], createdAt: Date.now(), startedAt: Date.now(), streaming: true },
+          {
+            id: `live-${e.seq ?? Date.now()}`,
+            role: "assistant",
+            text: "",
+            tools: [],
+            createdAt: Date.now(),
+            startedAt: Date.now(),
+            streaming: true,
+            personalityId: speakerFor(threadId),
+          },
         ],
       }))
       break
@@ -428,8 +430,9 @@ async function ensureRuntime(threadId: Id): Promise<string> {
   runtimeOf.set(threadId, r.session_id)
   storedOf.set(r.session_id, threadId)
   rememberModel(threadId, r.info)
+  noteSession(r.session_id, r.info)
 
-  const messages = mapTranscript(r.messages ?? [])
+  const messages = applySpeakers(threadId, mapTranscript(r.messages ?? []))
   if (r.running && r.inflight?.assistant) {
     messages.push({ id: "inflight", role: "assistant", text: r.inflight.assistant, createdAt: Date.now(), streaming: true })
   }
@@ -467,6 +470,7 @@ gw.onClose = (reason) => {
   runtimeOf.clear()
   storedOf.clear()
   openRequests.clear()
+  forgetSessions()
   store.set({ connection: { state: "error", message: `Disconnected: ${reason}` }, details: {} })
   scheduleReconnect()
 }
@@ -502,14 +506,27 @@ async function connectOnce() {
   const projects = profiles.map((p) => ({
     id: p.name as string,
     name: (p.display_name as string) || (p.name === "default" ? "Default" : (p.name as string)),
+    personalityIds: castOf(p),
   }))
-  store.set({ projects })
+  store.set({ projects, personalities: readLibrary(profiles) })
   let saved: string | null = null
   try {
     saved = localStorage.getItem("projectId")
   } catch {}
   const pick = projects.find((p) => p.id === saved)?.id ?? projects.find((p) => p.id === "default")?.id ?? projects[0]?.id
   if (pick) await backend.selectProject(pick)
+}
+
+/** Re-reads the library and each project's cast (they can change from another Mac). */
+async function refreshPersonalities() {
+  const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
+  store.set((s) => ({
+    personalities: readLibrary(profiles),
+    projects: s.projects.map((pr) => {
+      const row = profiles.find((p) => p.name === pr.id)
+      return row ? { ...pr, personalityIds: castOf(row) } : pr
+    }),
+  }))
 }
 
 /** Threads marked done this session, newest last, for ⌘Z. */
@@ -564,7 +581,7 @@ export const backend: Backend = {
       loadDone(id).catch(() => {}),
       loadModels(id).catch(() => {}),
       loadRoutines().catch((e) => toast.error(`Routines: ${e.message ?? e}`)),
-      loadPersonality(id),
+      changed ? refreshPersonalities().catch(() => {}) : undefined,
     ])
   },
 
@@ -589,6 +606,7 @@ export const backend: Backend = {
       runtimeOf.set(id, runtimeId)
       storedOf.set(runtimeId, id)
       rememberModel(id, r.info)
+      noteSession(runtimeId, r.info)
       const draft = store.get().draftModel
       if (draft) {
         await applyModel(runtimeId, draft).catch((e) => toast.error(`Model: ${e.message ?? e}`))
@@ -623,6 +641,10 @@ export const backend: Backend = {
     if (run) rememberRunThread(threadIdFinal, { ...run, updatedAt: Date.now() })
 
     try {
+      // Who answers: the @mentioned personality, else the thread's host.
+      const projectId = run?.profile ?? store.get().threads.find((t) => t.id === threadIdFinal)?.projectId ?? profile()
+      const cast = await prepareTurn(threadIdFinal, runtimeId, projectId, text)
+      patchThread(threadIdFinal, { cast })
       await attach(runtimeId, attachments)
       await gw.call("prompt.submit", { session_id: runtimeId, text })
     } catch (e) {

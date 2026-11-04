@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type PointerEvent } from "react"
+import { useEffect, useMemo, useState, type DragEvent, type PointerEvent } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,6 +17,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId))
   const detail = useStore((s) => (threadId ? s.details[threadId] : undefined))
   const personalities = useStore((s) => s.personalities)
+  const projectId = useStore((s) => thread?.projectId ?? s.projectId)
+  const castIds = useStore((s) => s.projects.find((p) => p.id === projectId)?.personalityIds)
+  const mentionables = useMemo(() => personalities.filter((p) => castIds?.includes(p.id)), [personalities, castIds])
+  const host = thread?.cast.length ? personalities.find((p) => p.id === thread.cast[0]) : undefined
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [dragging, setDragging] = useState(false)
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
@@ -105,7 +109,16 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         <div className="mx-auto w-full max-w-chat px-6 pb-3">
           {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
           <Composer
-            placeholder={threadId ? "Reply…" : "Ask anything…"}
+            placeholder={
+              host
+                ? `Reply to ${host.name}…`
+                : mentionables.length
+                  ? `${threadId ? "Reply" : "Ask anything"}, or type @ to bring in a personality…`
+                  : threadId
+                    ? "Reply…"
+                    : "Ask anything…"
+            }
+            mentionables={mentionables}
             busy={busy}
             drafts={drafts}
             setDrafts={setDrafts}

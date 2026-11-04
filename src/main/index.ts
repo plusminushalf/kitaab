@@ -197,6 +197,23 @@ ipcMain.handle("api:get", async (_e, path: string) => {
   return (await authedFetch(t.server, t.baseUrl, path)).json()
 })
 
+// Authenticated REST writes. Only config saves for now, so the allowlist stays tight.
+const WRITABLE = /^\/api\/config(\?|$)/
+ipcMain.handle("api:put", async (_e, path: string, body: unknown) => {
+  if (typeof path !== "string" || !WRITABLE.test(path)) throw new Error(`Writing ${path} isn't allowed`)
+  const t = await target()
+  const init: RequestInit = { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+  if (t.kind === "ssh") {
+    const res = await fetch(`${t.baseUrl}${path}`, {
+      ...init,
+      headers: { ...(init.headers as Record<string, string>), "x-hermes-session-token": t.token },
+    })
+    if (!res.ok) throw new Error(`PUT ${path} → ${res.status}`)
+    return res.json()
+  }
+  return (await authedFetch(t.server, t.baseUrl, path, init)).json()
+})
+
 async function download(path: string, name: string): Promise<Buffer> {
   const t = await target()
   const url = `/api/files/download?path=${encodeURIComponent(path)}`

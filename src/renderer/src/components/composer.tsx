@@ -24,6 +24,20 @@ function readHeight(): number {
   }
 }
 
+/** Someone the composer can @mention. The token typed is `@id`. */
+export type Mentionable = { id: string; name: string; description?: string }
+
+type MentionState = { start: number; end: number; query: string; index: number }
+
+/** The `@word` the caret is in, if any. */
+function mentionAt(text: string, caret: number): Omit<MentionState, "index"> | null {
+  const m = /(^|[\s(])@([a-z0-9-]*)$/i.exec(text.slice(0, caret))
+  if (!m) return null
+  const start = caret - m[2].length - 1
+  const rest = /^[a-z0-9-]*/i.exec(text.slice(caret))?.[0] ?? ""
+  return { start, end: caret + rest.length, query: m[2].toLowerCase() }
+}
+
 export function Composer({
   placeholder,
   busy,
@@ -33,6 +47,7 @@ export function Composer({
   onStop,
   autoFocus,
   extras,
+  mentionables = [],
 }: {
   placeholder: string
   busy?: boolean
@@ -43,11 +58,39 @@ export function Composer({
   autoFocus?: boolean
   /** Controls shown in the bottom bar before the send button (e.g. the model picker). */
   extras?: React.ReactNode
+  /** Typing @ offers these. */
+  mentionables?: Mentionable[]
 }) {
   const [text, setText] = useState("")
   const [minHeight, setMinHeight] = useState(readHeight)
+  const [mention, setMention] = useState<MentionState | null>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+
+  const options = mention
+    ? mentionables.filter(
+        (p) => p.id.startsWith(mention.query) || p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(mention.query)),
+      )
+    : []
+  const choosing = mention !== null && options.length > 0
+
+  const trackMention = (el: HTMLTextAreaElement) => {
+    const found = mentionables.length ? mentionAt(el.value, el.selectionStart) : null
+    setMention((prev) => (found ? { ...found, index: prev?.query === found.query ? prev.index : 0 } : null))
+  }
+
+  const pick = (p: Mentionable) => {
+    if (!mention) return
+    const insert = `@${p.id} `
+    const next = text.slice(0, mention.start) + insert + text.slice(mention.end).replace(/^ /, "")
+    const caret = mention.start + insert.length
+    setText(next)
+    setMention(null)
+    requestAnimationFrame(() => {
+      input.current?.focus()
+      input.current?.setSelectionRange(caret, caret)
+    })
+  }
 
   useEffect(() => {
     if (autoFocus) input.current?.focus()
@@ -59,6 +102,7 @@ export function Composer({
     if (!canSend) return
     onSend(text.trim(), drafts)
     setText("")
+    setMention(null)
   }
 
   const saveHeight = (h: number) => {
@@ -92,7 +136,32 @@ export function Composer({
   const stopping = busy && onStop && !canSend
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="relative flex flex-col items-center gap-1.5">
+      {choosing && (
+        <div
+          role="listbox"
+          aria-label="Personalities"
+          className="absolute inset-x-0 bottom-full z-20 mb-2 flex max-h-64 flex-col overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
+          {options.map((p, i) => (
+            <button
+              key={p.id}
+              role="option"
+              aria-selected={i === Math.min(mention.index, options.length - 1)}
+              className="flex items-baseline gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pick(p)
+              }}
+              onMouseEnter={() => setMention((m) => (m ? { ...m, index: i } : m))}
+            >
+              <span className="font-medium">{p.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">@{p.id}</span>
+              {p.description && <span className="min-w-0 truncate text-xs text-muted-foreground">{p.description}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className="flex w-full cursor-text flex-col gap-2 rounded-2xl border border-input/60 bg-composer p-3 shadow-lg shadow-black/5 backdrop-blur-xl dark:shadow-black/20"
         onClick={(e) => {
@@ -113,8 +182,33 @@ export function Composer({
           placeholder={placeholder}
           style={{ minHeight }}
           className="field-sizing-content max-h-[40vh] w-full resize-none bg-transparent px-1 font-composer text-prompt leading-relaxed outline-none placeholder:text-placeholder"
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            trackMention(e.target)
+          }}
+          onSelect={(e) => trackMention(e.currentTarget)}
+          onBlur={() => setMention(null)}
           onKeyDown={(e) => {
+            if (choosing && !e.nativeEvent.isComposing) {
+              const n = options.length
+              const index = Math.min(mention.index, n - 1)
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault()
+                setMention({ ...mention, index: (index + (e.key === "ArrowDown" ? 1 : n - 1)) % n })
+                return
+              }
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault()
+                pick(options[index])
+                return
+              }
+              if (e.key === "Escape") {
+                e.preventDefault()
+                e.stopPropagation()
+                setMention(null)
+                return
+              }
+            }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               send()

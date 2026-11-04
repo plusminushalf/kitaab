@@ -7,12 +7,19 @@ export type Id = string
 export type Project = {
   id: Id
   name: string
+  /** Library personalities added to this project (its cast). */
+  personalityIds?: Id[]
 }
 
+/** A named character from your library. Behaviour only: it never keeps project facts. */
 export type Personality = {
   id: Id
   name: string
+  /** One line for people: what this personality is for. */
   description?: string
+  /** Who it is and how it works: identity, tone, craft. */
+  instructions: string
+  updatedAt?: number
 }
 
 export type Thread = {
