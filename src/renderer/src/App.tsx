@@ -56,6 +56,21 @@ function Shell() {
     }
   }, [])
 
+  // ⌘1–⌘9 switch to the nth project, in the project picker's order.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.shiftKey || e.altKey || e.ctrlKey) return
+      const n = /^Digit([1-9])$/.exec(e.code)?.[1]
+      if (!n) return
+      e.preventDefault()
+      const { projects, projectId } = store.get()
+      const target = projects[Number(n) - 1]
+      if (target && target.id !== projectId) void backend.selectProject(target.id)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
   useEffect(
     () =>
       window.hermes.onMenu((command) => {

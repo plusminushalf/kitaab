@@ -62,9 +62,10 @@ export function installMenu(send: Send) {
         { label: "Back", accelerator: "Cmd+[", click: cmd("back") },
         { label: "Forward", accelerator: "Cmd+]", click: cmd("forward") },
         { type: "separator" },
-        { label: "Threads", accelerator: "Cmd+1", click: cmd("go-threads") },
-        { label: "Routines", accelerator: "Cmd+2", click: cmd("go-routines") },
-        { label: "Personalities", accelerator: "Cmd+3", click: cmd("go-personalities") },
+        // ⌘1–⌘9 switch projects (handled in the renderer), so the views sit on ⌥⌘.
+        { label: "Threads", accelerator: "Cmd+Alt+1", click: cmd("go-threads") },
+        { label: "Routines", accelerator: "Cmd+Alt+2", click: cmd("go-routines") },
+        { label: "Personalities", accelerator: "Cmd+Alt+3", click: cmd("go-personalities") },
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },
