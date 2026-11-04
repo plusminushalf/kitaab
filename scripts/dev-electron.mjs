@@ -15,6 +15,9 @@ const root = join(import.meta.dirname, "..")
 const icon = join(root, "resources/icon.icns")
 const require = createRequire(import.meta.url)
 const srcApp = join(dirname(require.resolve("electron")), "dist/Electron.app")
+// Electron 45+ has no postinstall that downloads the binary; requiring the
+// package downloads it if it is missing (e.g. after a fresh CI install).
+require("electron")
 const outDir = join(root, "node_modules/.kitab-electron")
 const app = join(outDir, `${NAME}.app`)
 const stampFile = join(outDir, "stamp")

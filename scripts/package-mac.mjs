@@ -13,6 +13,9 @@ const root = join(import.meta.dirname, "..")
 const require = createRequire(import.meta.url)
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const srcApp = join(dirname(require.resolve("electron")), "dist/Electron.app")
+// Electron 45+ has no postinstall that downloads the binary; requiring the
+// package downloads it if it is missing (e.g. after a fresh CI install).
+require("electron")
 const outDir = join(root, "dist")
 const app = join(outDir, `${NAME}.app`)
 
