@@ -287,8 +287,129 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function RunRow({ run }: { run: Run }) {
+/** Every run of every routine in the project, newest first, grouped by day. */
+export function AllRunsView() {
+  const all = useStore((s) => s.routines)
+  const projectId = useStore((s) => s.projectId)
+  const runsByRoutine = useStore((s) => s.runs)
+  const routines = useMemo(() => all.filter((r) => r.projectId === projectId), [all, projectId])
+  const [loading, setLoading] = useState(false)
+
+  const ids = routines.map((r) => r.id).join(",")
+  useEffect(() => {
+    if (!ids) return
+    setLoading(true)
+    Promise.allSettled(ids.split(",").map((id) => backend.loadRuns(id)))
+      .then((results) => {
+        const failed = results.filter((r) => r.status === "rejected").length
+        if (failed) toast.error(`Couldn't load runs for ${plural(failed, "routine")}`)
+      })
+      .finally(() => setLoading(false))
+  }, [ids])
+
+  const days = useMemo(() => {
+    const names = new Map(routines.map((r) => [r.id, r.name]))
+    const runs = routines
+      .flatMap((r) => runsByRoutine[r.id] ?? [])
+      .sort((a, b) => b.startedAt - a.startedAt)
+    const groups: { day: string; runs: (Run & { routineName: string })[] }[] = []
+    for (const run of runs) {
+      const day = dayLabel(run.startedAt)
+      const last = groups.at(-1)
+      const row = { ...run, routineName: names.get(run.routineId) ?? "Routine" }
+      if (last?.day === day) last.runs.push(row)
+      else groups.push({ day, runs: [row] })
+    }
+    return groups
+  }, [routines, runsByRoutine])
+
+  const total = days.reduce((n, d) => n + d.runs.length, 0)
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <PageHeader
+        title={<Breadcrumb items={[{ label: "Routines", onClick: () => store.go({ kind: "routines" }) }, { label: "All runs" }]} />}
+        subtitle={total > 0 && plural(total, "run")}
+      >
+        {loading && total > 0 && <Spinner className="size-3.5 text-muted-foreground" />}
+      </PageHeader>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        {total === 0 ? (
+          loading ? (
+            <div className="flex h-full items-center justify-center">
+              <Spinner />
+            </div>
+          ) : (
+            <Empty className="h-full">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Repeat />
+                </EmptyMedia>
+                <EmptyTitle>No runs yet</EmptyTitle>
+                <EmptyDescription>Each time a routine runs, its report shows up here.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )
+        ) : (
+          <div className="mx-auto w-full max-w-chat px-6 py-6">
+            {days.map((d) => (
+              <RowGroup key={d.day} title={d.day} count={d.runs.length}>
+                {d.runs.map((run) => (
+                  <RunRow key={run.id} run={run} routineName={run.routineName} />
+                ))}
+              </RowGroup>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function dayLabel(ms: number) {
+  const d = new Date(ms)
+  const today = new Date()
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  if (d.toDateString() === today.toDateString()) return "Today"
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
+  return d.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  })
+}
+
+/** A run. With `routineName` (the all-runs list) the routine leads and the time moves to the end. */
+function RunRow({ run, routineName }: { run: Run; routineName?: string }) {
   const summary = firstLine(run.report)
+  if (routineName)
+    return (
+      <button
+        onClick={() => store.go({ kind: "run", routineId: run.routineId, runId: run.id })}
+        className="group flex w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:bg-accent/50"
+      >
+        <StatusMark state={run.status} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{routineName}</div>
+          {(run.status === "running" || summary || run.report === "") && (
+            <div className={cn("truncate text-xs", summary ? "text-muted-foreground" : "text-muted-foreground/60")}>
+              {run.status === "running" ? "Running…" : summary || "No report"}
+            </div>
+          )}
+        </div>
+        {run.threadId && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            <MessageSquare className="size-3" />
+            Thread
+          </span>
+        )}
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums" title={dateTime(run.startedAt)}>
+          {new Date(run.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-transparent transition-colors group-hover:text-muted-foreground" />
+      </button>
+    )
   return (
     <button
       onClick={() => store.go({ kind: "run", routineId: run.routineId, runId: run.id })}

@@ -47,7 +47,7 @@ export function ProjectPicker({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger render={render}>{children}</PopoverTrigger>
-      <PopoverContent align={align} className="w-72 gap-0 overflow-hidden p-0">
+      <PopoverContent align={align} className="w-72 gap-0 overflow-hidden p-0" data-over-vibrancy>
         <div className="flex items-center gap-2 border-b px-3">
           <Search className="size-3.5 shrink-0 text-muted-foreground" />
           <input

@@ -190,6 +190,27 @@ body {
   background: color-mix(in oklab, var(--background) var(--glass, 100%), transparent);
 }
 
+/* Chromium can only blur an opaque backdrop, and Kitab's own theme leaves the sidebar
+   see-through for the window's vibrancy, so nothing over it can be frosted: menus
+   opened from the sidebar (marked data-over-vibrancy) go solid instead of showing
+   the rows behind them sharp. */
+:root[data-native="true"] [data-over-vibrancy] {
+  background: var(--app-theme-surface-overlay);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Same reason for dialogs: their overlay paints the (expanded) sidebar column solid,
+   at the dimmed color it would have shown, so the dialog's glass has an opaque
+   backdrop to blur everywhere. */
+:root[data-native="true"]:has([data-slot="sidebar"][data-state="expanded"]) [data-slot="dialog-overlay"] {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--background) 64%, var(--app-theme-surface-overlay)) 16rem,
+    transparent 16rem
+  );
+}
+
 /* Base UI positioners set will-change: transform, which makes them a "backdrop root":
    the popup inside could then only blur its own (empty) positioner. Drop the hint so
    the blur reaches the app behind. */

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, ListFilter, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
@@ -91,7 +92,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <ListFilter />
               </DropdownMenuTrigger>
             </IconTip>
-            <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuContent align="end" className="min-w-44" data-over-vibrancy>
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Sort threads by</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={sort} onValueChange={(v) => setSort(v as Sort)}>
@@ -135,35 +136,40 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           <SidebarGroupContent>
             <SidebarMenu>
               {threads.map((t) => (
-                  <SidebarMenuItem key={t.id}>
+                <HoverCard key={t.id}>
+                  <HoverCardTrigger render={<SidebarMenuItem />}>
                     <SidebarMenuButton
                       isActive={t.id === activeThreadId}
                       onClick={() => store.go({ kind: "thread", threadId: t.id })}
-                      title={t.title}
-                      // No space is reserved for the done tick: it floats over the status on hover.
                       className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
                     >
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                      {t.status === "idle" ? (
-                        <span className="ml-auto shrink-0 text-xs text-sidebar-muted-foreground tabular-nums">
-                          {relativeTime(t.updatedAt)}
-                        </span>
-                      ) : (
-                        <StatusPill status={t.status} className="ml-auto" />
-                      )}
+                      {/* On hover the done tick takes this spot, so the status steps aside
+                          (keeping its width, so the title doesn't reflow). */}
+                      <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
+                        {t.status === "idle" ? (
+                          <span className="text-xs text-sidebar-muted-foreground tabular-nums">
+                            {relativeTime(t.updatedAt)}
+                          </span>
+                        ) : (
+                          <StatusPill status={t.status} />
+                        )}
+                      </span>
                     </SidebarMenuButton>
                     <SidebarMenuAction
-                      showOnHover
-                      // Layered over the row's end; a fading backdrop covers the status so nothing reflows.
-                      className="z-10 before:pointer-events-none before:absolute before:inset-y-0 before:right-0 before:-left-12 before:-z-10 before:rounded-r-md before:bg-linear-to-l before:from-sidebar-accent before:via-sidebar-accent/90 before:to-sidebar-accent/0"
+                      className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
                       title="Mark as done (⇧⌘S)"
                       aria-label={`Mark “${t.title}” as done`}
                       onClick={() => void backend.setDone(t.id, true)}
                     >
                       <Check />
                     </SidebarMenuAction>
-                  </SidebarMenuItem>
-                ))}
+                  </HoverCardTrigger>
+                  <HoverCardContent>
+                    <ThreadCard thread={t} projectName={project?.name} />
+                  </HoverCardContent>
+                </HoverCard>
+              ))}
               {threads.length === 0 && connection.state === "connected" && (
                 <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">
                   {query.trim() ? "No matching threads." : "No threads yet."}
@@ -250,12 +256,25 @@ function LatestRuns({ projectId, activeRoutineId }: { projectId: Id | null; acti
     [all, projectId],
   )
 
+  const viewingAll = useStore((s) => s.view.kind === "runs")
+
   // Pinned to the bottom with the nav below it, so the thread list keeps the space above.
   if (recent.length === 0) return <div className="mt-auto" />
 
   return (
     <SidebarGroup className="mt-auto">
-      <SidebarGroupLabel className="text-sidebar-muted-foreground">Latest runs</SidebarGroupLabel>
+      <SidebarGroupLabel className="pr-1 text-sidebar-muted-foreground">
+        <span className="flex-1">Latest runs</span>
+        <button
+          onClick={() => store.go({ kind: "runs" })}
+          className={
+            "rounded px-1.5 py-0.5 text-xs font-normal outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring " +
+            (viewingAll ? "text-sidebar-foreground" : "text-sidebar-muted-foreground")
+          }
+        >
+          View all
+        </button>
+      </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
           {recent.map((r) => (
@@ -291,6 +310,52 @@ async function openLatestRun(r: Routine) {
   const runs = store.get().runs[r.id] ?? []
   const latest = runs.reduce<(typeof runs)[number] | undefined>((a, b) => (!a || b.startedAt > a.startedAt ? b : a), undefined)
   store.go(latest ? { kind: "run", routineId: r.id, runId: latest.id } : { kind: "routine", routineId: r.id })
+}
+
+/** What a thread row's hover card shows: the full title, then where and who, then the latest words. */
+function ThreadCard({ thread, projectName }: { thread: Thread; projectName?: string }) {
+  const personalities = useStore((s) => s.personalities)
+  const routines = useStore((s) => s.routines)
+  const cast = thread.cast
+    .map((id) => personalities.find((p) => p.id === id)?.name)
+    .filter((n): n is string => !!n)
+  const routine = thread.fromRun && routines.find((r) => r.id === thread.fromRun!.routineId)
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="font-medium leading-snug break-words">{thread.title}</div>
+      <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+        {projectName && (
+          <div className="flex items-center gap-2">
+            <ProjectBadge name={projectName} className="size-4 rounded text-[0.5rem]" />
+            <span className="truncate">{projectName}</span>
+          </div>
+        )}
+        {cast.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Users className="size-3.5 shrink-0" />
+            <span className="truncate">{cast.join(", ")}</span>
+          </div>
+        )}
+        {routine && (
+          <div className="flex items-center gap-2">
+            <Repeat className="size-3.5 shrink-0" />
+            <span className="truncate">From {routine.name}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Clock className="size-3.5 shrink-0" />
+          <span className="truncate">Updated {relativeTime(thread.updatedAt)}</span>
+          {thread.status !== "idle" && <StatusPill status={thread.status} className="ml-auto" />}
+        </div>
+      </div>
+      {thread.preview && (
+        <p className="line-clamp-3 border-t border-foreground/10 pt-2.5 text-xs leading-relaxed text-muted-foreground">
+          {thread.preview}
+        </p>
+      )}
+    </div>
+  )
 }
 
 function IconTip({ label, children }: { label: string; children: React.ReactElement }) {

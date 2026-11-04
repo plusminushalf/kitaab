@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/app-sidebar"
 import { PersonalitiesView } from "@/components/personalities-view"
 import { DoneView } from "@/components/done-view"
-import { RoutinesView, RoutineView, RunView } from "@/components/routine-views"
+import { AllRunsView, RoutinesView, RoutineView, RunView } from "@/components/routine-views"
 import { SettingsOverlay } from "@/components/settings/settings-page"
 import { ThemeEditor } from "@/components/settings/theme-editor"
 import { appearance, useAppearance } from "@/lib/appearance/store"
@@ -77,6 +77,7 @@ function Shell() {
         {blocked && <ConnectionView onOpenSettings={() => openSettings()} />}
         {!blocked && view.kind === "thread" && <ThreadView key={view.threadId ?? "new"} threadId={view.threadId} />}
         {!blocked && view.kind === "routines" && <RoutinesView />}
+        {!blocked && view.kind === "runs" && <AllRunsView />}
         {!blocked && view.kind === "routine" && <RoutineView routineId={view.routineId} />}
         {!blocked && view.kind === "run" && <RunView routineId={view.routineId} runId={view.runId} />}
         {!blocked && view.kind === "personalities" && <PersonalitiesView />}

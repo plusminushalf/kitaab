@@ -20,6 +20,7 @@ export type ModelProvider = { slug: string; name: string; models: string[]; caps
 export type View =
   | { kind: "thread"; threadId: Id | null }
   | { kind: "routines" }
+  | { kind: "runs" }
   | { kind: "routine"; routineId: Id }
   | { kind: "run"; routineId: Id; runId: Id }
   | { kind: "personalities" }
