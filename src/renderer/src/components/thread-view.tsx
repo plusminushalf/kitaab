@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type DragEvent, type PointerEvent } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CornerDownLeft } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { ModelPicker } from "@/components/model-picker"
 import { Composer, fileToDraft, type Draft } from "@/components/composer"
@@ -195,29 +197,78 @@ function SidePanel({ file, onClose }: { file: Attachment; onClose: () => void })
 }
 
 function QuestionCard({ threadId, question }: { threadId: Id; question: PendingQuestion }) {
-  const choices = question.choices?.length ? question.choices : ["Allow", "Deny"]
-  return (
-    <Card size="sm" className="mb-3">
-      <CardHeader>
-        <CardTitle>{question.title}</CardTitle>
-        {question.detail && (
-          <CardDescription className="selectable font-mono text-xs whitespace-pre-wrap">
-            {question.detail}
-          </CardDescription>
-        )}
-        <CardAction className="flex gap-2">
+  const [custom, setCustom] = useState("")
+  const answer = (value: string) => void backend.answer(threadId, question, value)
+
+  if (question.kind === "approval") {
+    const choices = question.choices?.length ? question.choices : ["Allow", "Deny"]
+    return (
+      <Card size="sm" className="mb-3">
+        <CardHeader>
+          <CardTitle className="selectable">{question.title}</CardTitle>
+          {question.detail && (
+            <CardDescription className="selectable font-mono text-xs break-all whitespace-pre-wrap">
+              {question.detail}
+            </CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
           {choices.map((c, i) => (
-            <Button
-              key={c}
-              size="sm"
-              variant={i === 0 ? "default" : "outline"}
-              onClick={() => void backend.answer(threadId, question, c)}
-            >
+            <Button key={c} size="sm" variant={i === 0 ? "default" : "outline"} onClick={() => answer(c)}>
               {c}
             </Button>
           ))}
-        </CardAction>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const choices = question.choices ?? []
+  const submitCustom = () => {
+    const v = custom.trim()
+    if (v) answer(v)
+  }
+  return (
+    <Card size="sm" className="mb-3">
+      <CardHeader>
+        <CardTitle className="selectable leading-snug">{question.title}</CardTitle>
+        {question.detail && (
+          <CardDescription className="selectable whitespace-pre-wrap">{question.detail}</CardDescription>
+        )}
       </CardHeader>
+      <CardContent className="flex flex-col gap-1.5">
+        {choices.map((c, i) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => answer(c)}
+            className="group flex w-full items-start gap-2.5 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors hover:border-ring/60 hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground tabular-nums group-hover:text-foreground">
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1 break-words">{c}</span>
+          </button>
+        ))}
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            submitCustom()
+          }}
+        >
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder={choices.length ? "Or type your own answer…" : "Type your answer…"}
+            aria-label="Your own answer"
+          />
+          <Button type="submit" size="sm" disabled={!custom.trim()}>
+            <CornerDownLeft />
+            Send
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   )
 }

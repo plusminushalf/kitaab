@@ -632,8 +632,8 @@ export const backend: Backend = {
     }
     const threadIdFinal = id
 
-    // A clarify question without fixed choices is answered by the next message.
-    const openClarify = store.get().details[threadIdFinal]?.pending.find((x) => x.kind === "clarify" && !x.choices?.length)
+    // An open clarify question is answered by the next message (a custom answer when it has choices).
+    const openClarify = store.get().details[threadIdFinal]?.pending.find((x) => x.kind === "clarify")
     if (openClarify && text) {
       await backend.answer(threadIdFinal, openClarify, text)
       return threadIdFinal
