@@ -6,6 +6,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
@@ -25,10 +26,11 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
+import { StatusMark } from "@/components/routine-views"
 import { backend } from "@/lib/backend"
 import { store, useStore } from "@/lib/store"
 import { relativeTime } from "@/lib/format"
-import type { Thread } from "@/lib/model"
+import type { Id, Routine, Thread } from "@/lib/model"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"
@@ -171,7 +173,9 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto">
+        <LatestRuns projectId={projectId} activeRoutineId={view.kind === "run" ? view.routineId : null} />
+
+        <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton isActive={inRoutines} onClick={() => store.go({ kind: "routines" })}>
@@ -230,6 +234,63 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       </SidebarFooter>
     </Sidebar>
   )
+}
+
+const LATEST_RUNS = 4
+
+/** The project's most recent routine runs, newest first. A row opens that run's report. */
+function LatestRuns({ projectId, activeRoutineId }: { projectId: Id | null; activeRoutineId: Id | null }) {
+  const all = useStore((s) => s.routines)
+  const recent = useMemo(
+    () =>
+      all
+        .filter((r) => r.projectId === projectId && (r.running || r.lastRunAt))
+        .sort((a, b) => Number(!!b.running) - Number(!!a.running) || (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0))
+        .slice(0, LATEST_RUNS),
+    [all, projectId],
+  )
+
+  // Pinned to the bottom with the nav below it, so the thread list keeps the space above.
+  if (recent.length === 0) return <div className="mt-auto" />
+
+  return (
+    <SidebarGroup className="mt-auto">
+      <SidebarGroupLabel className="text-sidebar-muted-foreground">Latest runs</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {recent.map((r) => (
+            <SidebarMenuItem key={r.id}>
+              <SidebarMenuButton
+                isActive={r.id === activeRoutineId}
+                onClick={() => void openLatestRun(r)}
+                title={r.lastError && r.lastStatus === "failed" ? `${r.name}\n${r.lastError}` : r.name}
+                className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
+              >
+                <StatusMark
+                  state={r.running ? "running" : r.lastStatus === "failed" ? "failed" : "ok"}
+                  className="-ml-0.5 size-4"
+                />
+                <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                <span className="ml-auto shrink-0 text-xs text-sidebar-muted-foreground tabular-nums">
+                  {r.running ? "Running" : relativeTime(r.lastRunAt!)}
+                </span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
+/** Opens the routine's newest run, or the routine itself if its runs can't be listed. */
+async function openLatestRun(r: Routine) {
+  try {
+    await backend.loadRuns(r.id)
+  } catch {}
+  const runs = store.get().runs[r.id] ?? []
+  const latest = runs.reduce<(typeof runs)[number] | undefined>((a, b) => (!a || b.startedAt > a.startedAt ? b : a), undefined)
+  store.go(latest ? { kind: "run", routineId: r.id, runId: latest.id } : { kind: "routine", routineId: r.id })
 }
 
 function IconTip({ label, children }: { label: string; children: React.ReactElement }) {

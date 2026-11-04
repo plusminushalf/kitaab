@@ -23,7 +23,7 @@ function stateOf(r: Routine): RoutineState {
 }
 
 /** How a routine or run is doing, always in the same slot at the start of a row. */
-function StatusMark({ state, className }: { state: RoutineState | Run["status"]; className?: string }) {
+export function StatusMark({ state, className }: { state: RoutineState | Run["status"]; className?: string }) {
   return (
     <span className={cn("flex size-5 shrink-0 items-center justify-center", className)}>
       {state === "running" ? (

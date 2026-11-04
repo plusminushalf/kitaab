@@ -212,6 +212,9 @@ function apply() {
   root.style.setProperty("--contrast-target", c >= 100 ? "var(--app-theme-text)" : "var(--app-theme-canvas)")
   root.style.setProperty("--contrast-amount", `${c >= 100 ? ((c - 100) / 100) * 40 : ((100 - c) / 100) * 45}%`)
   root.style.setProperty("--glass", `${settings.glassOpacity}%`)
+  // Fully opaque glass has nothing to frost, so the blur goes too (as in T3 Code).
+  if (settings.glassOpacity >= 100) root.style.setProperty("--glass-blur", "0px")
+  else root.style.removeProperty("--glass-blur")
   root.style.setProperty("--font-size-interface", `${settings.fontSizeInterface}px`)
   root.style.setProperty("--font-size-prompt", `${settings.fontSizePrompt}px`)
   root.style.setProperty("--font-size-code", `${settings.fontSizeCode}px`)
