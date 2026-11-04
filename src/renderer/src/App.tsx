@@ -12,7 +12,7 @@ import { appearance, useAppearance } from "@/lib/appearance/store"
 import { ThreadView } from "@/components/thread-view"
 import { ConnectionView } from "@/components/connection-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
-import { backend } from "@/lib/backend"
+import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@/lib/backend"
 import { store, useStore } from "@/lib/store"
 
 export function App() {
@@ -36,6 +36,24 @@ function Shell() {
 
   useEffect(() => {
     void backend.connect()
+  }, [])
+
+  // ⌘Z undoes "mark as done". Inside a text field it only does so while the field is
+  // empty (the composer takes focus after a thread is marked done), and typing
+  // anything hands ⌘Z back to the text.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.shiftKey || e.altKey || e.ctrlKey || e.key.toLowerCase() !== "z") return
+      if (!hasUndoableDone() || hasText(e.target)) return
+      e.preventDefault()
+      undoLastDone()
+    }
+    window.addEventListener("keydown", onKey, true)
+    window.addEventListener("input", clearUndoableDone, true)
+    return () => {
+      window.removeEventListener("keydown", onKey, true)
+      window.removeEventListener("input", clearUndoableDone, true)
+    }
   }, [])
 
   useEffect(
@@ -96,4 +114,11 @@ function Shell() {
       <SwipeIndicator />
     </>
   )
+}
+
+/** A focused text field with something in it, where ⌘Z should undo typing. */
+function hasText(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target.value !== ""
+  if (target instanceof HTMLElement && target.isContentEditable) return (target.textContent ?? "") !== ""
+  return false
 }

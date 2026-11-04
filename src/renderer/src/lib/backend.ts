@@ -512,6 +512,40 @@ async function connectOnce() {
   if (pick) await backend.selectProject(pick)
 }
 
+/** Threads marked done this session, newest last, for ⌘Z. */
+const recentlyDone: { threadId: Id; wasOpen: boolean }[] = []
+const doneToastId = (threadId: Id) => `done:${threadId}`
+function forgetDone(threadId: Id) {
+  const i = recentlyDone.findIndex((d) => d.threadId === threadId)
+  if (i >= 0) recentlyDone.splice(i, 1)
+}
+
+/** Restores a thread marked done, reopening it if it was open at the time. */
+async function undoDone(threadId: Id) {
+  const entry = recentlyDone.find((d) => d.threadId === threadId)
+  // Already restored some other way: nothing to undo.
+  if (!store.get().done.some((t) => t.id === threadId)) return forgetDone(threadId)
+  await backend.setDone(threadId, false)
+  if (entry?.wasOpen) store.go({ kind: "thread", threadId })
+}
+
+/** ⌘Z: restores the most recently marked-done thread. False when there is none. */
+export function undoLastDone(): boolean {
+  const last = recentlyDone.at(-1)
+  if (!last) return false
+  void undoDone(last.threadId)
+  return true
+}
+
+export function hasUndoableDone(): boolean {
+  return recentlyDone.length > 0
+}
+
+/** Typing anything makes ⌘Z about the text again. */
+export function clearUndoableDone() {
+  recentlyDone.length = 0
+}
+
 export const backend: Backend = {
   // Single-flight: overlapping calls (StrictMode, menu, reconnect) share one attempt.
   connect() {
@@ -683,18 +717,25 @@ export const backend: Backend = {
     })
     const run = runThreads()[threadId]
     if (run) rememberRunThread(threadId, { ...run, done })
+    if (done) recentlyDone.push({ threadId, wasOpen: st.view.kind === "thread" && st.view.threadId === threadId })
+    else {
+      forgetDone(threadId)
+      toast.dismiss(doneToastId(threadId))
+    }
 
     try {
       await gw.call("session.archive", { session_id: threadId, archived: done, profile: p })
     } catch (e) {
       toast.error(`Couldn't ${done ? "mark as done" : "restore"}: ${e instanceof Error ? e.message : e}`)
+      if (done) forgetDone(threadId)
       void loadThreads(p)
       void loadDone(p)
       return
     }
     if (done) {
       toast(`Marked “${thread?.title ?? "thread"}” as done`, {
-        action: { label: "Undo", onClick: () => void backend.setDone(threadId, false) },
+        id: doneToastId(threadId),
+        action: { label: "Undo", onClick: () => void undoDone(threadId) },
       })
     }
   },
