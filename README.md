@@ -43,6 +43,36 @@ Tokens are stored encrypted with the macOS keychain. Kitab keeps its settings in
 - Node.js 24 and pnpm 10.
 - A machine running [Hermes Agent](https://hermes-agent.nousresearch.com/docs).
 
+## Install
+
+On an Apple silicon Mac:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/install.sh | bash
+```
+
+This installs the latest release into `/Applications` and opens it. Set `KITAB_VERSION=0.1.0` before `bash` to install a specific release. The installer verifies the release signature and the DMG's SHA-256 before installing anything (see below).
+
+Kitab isn't notarized by Apple. An app downloaded with `curl` opens without a Gatekeeper prompt. A DMG downloaded in a browser is blocked the first time it opens: allow it in System Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Kitab.app`.
+
+### Verifying a download
+
+Each release has a `SHA256SUMS` file with the DMG's hash, signed with Kitab's release key. The public key is [`release-key.pub`](release-key.pub):
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIKSxxZ9QRwqldlKJi68n/FSXG32Hpy8JCzYGIDVPSGo
+```
+
+To check a DMG by hand, put it in a folder with that release's `SHA256SUMS` and `SHA256SUMS.sig`, then run:
+
+```sh
+echo "kitab-release $(curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/release-key.pub)" > allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I kitab-release -n kitab-release -s SHA256SUMS.sig < SHA256SUMS
+shasum -a 256 -c SHA256SUMS
+```
+
+The first command should print `Good "kitab-release" signature`, the second `Kitab-<version>-arm64.dmg: OK`. Both tools ship with macOS.
+
 ## Development
 
 ```sh
@@ -61,6 +91,18 @@ pnpm install-app  # builds it and replaces /Applications/Kitab.app
 ```
 
 The app is ad-hoc signed, which is enough to run it on the Mac that built it. It isn't notarized, so Gatekeeper will block a copy moved to another Mac. Build it on each Mac instead.
+
+## Releasing
+
+```sh
+pnpm dmg          # builds dist/Kitab-<version>-<arch>.dmg
+```
+
+Pushing a tag like `v0.1.0` runs `.github/workflows/dmg.yml`. It builds the DMG with that version, writes `SHA256SUMS`, signs it with `scripts/sign-release.sh`, and attaches all three files to a GitHub release. You can also run the workflow by hand from the Actions tab, which uploads them as a workflow artifact.
+
+The release key's private half is the `RELEASE_SIGNING_KEY` repository secret, and tagged builds fail without it. If you ever replace the key, update `release-key.pub` and `PUBLIC_KEY` in `install.sh` in the same commit. Releases signed with the old key will no longer verify against the new one.
+
+To sign and notarize the app with Apple, so it opens on any Mac with no Gatekeeper prompt, add these repository secrets: `APPLE_CERTIFICATE_P12` (a base64-encoded Developer ID Application certificate), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Without them the DMG is ad-hoc signed, and people who download it have to allow it in System Settings → Privacy & Security the first time they open it.
 
 ## Shortcuts
 

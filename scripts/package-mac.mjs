@@ -44,9 +44,26 @@ writeFileSync(
   JSON.stringify({ name: pkg.name, productName: NAME, version: pkg.version, main: pkg.main, type: pkg.type }, null, 2),
 )
 
-// Editing the bundle breaks Electron's signature; sign it again, ad hoc.
-execFileSync("codesign", ["--force", "--deep", "--sign", "-", app], { stdio: "ignore" })
-console.log(`[package] ${app}`)
+// Editing the bundle breaks Electron's signature, so sign it again. With
+// APPLE_SIGNING_IDENTITY set (a Developer ID Application identity in the keychain)
+// it is signed for distribution: hardened runtime, secure timestamp, and the
+// entitlements Electron needs. Otherwise it is signed ad hoc, for this Mac only.
+const identity = process.env.APPLE_SIGNING_IDENTITY
+if (identity) {
+  execFileSync(
+    "codesign",
+    [
+      "--force", "--deep", "--timestamp", "--options", "runtime",
+      "--entitlements", join(root, "resources/entitlements.mac.plist"),
+      "--sign", identity, app,
+    ],
+    { stdio: "inherit" },
+  )
+  execFileSync("codesign", ["--verify", "--deep", "--strict", app], { stdio: "inherit" })
+} else {
+  execFileSync("codesign", ["--force", "--deep", "--sign", "-", app], { stdio: "ignore" })
+}
+console.log(`[package] ${app}${identity ? " (Developer ID)" : " (ad hoc)"}`)
 
 if (process.argv.includes("--install")) {
   const target = `/Applications/${NAME}.app`

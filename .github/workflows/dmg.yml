@@ -1,0 +1,133 @@
+# Builds Kitab-<version>-arm64.dmg.
+#
+# - Push a tag like v0.1.0: the DMG is built with that version and attached to
+#   a GitHub release for the tag.
+# - Run it by hand (Actions → Build DMG → Run workflow): the DMG is uploaded as
+#   a workflow artifact only.
+#
+# Every DMG gets a SHA256SUMS file signed with Kitab's release key (secret
+# RELEASE_SIGNING_KEY; the public half is release-key.pub). install.sh refuses
+# anything that doesn't verify, so a tagged release fails without that secret.
+#
+# Apple signing and notarization are optional. Without the secrets below the app is
+# ad-hoc signed, and people who download it must allow it in
+# System Settings → Privacy & Security the first time they open it.
+#   APPLE_CERTIFICATE_P12       base64 of a "Developer ID Application" .p12
+#   APPLE_CERTIFICATE_PASSWORD  the .p12's password
+#   APPLE_ID                    Apple ID email, for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD app-specific password for that Apple ID
+#   APPLE_TEAM_ID               10-character team ID
+name: Build DMG
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dmg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-latest # Apple silicon, so the DMG is arm64
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version comes from packageManager in package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Use the tag as the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+
+      - name: Import the signing certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            echo "No signing certificate; the app will be ad-hoc signed."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/ { print $2; exit }')"
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity in APPLE_CERTIFICATE_P12"
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build the DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm dmg
+
+      - name: Write and sign SHA256SUMS
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::RELEASE_SIGNING_KEY is not set; install.sh can't verify an unsigned release."
+              exit 1
+            fi
+            echo "::warning::RELEASE_SIGNING_KEY is not set; writing an unsigned SHA256SUMS."
+            (cd dist && shasum -a 256 Kitab-*.dmg > SHA256SUMS && cat SHA256SUMS)
+            exit 0
+          fi
+          scripts/sign-release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kitab-dmg
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+          if-no-files-found: error
+
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## Install'
+            echo
+            echo '```sh'
+            echo "curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | bash"
+            echo '```'
+            echo
+            echo 'The installer checks the signature and checksum below before installing. To check a manual download, see [Verifying a download](https://github.com/'"$GITHUB_REPOSITORY"'#verifying-a-download).'
+            echo
+            echo '## SHA-256'
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "Kitab $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/*.dmg dist/SHA256SUMS dist/SHA256SUMS.sig --clobber
