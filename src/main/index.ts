@@ -104,15 +104,6 @@ type Target =
 
 let current: Target | null = null
 
-async function tokenWorks(baseUrl: string, token: string) {
-  try {
-    const res = await fetch(`${baseUrl}/api/sessions?limit=1`, { headers: { "x-hermes-session-token": token } })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 let resolving: Promise<Target> | null = null
 function resolveTarget(): Promise<Target> {
   resolving ??= resolveTargetOnce().finally(() => (resolving = null))
@@ -124,15 +115,9 @@ async function resolveTargetOnce(): Promise<Target> {
   if (s.sshHost) {
     const host = s.sshHost
     console.log("[connect] ensuring backend on", host)
-    const backend = await ensureRemoteBackend(host, async (b) => {
-      const port = await tunnel.open(host, b.remotePort)
-      const ok = await tokenWorks(`http://127.0.0.1:${port}`, b.token)
-      console.log("[connect] reuse check pid", b.pid, "port", b.remotePort, ok ? "ok" : "rejected")
-      return ok
-    })
-    console.log("[connect] backend pid", backend.pid, "remote port", backend.remotePort)
-    const port = await tunnel.open(host, backend.remotePort)
-    current = { kind: "ssh", host, label: host, baseUrl: `http://127.0.0.1:${port}`, token: backend.token }
+    const backend = await ensureRemoteBackend(host, async (remotePort) => `http://127.0.0.1:${await tunnel.open(host, remotePort)}`)
+    console.log("[connect] backend pid", backend.pid, "remote port", backend.port)
+    current = { kind: "ssh", host, label: host, baseUrl: backend.baseUrl, token: backend.token }
   } else {
     const url = s.baseUrl.replace(/\/+$/, "")
     current = { kind: "url", server: url, label: new URL(url).host, baseUrl: url }

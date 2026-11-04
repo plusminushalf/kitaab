@@ -52,3 +52,16 @@ export function splitUserText(raw: string): { text: string; attachments: Attachm
   }
   return { text: lines.join("\n").trim(), attachments: [...lead, ...trail] }
 }
+
+/**
+ * A list preview without attachment refs. Hermes's previews are one line, cut at 80
+ * characters, so a ref can be cut off too ("@image:/home/me/.hermes/i...").
+ */
+export function previewText(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined
+  const text = raw
+    .replace(/@(?:file|image|url|folder):(?:`[^`]*`?|\S+)(?:\s+\[[^\]]*\]?)?/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text && text !== "..." && text !== "…" ? text : undefined
+}

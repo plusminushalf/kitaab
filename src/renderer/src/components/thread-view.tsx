@@ -11,8 +11,8 @@ import { FilePanel } from "@/components/file-panel"
 import { MessageList } from "@/components/message-list"
 import { PageHeader } from "@/components/page-header"
 import { ThreadDetails } from "@/components/thread-details"
-import { backend } from "@/lib/backend"
-import type { Attachment, Id, PendingQuestion } from "@/lib/model"
+import { backend } from "@kitab/core/backend"
+import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
 import { store, useStore } from "@/lib/store"
 
 export function ThreadView({ threadId }: { threadId: Id | null }) {
@@ -26,10 +26,12 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [dragging, setDragging] = useState(false)
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
+  const connected = useStore((s) => s.connection.state === "connected")
 
+  // Wait for the connection: loading while it's down fails and would leave an empty thread behind.
   useEffect(() => {
-    if (threadId && !detail) void backend.loadThread(threadId)
-  }, [threadId, detail])
+    if (threadId && connected && (!detail || detail.stale)) void backend.loadThread(threadId)
+  }, [threadId, connected, detail])
 
   useEffect(() => setDrafts([]), [threadId])
 
@@ -100,7 +102,13 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
             <Empty className="h-full">
               <EmptyHeader>
                 <EmptyTitle>
-                  {threadId ? (detail?.loading ? "Loading…" : "Nothing here yet") : "Start a thread"}
+                  {threadId
+                    ? !connected
+                      ? "Reconnecting…"
+                      : detail?.loading || !detail || detail.stale
+                        ? "Loading…"
+                        : "Nothing here yet"
+                    : "Start a thread"}
                 </EmptyTitle>
                 <EmptyDescription>Drop images, video or files anywhere to attach them.</EmptyDescription>
               </EmptyHeader>

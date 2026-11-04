@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import { Asterisk, Bot, Check, Cpu, Gem, Search, Sparkles, Star, Zap } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { backend } from "@/lib/backend"
-import type { Id } from "@/lib/model"
-import { EFFORT_LABELS, modelName, shortModelName } from "@/lib/model-names"
+import { backend } from "@kitab/core/backend"
+import type { Id } from "@kitab/core/model"
+import { EFFORT_LABELS, modelName, shortModelName } from "@kitab/core/model-names"
 import { useStore, type ModelChoice, type ModelProvider } from "@/lib/store"
 
 // Model picker in the composer, laid out like T3 Code's: providers on the left

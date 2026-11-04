@@ -1,4 +1,4 @@
-import { toast } from "sonner"
+import { http, platform, toast } from "./platform"
 import { Gateway, type GatewayEvent, type ServerRequest } from "./gateway"
 import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, ToolCall } from "./model"
 import { store, type Backend } from "./store"
@@ -6,7 +6,8 @@ import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
 import { claimCreatedSkills, noteToolStart } from "./skills"
 import { setFileAccess } from "./server-files"
-import { splitUserText } from "./user-text"
+import { previewText, splitUserText } from "./user-text"
+import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Project
@@ -23,25 +24,8 @@ const openRequests = new Map<string, { threadId: Id; req: ServerRequest }>()
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 let attempt = 0
 
-// ---- local memory: which runs have become threads ----------------------------
-
-type RunThread = { routineId: Id; profile: string; title: string; updatedAt: number; done?: boolean }
-const RUN_THREADS = "runThreads"
-function runThreads(): Record<Id, RunThread> {
-  try {
-    return JSON.parse(localStorage.getItem(RUN_THREADS) ?? "{}")
-  } catch {
-    return {}
-  }
-}
-function rememberRunThread(id: Id, value: RunThread) {
-  try {
-    localStorage.setItem(RUN_THREADS, JSON.stringify({ ...runThreads(), [id]: value }))
-  } catch {}
-}
-
 const profile = () => store.get().projectId ?? "default"
-const api = <T>(path: string) => window.hermes.api.get<T>(path)
+const api = <T>(path: string) => http().get<T>(path)
 const q = encodeURIComponent
 
 // ---- helpers ------------------------------------------------------------------
@@ -136,13 +120,7 @@ function toRoutine(j: any): Routine {
   }
 }
 
-async function blobToBase64(url: string): Promise<string> {
-  const buf = await (await fetch(url)).arrayBuffer()
-  let bin = ""
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-  return btoa(bin)
-}
+const blobToBase64 = (url: string) => platform().base64(url)
 
 // ---- lists ----------------------------------------------------------------------
 
@@ -153,7 +131,7 @@ const toThread = (p: string, s: any): Thread => ({
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
   cast: threadCast(s.id),
   status: "idle",
-  preview: s.preview,
+  preview: previewText(s.preview),
 })
 
 // ---- models ------------------------------------------------------------------------
@@ -205,7 +183,7 @@ async function applyModel(runtimeId: string, choice: { model: string; provider: 
   const value = `${choice.model} --provider ${choice.provider} --session`
   let r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value })
   if (r?.confirm_required) {
-    if (!window.confirm(r.confirm_message || `Switch to ${choice.model}? It costs more.`)) return false
+    if (!(await platform().confirm(r.confirm_message || `Switch to ${choice.model}? It costs more.`))) return false
     r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value, confirm_expensive_model: true })
   }
   if (r?.warning) toast.warning(r.warning)
@@ -224,9 +202,8 @@ async function loadDone(p: string) {
   const res = await api<{ sessions: any[]; total?: number }>(
     `/api/sessions?profile=${q(p)}&archived=only&order=recent&limit=100&min_messages=1`,
   )
-  const runs = runThreads()
   // Archived routine runs only count if someone turned them into a thread.
-  const rows = res.sessions.filter((s) => s.source !== "cron" || runs[s.id])
+  const rows = res.sessions.filter((s) => s.source !== "cron" || runOrigin(s.id))
   const cronRows = res.sessions.length - rows.length
   store.set({
     done: rows.map((s) => toThread(p, s)),
@@ -238,7 +215,8 @@ async function loadThreads(p: string) {
   const res = await api<{ sessions: any[] }>(
     `/api/sessions?profile=${q(p)}&exclude_sources=cron&order=recent&limit=100&min_messages=1`,
   )
-  const fromRuns = Object.entries(runThreads()).filter(([, v]) => v.profile === p && !v.done)
+  void migrateLocal(p, res.sessions.map((s) => s.id))
+  const fromRuns = runThreads(p).filter((r) => !r.run.done)
   const threads: Thread[] = [
     ...res.sessions.map(
       (s): Thread => ({
@@ -249,18 +227,18 @@ async function loadThreads(p: string) {
         cast: threadCast(s.id),
         // `is_active` only means "recently active". Live events decide "working".
         status: "idle",
-        preview: s.preview,
+        preview: previewText(s.preview),
       }),
     ),
     ...fromRuns.map(
-      ([id, v]): Thread => ({
+      ({ id, run }): Thread => ({
         id,
         projectId: p,
-        title: v.title,
-        updatedAt: v.updatedAt,
+        title: run.title,
+        updatedAt: run.updatedAt,
         cast: threadCast(id),
         status: "idle",
-        fromRun: { routineId: v.routineId, runId: id },
+        fromRun: { routineId: run.routineId, runId: id },
       }),
     ),
   ]
@@ -286,7 +264,8 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined
 function refreshSoon(what: "threads" | "routines") {
   clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
-    if (what === "threads") void loadThreads(profile()).catch(() => {})
+    // Another device may have changed a thread's cast or turned a run into a thread.
+    if (what === "threads") void refreshProfiles().then(() => loadThreads(profile())).catch(() => {})
     else void loadRoutines().catch(() => {})
   }, 400)
 }
@@ -360,7 +339,7 @@ function onEvent(e: GatewayEvent) {
       }))
       if (p.status === "error" && p.error) toast.error(String(p.error))
       patchThread(threadId, { status: "idle", updatedAt: Date.now() })
-      if (!document.hasFocus()) window.hermes.dock.bounce()
+      platform().attention()
       void claimCreatedSkills(
         threadId,
         store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile(),
@@ -424,15 +403,30 @@ function showRequest(threadId: Id, req: ServerRequest) {
   }
   store.updateDetail(threadId, (d) => ({ ...d, pending: [...d.pending.filter((x) => x.id !== req.id), question] }))
   patchThread(threadId, { status: "needs-you" })
-  if (!document.hasFocus()) window.hermes.dock.bounce()
+  platform().attention()
 }
 
 // ---- sessions --------------------------------------------------------------------
 
-async function ensureRuntime(threadId: Id): Promise<string> {
+const resuming = new Map<Id, Promise<string>>()
+
+/** Single-flight per thread: the view and a reconnect resuming the same thread share one session. */
+function ensureRuntime(threadId: Id): Promise<string> {
   const known = runtimeOf.get(threadId)
-  if (known) return known
-  const p = runThreads()[threadId]?.profile ?? store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile()
+  if (known) return Promise.resolve(known)
+  let p = resuming.get(threadId)
+  if (!p) {
+    const flight: Promise<string> = resume(threadId).finally(() => {
+      if (resuming.get(threadId) === flight) resuming.delete(threadId)
+    })
+    resuming.set(threadId, flight)
+    p = flight
+  }
+  return p
+}
+
+async function resume(threadId: Id): Promise<string> {
+  const p = runOrigin(threadId)?.projectId ?? store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile()
   const r = await gw.call<any>("session.resume", { session_id: threadId, profile: p })
   runtimeOf.set(threadId, r.session_id)
   storedOf.set(r.session_id, threadId)
@@ -443,7 +437,7 @@ async function ensureRuntime(threadId: Id): Promise<string> {
   if (r.running && r.inflight?.assistant) {
     messages.push({ id: "inflight", role: "assistant", text: r.inflight.assistant, createdAt: Date.now(), streaming: true })
   }
-  store.updateDetail(threadId, (d) => ({ ...d, messages, loading: false }))
+  store.updateDetail(threadId, (d) => ({ ...d, messages, loading: false, stale: false }))
   if (r.running) patchThread(threadId, { status: "working" })
   for (const req of r.open_requests ?? []) showRequest(threadId, req)
   return r.session_id
@@ -472,14 +466,40 @@ function scheduleReconnect() {
 
 gw.onEvent = onEvent
 gw.onRequest = onRequest
+/** Threads that were working or waiting when the socket dropped, to reattach after reconnecting. */
+const liveBeforeDrop = new Set<Id>()
+
 gw.onClose = (reason) => {
   // Live session ids die with the socket; resume again after reconnecting.
   runtimeOf.clear()
   storedOf.clear()
+  resuming.clear()
   openRequests.clear()
   forgetSessions()
-  store.set({ connection: { state: "error", message: `Disconnected: ${reason}` }, details: {} })
+  for (const t of store.get().threads) if (t.status !== "idle") liveBeforeDrop.add(t.id)
+  store.set((s) => {
+    return {
+      connection: { state: "error", message: `Disconnected: ${reason}` },
+      // No live events reach us now, so nothing would ever clear "working".
+      threads: s.threads.map((t) => (t.status === "idle" ? t : { ...t, status: "idle" })),
+      // Keep what's on screen; resuming replaces it. Open questions died with the socket.
+      details: Object.fromEntries(
+        Object.entries(s.details).map(([id, d]) => [id, { ...d, pending: [], loading: false, stale: true }]),
+      ),
+    }
+  })
   scheduleReconnect()
+}
+
+/** Reattaches threads that were running before a drop, so their status and replies come back. */
+function resumeLive() {
+  const open = store.get().view
+  for (const id of [...liveBeforeDrop]) {
+    liveBeforeDrop.delete(id)
+    // The open thread is reloaded by its view.
+    if (open.kind === "thread" && open.threadId === id) continue
+    void ensureRuntime(id).catch(() => {})
+  }
 }
 
 let connecting: Promise<void> | null = null
@@ -488,7 +508,7 @@ async function connectOnce() {
   clearTimeout(reconnectTimer)
   gw.close()
   store.set({ connection: { state: "connecting" } })
-  const r = await window.hermes.connection.open()
+  const r = await platform().connect()
   if (!r.ok) {
     console.warn("[connection]", r.message)
     store.set({ connection: { state: "error", message: r.message, needsSignIn: r.needsSignIn } })
@@ -516,17 +536,21 @@ async function connectOnce() {
     personalityIds: castOf(p),
   }))
   store.set({ projects, personalities: readLibrary(profiles) })
+  readThreadMeta(profiles)
+  void migrateLocal()
   let saved: string | null = null
   try {
-    saved = localStorage.getItem("projectId")
+    saved = platform().storage.get("projectId")
   } catch {}
   const pick = projects.find((p) => p.id === saved)?.id ?? projects.find((p) => p.id === "default")?.id ?? projects[0]?.id
   if (pick) await backend.selectProject(pick)
+  resumeLive()
 }
 
-/** Re-reads the library and each project's cast (they can change from another Mac). */
-async function refreshPersonalities() {
+/** Re-reads the library, each project's cast and thread details (they can change on another device). */
+async function refreshProfiles() {
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
+  readThreadMeta(profiles)
   store.set((s) => ({
     personalities: readLibrary(profiles),
     projects: s.projects.map((pr) => {
@@ -578,7 +602,7 @@ export const backend: Backend = {
   },
   async selectProject(id) {
     try {
-      localStorage.setItem("projectId", id)
+      platform().storage.set("projectId", id)
     } catch {}
     const changed = store.get().projectId !== id
     store.set({ projectId: id })
@@ -588,14 +612,15 @@ export const backend: Backend = {
       loadDone(id).catch(() => {}),
       loadModels(id).catch(() => {}),
       loadRoutines().catch((e) => toast.error(`Routines: ${e.message ?? e}`)),
-      changed ? refreshPersonalities().catch(() => {}) : undefined,
+      changed ? refreshProfiles().catch(() => {}) : undefined,
     ])
   },
 
   async loadThread(threadId) {
-    store.updateDetail(threadId, (d) => ({ ...d, loading: true }))
+    // Clearing stale first keeps a view that reloads stale details from asking twice.
+    store.updateDetail(threadId, (d) => ({ ...d, loading: true, stale: false }))
     try {
-      runtimeOf.delete(threadId)
+      if (!resuming.has(threadId)) runtimeOf.delete(threadId)
       await ensureRuntime(threadId)
     } catch (e) {
       store.updateDetail(threadId, (d) => ({ ...d, loading: false }))
@@ -644,12 +669,10 @@ export const backend: Backend = {
       messages: [...d.messages, { id: `u-${Date.now()}`, role: "user", text, attachments, createdAt: Date.now() }],
     }))
     patchThread(threadIdFinal, { status: "working", updatedAt: Date.now() })
-    const run = runThreads()[threadIdFinal]
-    if (run) rememberRunThread(threadIdFinal, { ...run, updatedAt: Date.now() })
-
     try {
       // Who answers: the @mentioned personality, else the thread's host.
-      const projectId = run?.profile ?? store.get().threads.find((t) => t.id === threadIdFinal)?.projectId ?? profile()
+      const projectId =
+        runOrigin(threadIdFinal)?.projectId ?? store.get().threads.find((t) => t.id === threadIdFinal)?.projectId ?? profile()
       const cast = await prepareTurn(threadIdFinal, runtimeId, projectId, text)
       patchThread(threadIdFinal, { cast })
       await attach(runtimeId, attachments)
@@ -683,7 +706,6 @@ export const backend: Backend = {
     const routine = store.get().routines.find((r) => r.id === routineId)
     const p = routine?.projectId ?? profile()
     const res = await api<{ runs: any[] }>(`/api/cron/jobs/${q(routineId)}/runs?profile=${q(p)}&limit=50`)
-    const known = runThreads()
     const prev = store.get().runs[routineId] ?? []
     const runs: Run[] = res.runs.map((s) => ({
       id: s.id,
@@ -691,7 +713,7 @@ export const backend: Backend = {
       startedAt: (s.started_at ?? 0) * 1000,
       status: s.is_active ? "running" : "ok",
       report: prev.find((r) => r.id === s.id)?.report ?? (s.message_count ? undefined : ""),
-      threadId: known[s.id] ? s.id : undefined,
+      threadId: runOrigin(s.id) ? s.id : undefined,
     }))
     store.set((st) => ({ runs: { ...st.runs, [routineId]: runs } }))
   },
@@ -714,7 +736,7 @@ export const backend: Backend = {
     const p = routine?.projectId ?? profile()
     const run = store.get().runs[routineId]?.find((r) => r.id === runId)
     const title = `${routine?.name ?? "Routine"} · ${new Date(run?.startedAt ?? Date.now()).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`
-    rememberRunThread(runId, { routineId, profile: p, title, updatedAt: Date.now() })
+    await saveThreadMeta(p, runId, { run: { routineId, title, updatedAt: Date.now() } })
     store.set((s) => ({
       threads: s.threads.some((t) => t.id === runId)
         ? s.threads
@@ -728,7 +750,7 @@ export const backend: Backend = {
   async setDone(threadId, done) {
     const st = store.get()
     const thread = (done ? st.threads : st.done).find((t) => t.id === threadId)
-    const p = thread?.projectId ?? runThreads()[threadId]?.profile ?? profile()
+    const p = thread?.projectId ?? runOrigin(threadId)?.projectId ?? profile()
 
     // Optimistic: move it between the lists right away.
     store.set((s) => {
@@ -744,8 +766,8 @@ export const backend: Backend = {
         view: leavingOpen ? { kind: "thread", threadId: others[0]?.id ?? null } : s.view,
       }
     })
-    const run = runThreads()[threadId]
-    if (run) rememberRunThread(threadId, { ...run, done })
+    const run = threadMeta(threadId).run
+    if (run) void saveThreadMeta(p, threadId, { run: { ...run, done: done || undefined } }).catch(() => {})
     if (done) recentlyDone.push({ threadId, wasOpen: st.view.kind === "thread" && st.view.threadId === threadId })
     else {
       forgetDone(threadId)

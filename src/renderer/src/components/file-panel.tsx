@@ -6,8 +6,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Markdown } from "@/components/markdown"
-import { bytes } from "@/lib/format"
-import type { Attachment } from "@/lib/model"
+import { bytes } from "@kitab/core/format"
+import type { Attachment } from "@kitab/core/model"
 
 // A file opened from the transcript, docked to the right of the thread like an
 // editor tab: a path breadcrumb on top, the contents below.

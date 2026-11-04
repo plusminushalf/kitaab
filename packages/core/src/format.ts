@@ -1,4 +1,13 @@
-const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" })
+// React Native's Hermes engine has no Intl.RelativeTimeFormat; fall back to short plain words there.
+const rtf =
+  typeof Intl.RelativeTimeFormat === "function"
+    ? new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" })
+    : {
+        format(n: number, unit: "minute" | "hour" | "day") {
+          const short = { minute: "m", hour: "h", day: "d" }[unit]
+          return n < 0 ? `${-n}${short} ago` : `in ${n}${short}`
+        },
+      }
 
 export function relativeTime(ms: number | undefined): string {
   if (!ms) return ""

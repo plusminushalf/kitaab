@@ -4,7 +4,7 @@
 
 <h1 align="center">Kitab</h1>
 
-<p align="center">A small macOS client for a <a href="https://hermes-agent.nousresearch.com/docs">Hermes Agent</a> server.</p>
+<p align="center">A small macOS and iPhone client for a <a href="https://hermes-agent.nousresearch.com/docs">Hermes Agent</a> server.</p>
 
 Kitab connects to a Hermes install on another machine, usually over SSH, and organizes your work into **projects**, **threads**, **routines** and **personalities**. It never installs or updates Hermes; it only talks to it.
 
@@ -35,7 +35,28 @@ Open **Settings** (`⌘,`) and pick one of two ways in:
 
 **Dashboard URL.** Leave the SSH host empty and point Kitab at an existing Hermes dashboard, such as `http://127.0.0.1:9119`. If the dashboard requires login, Kitab opens your browser to sign in (OAuth with PKCE) and never sees your password.
 
+**The Mac and the iPhone share one backend.** Kitab keeps a private copy of the backend's session token next to its lockfile on the server (`~/.hermes/desktop-ssh/<id>/kitab-token`, mode 600), so whichever device connects next finds the running backend and joins it instead of starting another. Every device picks the oldest live one, so they converge, and a device that joins someone else's backend stops the one it left behind. Because they share a backend, a reply streaming on one device streams on the other, and approvals show up on both. What Kitab adds on top of Hermes (which personalities are in a thread, who answered each turn, which routine runs became threads) is saved on the server in each project's profile, never on one device.
+
 Tokens are stored encrypted with the macOS keychain. Kitab keeps its settings in `~/Library/Application Support/hermes-desktop`, separate from the official Hermes app.
+
+## iPhone
+
+The iPhone app (`apps/mobile`) has the same projects, threads, routines and personalities, and connects the same way, over SSH, from inside the app:
+
+1. Open **Settings** in the app and enter the host, your user name and the port. Use an address the phone can reach, such as a Tailscale name.
+2. Copy **This iPhone's key** (an Ed25519 key made on the phone and kept in its Keychain) and add it to `~/.ssh/authorized_keys` on the host.
+3. Tap **Connect**. The first time, Kitab trusts the host's key and shows its fingerprint. After that it refuses a host that shows a different key.
+
+To run it from source (needs Xcode):
+
+```sh
+cd apps/mobile
+pnpm install
+pnpm ios          # builds the dev client and runs it in the simulator
+pnpm start        # Metro, for an already-installed dev client
+```
+
+It uses native modules, so it can't run in Expo Go. A real iPhone needs your Apple team set for signing in Xcode.
 
 ## Requirements
 
@@ -123,14 +144,17 @@ Settings → Appearance has built-in light and dark themes, a theme editor, and 
 ## Project layout
 
 ```
+packages/core/  the Hermes logic both apps share: gateway client, adapter, personalities,
+                skills, thread details, the SSH backend scripts
 src/main/       Electron main process: SSH backend, tunnel, sign-in, menus, themes
 src/preload/    the bridge exposed to the renderer
 src/renderer/   React UI (Tailwind, shadcn on Base UI)
 src/shared/     types shared by both sides
+apps/mobile/    the iPhone app (Expo, React Native); modules/kitab-ssh is its SSH client
 docs/           product concept and research notes
 ```
 
-The renderer speaks JSON-RPC to Hermes over a plain WebSocket (`/api/ws`). `src/renderer/src/lib/backend.ts` translates Hermes data into the app's own vocabulary, so Hermes terms don't leak into the UI.
+Both apps speak JSON-RPC to Hermes over a plain WebSocket (`/api/ws`). `packages/core/src/backend.ts` translates Hermes data into the app's own vocabulary, so Hermes terms don't leak into the UI. The core has no dependencies and never touches Electron, React Native or the DOM: each app hands it a small `Platform` (`packages/core/src/platform.ts`) for HTTP, notices, prompts and storage, and imports it as `@kitab/core/<module>`. The iPhone app's SSH client (`apps/mobile/modules/kitab-ssh`) is built on Apple's swift-nio-ssh. It sends scripts on stdin, so the token never shows up in the remote process list.
 
 ## License
 

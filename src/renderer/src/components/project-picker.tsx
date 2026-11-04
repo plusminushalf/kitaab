@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactElement, type ReactNode } from "react"
 import { Check, Search, Settings } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { aggregateStatus, ProjectBadge, StatusPill } from "@/components/project-badge"
-import { backend } from "@/lib/backend"
+import { backend } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 

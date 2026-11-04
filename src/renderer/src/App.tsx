@@ -13,7 +13,7 @@ import { appearance, useAppearance } from "@/lib/appearance/store"
 import { ThreadView } from "@/components/thread-view"
 import { ConnectionView } from "@/components/connection-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
-import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@/lib/backend"
+import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 
 export function App() {

@@ -1,4 +1,4 @@
-import { toast } from "sonner"
+import { http, toast } from "./platform"
 import type { Id, Skill } from "./model"
 import { setPersonalitySkills } from "./personalities"
 import { store } from "./store"
@@ -33,14 +33,14 @@ function put(projectId: Id, skills: Skill[]) {
 
 /** Reads the skills installed in a project. */
 export async function loadSkills(projectId: Id): Promise<Skill[]> {
-  const rows = await window.hermes.api.get<any[]>(`/api/skills?profile=${q(projectId)}`)
+  const rows = await http().get<any[]>(`/api/skills?profile=${q(projectId)}`)
   const skills = (Array.isArray(rows) ? rows : []).filter((r) => r?.name).map(toSkill).sort(byName)
   put(projectId, skills)
   return skills
 }
 
 export async function setSkillEnabled(projectId: Id, name: string, enabled: boolean) {
-  await window.hermes.api.put(`/api/skills/toggle?profile=${q(projectId)}`, { name, enabled, profile: projectId })
+  await http().put(`/api/skills/toggle?profile=${q(projectId)}`, { name, enabled, profile: projectId })
   put(
     projectId,
     (store.get().skills[projectId] ?? []).map((s) => (s.name === name ? { ...s, enabled } : s)),
@@ -49,7 +49,7 @@ export async function setSkillEnabled(projectId: Id, name: string, enabled: bool
 
 /** The skill's SKILL.md, frontmatter included. */
 export async function readSkill(projectId: Id, name: string): Promise<string> {
-  const r = await window.hermes.api.get<{ content: string }>(
+  const r = await http().get<{ content: string }>(
     `/api/skills/content?name=${q(name)}&profile=${q(projectId)}`,
   )
   return r.content
@@ -57,7 +57,7 @@ export async function readSkill(projectId: Id, name: string): Promise<string> {
 
 /** Rewrites a skill's SKILL.md. */
 export async function saveSkill(projectId: Id, name: string, content: string) {
-  await window.hermes.api.put(`/api/skills/content?profile=${q(projectId)}`, { name, content, profile: projectId })
+  await http().put(`/api/skills/content?profile=${q(projectId)}`, { name, content, profile: projectId })
   await loadSkills(projectId).catch(() => {})
 }
 
@@ -88,7 +88,7 @@ export async function createSkill(projectId: Id, input: NewSkill): Promise<strin
 }
 
 function post(projectId: Id, name: string, content: string, category?: string) {
-  return window.hermes.api.post(`/api/skills?profile=${q(projectId)}`, {
+  return http().post(`/api/skills?profile=${q(projectId)}`, {
     name,
     content,
     category: category ?? null,

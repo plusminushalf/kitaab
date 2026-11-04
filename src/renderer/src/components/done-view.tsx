@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item"
 import { PageHeader } from "@/components/page-header"
-import { backend } from "@/lib/backend"
-import { relativeTime } from "@/lib/format"
+import { backend } from "@kitab/core/backend"
+import { relativeTime } from "@kitab/core/format"
 import { store, useStore } from "@/lib/store"
 
 /** Threads marked done. Open one to read it, or bring it back to the list. */

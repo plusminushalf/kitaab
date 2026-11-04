@@ -18,9 +18,9 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
 import { SkillBadges, SkillPicker } from "@/components/skill-picker"
-import type { Personality, Project } from "@/lib/model"
-import { deletePersonality, savePersonality, setInProject } from "@/lib/personalities"
-import { loadSkills } from "@/lib/skills"
+import type { Personality, Project } from "@kitab/core/model"
+import { deletePersonality, savePersonality, setInProject } from "@kitab/core/personalities"
+import { loadSkills } from "@kitab/core/skills"
 import { useStore } from "@/lib/store"
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))

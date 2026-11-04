@@ -1,0 +1,69 @@
+{
+  "name": "kitab-mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/ui": "~58.0.27",
+    "@legendapp/list": "^3.7.1",
+    "expo": "~58.0.23",
+    "expo-build-properties": "~58.0.12",
+    "expo-clipboard": "~58.0.4",
+    "expo-constants": "~58.0.15",
+    "expo-crypto": "~58.0.7",
+    "expo-dev-client": "~58.0.18",
+    "expo-file-system": "~58.0.13",
+    "expo-font": "~58.0.11",
+    "expo-glass-effect": "~58.0.5",
+    "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.18",
+    "expo-image-picker": "~58.0.10",
+    "expo-linking": "~58.0.16",
+    "expo-router": "~58.0.30",
+    "expo-secure-store": "~58.0.2",
+    "expo-sqlite": "~58.0.15",
+    "expo-status-bar": "~58.0.4",
+    "expo-symbols": "~58.0.4",
+    "expo-system-ui": "~58.0.7",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-enriched-markdown": "^1.1.1",
+    "react-native-gesture-handler": "~3.3.0",
+    "react-native-keyboard-controller": "1.22.7",
+    "react-native-reanimated": "4.7.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-worklets": "0.13.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start --dev-client",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild --clean --platform ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": true,
+  "enriched-markdown": {
+    "enableCodeHighlight": true,
+    "enableMath": false,
+    "enableVideo": false,
+    "codeHighlightLanguages": [
+      "javascript",
+      "typescript",
+      "python",
+      "bash",
+      "json",
+      "swift",
+      "go",
+      "rust",
+      "yaml"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "react-native-enriched-markdown"
+    ]
+  }
+}

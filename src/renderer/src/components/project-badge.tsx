@@ -1,7 +1,7 @@
 import { CircleCheck } from "lucide-react"
 import { cn } from "cn"
 import { Spinner } from "@/components/ui/spinner"
-import type { Thread } from "@/lib/model"
+import type { Thread } from "@kitab/core/model"
 
 /** "hermes-desktop" → "HD", "notes" → "NO". */
 export function initials(name: string): string {

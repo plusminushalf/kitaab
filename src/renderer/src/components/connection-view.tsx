@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/page-header"
-import { backend } from "@/lib/backend"
+import { backend } from "@kitab/core/backend"
 import { useStore } from "@/lib/store"
 import logo from "../../../../resources/icon.svg"
 

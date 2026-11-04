@@ -7,16 +7,8 @@ export type Settings = {
   baseUrl: string
 }
 
-export type ConnectionResult =
-  | {
-      ok: true
-      wsUrl: string
-      label: string
-      version?: string
-      /** For loading server files directly (images, video): `${base}/api/files/download?path=…&token=…`. */
-      files?: { base: string; token: string }
-    }
-  | { ok: false; needsSignIn: boolean; message: string }
+import type { ConnectionResult } from "@kitab/core/platform"
+export type { ConnectionResult }
 
 /** A server file's contents for the side panel; text is null for binary files. */
 export type FileText = { text: string | null; size: number; truncated: boolean }

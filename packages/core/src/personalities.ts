@@ -1,7 +1,8 @@
-import { toast } from "sonner"
+import { http, toast } from "./platform"
 import { gw } from "./backend"
 import type { Id, Message, Personality } from "./model"
 import { store } from "./store"
+import { metaProject, saveThreadMeta, threadMeta } from "./thread-meta"
 
 // Personalities, in Hermes terms:
 //   library            → ui_meta["kitab.personality.<id>"] on the default profile
@@ -80,7 +81,7 @@ function preset(p: Personality) {
 
 /** Writes the personality into the project's config so Hermes can switch to it. */
 function writePreset(projectId: Id, p: Personality) {
-  return window.hermes.api.put(`/api/config?profile=${q(projectId)}`, {
+  return http().put(`/api/config?profile=${q(projectId)}`, {
     config: { agent: { personalities: { [p.id]: preset(p) } } },
     profile: projectId,
   })
@@ -171,27 +172,7 @@ export async function deletePersonality(personalityId: Id) {
   store.set((st) => ({ personalities: st.personalities.filter((x) => x.id !== personalityId) }))
 }
 
-// ---- threads: cast and who answered each turn (kept on this Mac) -------------------------
-
-type ThreadMeta = { cast: Id[]; turns: Record<number, Id> }
-const THREADS = "kitab.threadPersonalities"
-
-function allThreadMeta(): Record<Id, ThreadMeta> {
-  try {
-    return JSON.parse(localStorage.getItem(THREADS) ?? "{}")
-  } catch {
-    return {}
-  }
-}
-function threadMeta(threadId: Id): ThreadMeta {
-  const m = allThreadMeta()[threadId]
-  return { cast: Array.isArray(m?.cast) ? m.cast : [], turns: m?.turns && typeof m.turns === "object" ? m.turns : {} }
-}
-function saveThreadMeta(threadId: Id, meta: ThreadMeta) {
-  try {
-    localStorage.setItem(THREADS, JSON.stringify({ ...allThreadMeta(), [threadId]: meta }))
-  } catch {}
-}
+// ---- threads: cast and who answered each turn (in Hermes, see thread-meta.ts) -------------
 
 /** Personality ids in a thread; the first one is the host. */
 export const threadCast = (threadId: Id): Id[] => threadMeta(threadId).cast
@@ -261,7 +242,7 @@ async function switchSession(runtimeId: string, projectId: Id, want: string, fal
   sessionPersonality.set(runtimeId, want)
   // config.set also saves the choice as the project's default. Put the default back.
   if (want !== fallback) {
-    await window.hermes.api.put(`/api/config?profile=${q(projectId)}`, {
+    await http().put(`/api/config?profile=${q(projectId)}`, {
       config: { display: { personality: fallback } },
       profile: projectId,
     })
@@ -297,7 +278,11 @@ export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id
   const userTurns = (store.get().details[threadId]?.messages ?? []).filter((m) => m.role === "user").length
   const turns = { ...meta.turns }
   if (speaker) turns[userTurns - 1] = speaker
-  saveThreadMeta(threadId, { cast, turns })
+  const run = meta.run ? { ...meta.run, updatedAt: Date.now() } : undefined
+  // Saved before the turn goes out, so another device opening the thread mid-reply sees who's answering.
+  await saveThreadMeta(metaProject(threadId) ?? projectId, threadId, { cast, turns, run }).catch((e) =>
+    console.warn("[thread-meta]", e),
+  )
   speaking.set(threadId, speaker)
   return cast
 }

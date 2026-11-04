@@ -28,10 +28,10 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
-import { backend } from "@/lib/backend"
+import { backend } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
-import { relativeTime } from "@/lib/format"
-import type { Id, Routine, Thread } from "@/lib/model"
+import { relativeTime } from "@kitab/core/format"
+import type { Id, Routine, Thread } from "@kitab/core/model"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"

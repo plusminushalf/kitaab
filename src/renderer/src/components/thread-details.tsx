@@ -27,10 +27,10 @@ import {
 } from "@/components/ui/context-menu"
 import { ProjectBadge } from "@/components/project-badge"
 import { appearance, THREAD_DETAIL_ITEMS, useAppearance } from "@/lib/appearance/store"
-import { backend } from "@/lib/backend"
-import { relativeTime } from "@/lib/format"
-import type { Id } from "@/lib/model"
-import { EFFORT_LABELS, shortModelName } from "@/lib/model-names"
+import { backend } from "@kitab/core/backend"
+import { relativeTime } from "@kitab/core/format"
+import type { Id } from "@kitab/core/model"
+import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
 
 /**

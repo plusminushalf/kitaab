@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, type PointerEvent } from "react"
 import { ArrowUp, FileIcon, ListPlus, Paperclip, X } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
-import type { Attachment } from "@/lib/model"
-import { bytes } from "@/lib/format"
+import type { Attachment } from "@kitab/core/model"
+import { bytes } from "@kitab/core/format"
 
 export type Draft = { file: File; attachment: Attachment }
 

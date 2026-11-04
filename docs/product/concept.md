@@ -43,6 +43,8 @@ Project "Healthy life"             ← memory: goals, allergies, what you like e
 - The app never installs or updates Hermes.
 - **Over SSH it runs its own private backend, the way the official Hermes app does** (decided 2026-11-04). It starts `hermes serve --isolated` on the server, bound to loopback, with a session token it mints. It reaches that backend through an SSH tunnel and reuses it on every launch. No login is needed, because SSH access is the credential.
 - Without SSH it can use an existing dashboard URL, signing in through the browser if that dashboard requires it.
+- **The Mac and the iPhone share that backend** (decided 2026-11-04). Whichever device connects first starts it; the others find it on the server and join it, so live replies and approvals show up everywhere. The iPhone reaches the server over SSH from inside the app, with its own key.
+- **Nothing that matters lives on one device.** Kitab's own additions (a thread's personalities, who answered each turn, which runs became threads) are stored on the server in the project's profile. Only per-device conveniences, like window sizes or the theme, stay local.
 - v1 supports one server. The data model should still allow more later.
 
 ### Project

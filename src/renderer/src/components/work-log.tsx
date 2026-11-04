@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Brain, ChevronDown, ChevronRight, Globe, SquareTerminal, Wrench, FileText, Code, BookOpen } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import type { Message, ToolCall } from "@/lib/model"
+import type { Message, ToolCall } from "@kitab/core/model"
 
 // The work behind an answer, the way T3 Code shows it: one "Worked for 3m 8s"
 // line that opens to the thinking and tool calls, with runs of the same tool

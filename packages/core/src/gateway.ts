@@ -35,16 +35,27 @@ export class Gateway {
       const ws = new WebSocket(url)
       this.ws = ws
       let ready = false
+      // A half-dead tunnel can accept the socket and then never answer.
+      const openTimer = setTimeout(() => {
+        if (ready || this.ws !== ws) return
+        this.detach(ws)
+        reject(new Error("Timed out connecting to Hermes"))
+      }, 20_000)
       const fail = (why: string) => {
+        clearTimeout(openTimer)
         if (!ready) reject(new Error(why))
       }
       ws.onerror = () => fail("Couldn't open the connection to Hermes")
       ws.onclose = (e) => {
+        // A socket we already replaced or dropped: its late close must not touch the new one.
+        if (this.ws !== ws) return
+        this.ws = null
         this.stop()
         if (!ready) fail(e.reason || `Connection closed (${e.code})`)
         else if (!this.closedByUs) this.onClose(e.reason || `closed (${e.code})`)
       }
       ws.onmessage = (m) => {
+        if (this.ws !== ws) return
         this.lastHeard = Date.now()
         let frame: any
         try {
@@ -56,6 +67,7 @@ export class Gateway {
           const ev = frame.params as GatewayEvent
           if (ev.type === "gateway.ready" && !ready) {
             ready = true
+            clearTimeout(openTimer)
             this.replayEpoch = ev.payload?.replay_epoch ?? null
             this.startHeartbeat()
             // Without this the server fails approvals/clarify for our socket.
@@ -107,16 +119,28 @@ export class Gateway {
 
   close() {
     this.closedByUs = true
+    if (this.ws) this.detach(this.ws)
+  }
+
+  /** Lets go of a socket now, without waiting for a close handshake a dead link never finishes. */
+  private detach(ws: WebSocket) {
+    ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null
+    if (this.ws === ws) this.ws = null
     this.stop()
-    this.ws?.close()
-    this.ws = null
+    try {
+      ws.close(4000)
+    } catch {}
   }
 
   private startHeartbeat() {
     this.lastHeard = Date.now()
     this.ping = setInterval(() => {
+      // After sleep the socket can look open while the link under it is gone.
       if (Date.now() - this.lastHeard > 45_000) {
-        this.ws?.close(4000, "heartbeat timeout")
+        const ws = this.ws
+        if (!ws) return
+        this.detach(ws)
+        if (!this.closedByUs) this.onClose("heartbeat timeout")
         return
       }
       this.call("gateway.ping", {}, 15_000).catch(() => {})

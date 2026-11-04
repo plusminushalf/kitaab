@@ -3,8 +3,11 @@ import { defineConfig } from "electron-vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
+// The shared Hermes core (also used by the iPhone app), imported as @kitab/core/<module>.
+const core = { "@kitab/core": resolve(import.meta.dirname, "packages/core/src") }
+
 export default defineConfig({
-  main: {},
+  main: { resolve: { alias: core } },
   // Sandboxed windows can only load a CommonJS preload.
   preload: {
     build: {
@@ -13,7 +16,7 @@ export default defineConfig({
   },
   renderer: {
     resolve: {
-      alias: { "@": resolve(import.meta.dirname, "src/renderer/src") },
+      alias: { "@": resolve(import.meta.dirname, "src/renderer/src"), ...core },
     },
     plugins: [react(), tailwindcss()],
   },
