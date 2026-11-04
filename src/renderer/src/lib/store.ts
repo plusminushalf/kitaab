@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Attachment, Id, Message, PendingQuestion, Personality, Project, Routine, Run, Thread } from "./model"
+import type { Attachment, Id, Message, PendingQuestion, Personality, Project, Routine, Run, Skill, Thread } from "./model"
 
 export type Connection =
   | { state: "idle" }
@@ -24,6 +24,7 @@ export type View =
   | { kind: "routine"; routineId: Id }
   | { kind: "run"; routineId: Id; runId: Id }
   | { kind: "personalities" }
+  | { kind: "project" }
   | { kind: "done" }
 
 export type SettingsSection = "general" | "appearance"
@@ -33,6 +34,8 @@ export type State = {
   projects: Project[]
   projectId: Id | null
   personalities: Personality[]
+  /** Each project's installed skills, once loaded. */
+  skills: Record<Id, Skill[]>
   threads: Thread[]
   /** Threads marked done (Hermes "archived"), newest first. */
   done: Thread[]
@@ -79,6 +82,7 @@ const initial: State = {
   projects: [],
   projectId: null,
   personalities: [],
+  skills: {},
   threads: [],
   done: [],
   doneCount: 0,

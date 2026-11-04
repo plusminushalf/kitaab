@@ -168,7 +168,17 @@ export async function authedFetch(server: string, baseUrl: string, path: string,
     if (needsAuth) store(server, null)
     throw new AuthError("Sign in to your Hermes server")
   }
-  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} → ${res.status}`)
+  if (!res.ok) {
+    // FastAPI puts the reason in `detail` (a skill name already taken, bad frontmatter…).
+    const detail = await res
+      .json()
+      .then((b) => {
+        const d = (b as { detail?: unknown } | null)?.detail
+        return typeof d === "string" ? d : undefined
+      })
+      .catch(() => undefined)
+    throw new Error(detail ?? `${init.method ?? "GET"} ${path} → ${res.status}`)
+  }
   return res
 }
 

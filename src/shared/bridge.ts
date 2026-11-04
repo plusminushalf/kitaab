@@ -58,8 +58,10 @@ export type HermesBridge = {
   }
   api: {
     get<T = unknown>(path: string): Promise<T>
-    /** JSON PUT; only /api/config is allowed. */
+    /** JSON PUT; only /api/config and /api/skills/{toggle,content} are allowed. */
     put<T = unknown>(path: string, body: unknown): Promise<T>
+    /** JSON POST; only /api/skills (create a skill) is allowed. */
+    post<T = unknown>(path: string, body: unknown): Promise<T>
   }
   files: {
     /** Downloads a file from the server and opens it in Quick Look. */

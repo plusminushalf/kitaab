@@ -19,7 +19,26 @@ export type Personality = {
   description?: string
   /** Who it is and how it works: identity, tone, craft. */
   instructions: string
+  /** Names of the skills it reaches for. The list goes with it to every project it joins. */
+  skills?: string[]
   updatedAt?: number
+}
+
+/** A written procedure the agent opens when a task needs it. Installed per project. */
+export type Skill = {
+  name: string
+  description: string
+  category?: string
+  /** Off: the project keeps it but nobody can open it. */
+  enabled: boolean
+  /**
+   * made: written in this project, by you or a personality (editable here).
+   * installed: added from a skills hub. shared: from a folder outside the project.
+   * builtin: ships with Hermes.
+   */
+  source: "made" | "installed" | "shared" | "builtin"
+  /** How often it has been used. */
+  usage?: number
 }
 
 export type Thread = {

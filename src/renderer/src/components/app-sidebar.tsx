@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, Repeat, Search, Settings, SlidersHorizontal, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -196,6 +196,12 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               >
                 <Users />
                 <span>Personalities</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={view.kind === "project"} onClick={() => store.go({ kind: "project" })}>
+                <SlidersHorizontal />
+                <span>Project</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             {doneCount > 0 && (

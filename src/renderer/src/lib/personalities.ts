@@ -32,6 +32,7 @@ export function readLibrary(rows: ProfileRow[]): Personality[] {
       name: String(v.name || k.slice(PREFIX.length)),
       description: v.description ? String(v.description) : undefined,
       instructions: String(v.instructions ?? ""),
+      skills: Array.isArray(v.skills) ? v.skills.filter((x: unknown): x is string => typeof x === "string") : undefined,
       updatedAt: typeof v.updatedAt === "number" ? v.updatedAt : undefined,
     }))
     .sort(byName)
@@ -63,6 +64,13 @@ function preset(p: Personality) {
   const lines = [`Your name is ${p.name}.`]
   if (p.description) lines.push(`Your role: ${p.description}`)
   if (p.instructions) lines.push("", p.instructions)
+  if (p.skills?.length) {
+    lines.push("", `Your skills: ${p.skills.join(", ")}. Open one with skill_view when a task fits it.`)
+  }
+  lines.push(
+    "",
+    "When you work out a reusable way of doing your job, save it as a skill with skill_manage. Skills you create are added to your skills.",
+  )
   lines.push(
     "",
     "Several personalities can take part in this conversation. Earlier replies may have come from someone else; answer only as yourself.",
@@ -92,7 +100,13 @@ function slug(name: string, taken: Set<string>): Id {
   return id
 }
 
-export type PersonalityInput = { name: string; description: string; instructions: string }
+export type PersonalityInput = {
+  name: string
+  description: string
+  instructions: string
+  /** Leave out to keep the skills it has. */
+  skills?: string[]
+}
 
 /** Creates (no id) or updates a library personality, then refreshes every project that uses it. */
 export async function savePersonality(input: PersonalityInput, id?: Id): Promise<Personality> {
@@ -100,15 +114,23 @@ export async function savePersonality(input: PersonalityInput, id?: Id): Promise
   const name = input.name.trim()
   if (!name) throw new Error("Give it a name")
   const finalId = id ?? slug(name, new Set(s.personalities.map((p) => p.id)))
+  const skills = [...new Set(input.skills ?? s.personalities.find((x) => x.id === finalId)?.skills ?? [])]
   const p: Personality = {
     id: finalId,
     name,
     description: input.description.trim() || undefined,
     instructions: input.instructions.trim(),
+    skills: skills.length ? skills : undefined,
     updatedAt: Date.now(),
   }
   await writeMeta(libraryProfile, {
-    [PREFIX + finalId]: { name: p.name, description: p.description ?? "", instructions: p.instructions, updatedAt: p.updatedAt },
+    [PREFIX + finalId]: {
+      name: p.name,
+      description: p.description ?? "",
+      instructions: p.instructions,
+      skills,
+      updatedAt: p.updatedAt,
+    },
   })
   store.set((st) => ({ personalities: [...st.personalities.filter((x) => x.id !== finalId), p].sort(byName) }))
 
@@ -132,6 +154,13 @@ export async function setInProject(projectId: Id, personalityId: Id, on: boolean
   if (on) await writePreset(projectId, p)
   await writeMeta(projectId, { [CAST]: next })
   store.set((st) => ({ projects: st.projects.map((pr) => (pr.id === projectId ? { ...pr, personalityIds: next } : pr)) }))
+}
+
+/** Replaces the skills a personality reaches for, everywhere it works. */
+export function setPersonalitySkills(personalityId: Id, skills: string[]) {
+  const p = store.get().personalities.find((x) => x.id === personalityId)
+  if (!p) throw new Error("That personality is gone")
+  return savePersonality({ name: p.name, description: p.description ?? "", instructions: p.instructions, skills }, p.id)
 }
 
 export async function deletePersonality(personalityId: Id) {

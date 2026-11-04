@@ -4,6 +4,7 @@ import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, To
 import { store, type Backend } from "./store"
 import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
+import { claimCreatedSkills, noteToolStart } from "./skills"
 import { setFileAccess } from "./server-files"
 import { splitUserText } from "./user-text"
 
@@ -332,6 +333,7 @@ function onEvent(e: GatewayEvent) {
       if (p.text) lastAssistant(threadId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + p.text }))
       break
     case "tool.start":
+      noteToolStart(threadId, p.name, p.args)
       lastAssistant(threadId, (m) => ({
         ...m,
         tools: [
@@ -359,6 +361,11 @@ function onEvent(e: GatewayEvent) {
       if (p.status === "error" && p.error) toast.error(String(p.error))
       patchThread(threadId, { status: "idle", updatedAt: Date.now() })
       if (!document.hasFocus()) window.hermes.dock.bounce()
+      void claimCreatedSkills(
+        threadId,
+        store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile(),
+        speakerFor(threadId),
+      )
       break
     case "session.info":
       rememberModel(threadId, p)

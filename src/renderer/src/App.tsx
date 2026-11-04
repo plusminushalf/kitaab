@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/app-sidebar"
 import { PersonalitiesView } from "@/components/personalities-view"
+import { ProjectView } from "@/components/project-view"
 import { DoneView } from "@/components/done-view"
 import { AllRunsView, RoutinesView, RoutineView, RunView } from "@/components/routine-views"
 import { SettingsOverlay } from "@/components/settings/settings-page"
@@ -87,6 +88,8 @@ function Shell() {
             return store.go({ kind: "routines" })
           case "go-personalities":
             return store.go({ kind: "personalities" })
+          case "go-project":
+            return store.go({ kind: "project" })
           case "mark-done": {
             const v = store.get().view
             if (v.kind !== "thread" || !v.threadId) return
@@ -114,6 +117,7 @@ function Shell() {
         {!blocked && view.kind === "routine" && <RoutineView routineId={view.routineId} />}
         {!blocked && view.kind === "run" && <RunView routineId={view.routineId} runId={view.runId} />}
         {!blocked && view.kind === "personalities" && <PersonalitiesView />}
+        {!blocked && view.kind === "project" && <ProjectView />}
         {!blocked && view.kind === "done" && <DoneView />}
       </SidebarInset>
       <SettingsOverlay />

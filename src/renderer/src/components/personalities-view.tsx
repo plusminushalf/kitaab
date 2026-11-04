@@ -215,6 +215,12 @@ function PersonalityDialog({
               onChange={(e) => setInstructions(e.target.value)}
             />
           </div>
+          {!isNew && (
+            <p className="text-xs text-muted-foreground">
+              {personality.skills?.length ? `Skills: ${personality.skills.join(", ")}. ` : "No skills yet. "}
+              Choose them on the Project page.
+            </p>
+          )}
           <DialogFooter className="sm:justify-between">
             {isNew ? (
               <span />

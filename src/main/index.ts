@@ -197,22 +197,34 @@ ipcMain.handle("api:get", async (_e, path: string) => {
   return (await authedFetch(t.server, t.baseUrl, path)).json()
 })
 
-// Authenticated REST writes. Only config saves for now, so the allowlist stays tight.
-const WRITABLE = /^\/api\/config(\?|$)/
-ipcMain.handle("api:put", async (_e, path: string, body: unknown) => {
-  if (typeof path !== "string" || !WRITABLE.test(path)) throw new Error(`Writing ${path} isn't allowed`)
+// Authenticated REST writes, kept to an allowlist: config saves and a project's skills.
+const WRITABLE: Record<"PUT" | "POST", RegExp> = {
+  PUT: /^\/api\/(config|skills\/toggle|skills\/content)(\?|$)/,
+  POST: /^\/api\/skills(\?|$)/,
+}
+async function write(method: "PUT" | "POST", path: string, body: unknown) {
+  if (typeof path !== "string" || !WRITABLE[method].test(path)) throw new Error(`Writing ${path} isn't allowed`)
   const t = await target()
-  const init: RequestInit = { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
-  if (t.kind === "ssh") {
-    const res = await fetch(`${t.baseUrl}${path}`, {
-      ...init,
-      headers: { ...(init.headers as Record<string, string>), "x-hermes-session-token": t.token },
-    })
-    if (!res.ok) throw new Error(`PUT ${path} → ${res.status}`)
-    return res.json()
+  const init: RequestInit = { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+  if (t.kind !== "ssh") return (await authedFetch(t.server, t.baseUrl, path, init)).json()
+  const res = await fetch(`${t.baseUrl}${path}`, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string>), "x-hermes-session-token": t.token },
+  })
+  if (!res.ok) throw new Error((await errorDetail(res)) ?? `${method} ${path} → ${res.status}`)
+  return res.json()
+}
+/** FastAPI puts the reason in `detail`; surface it (a skill name already taken, bad frontmatter…). */
+async function errorDetail(res: Response): Promise<string | undefined> {
+  try {
+    const d = ((await res.json()) as { detail?: unknown }).detail
+    return typeof d === "string" ? d : undefined
+  } catch {
+    return undefined
   }
-  return (await authedFetch(t.server, t.baseUrl, path, init)).json()
-})
+}
+ipcMain.handle("api:put", (_e, path: string, body: unknown) => write("PUT", path, body))
+ipcMain.handle("api:post", (_e, path: string, body: unknown) => write("POST", path, body))
 
 async function download(path: string, name: string): Promise<Buffer> {
   const t = await target()
