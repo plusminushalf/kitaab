@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
@@ -19,17 +19,53 @@ export function MessageList({
   onOpenFile: (a: Attachment) => void
   openFile?: Attachment | null
 }) {
-  const end = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  // Whether to follow new content. Scrolling up lets go; scrolling back to the bottom takes hold again.
+  const pinned = useRef(true)
   const [viewing, setViewing] = useState<Attachment | null>(null)
   const last = messages.at(-1)
 
-  // Stick to the bottom while new content arrives.
+  useLayoutEffect(() => {
+    const root = list.current?.closest<HTMLElement>("[data-scroll-root]")
+    if (!root || !list.current) return
+    const follow = () => {
+      if (pinned.current) root.scrollTop = root.scrollHeight
+    }
+    let lastTop = root.scrollTop
+    const onScroll = () => {
+      const fromBottom = root.scrollHeight - root.scrollTop - root.clientHeight
+      if (fromBottom < 8) pinned.current = true
+      else if (root.scrollTop < lastTop) pinned.current = false
+      lastTop = root.scrollTop
+    }
+    // A wheel or trackpad flick upward lets go at once, before new content can pull the view back down.
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0 && root.scrollHeight > root.clientHeight) pinned.current = false
+    }
+    follow()
+    root.addEventListener("scroll", onScroll, { passive: true })
+    root.addEventListener("wheel", onWheel, { passive: true })
+    // Content grows while streaming (and when images load); the viewport shrinks as the composer grows.
+    const resized = new ResizeObserver(follow)
+    resized.observe(list.current)
+    resized.observe(root)
+    return () => {
+      root.removeEventListener("scroll", onScroll)
+      root.removeEventListener("wheel", onWheel)
+      resized.disconnect()
+    }
+  }, [])
+
+  // Sending a message brings you back to the bottom.
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" })
-  }, [messages.length, last?.text.length, last?.tools?.length])
+    if (last?.role !== "user") return
+    pinned.current = true
+    const root = list.current?.closest<HTMLElement>("[data-scroll-root]")
+    if (root) root.scrollTop = root.scrollHeight
+  }, [last?.id, last?.role])
 
   return (
-    <div className="mx-auto flex w-full max-w-chat min-w-0 flex-col gap-6 px-6 py-6">
+    <div ref={list} className="mx-auto flex w-full max-w-chat min-w-0 flex-col gap-6 px-6 py-6">
       {messages.map((m) => (
         <MessageRow
           key={m.id}
@@ -40,7 +76,6 @@ export function MessageList({
           openFile={openFile}
         />
       ))}
-      <div ref={end} />
       <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
         <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">
           <DialogTitle className="truncate">{viewing?.name}</DialogTitle>

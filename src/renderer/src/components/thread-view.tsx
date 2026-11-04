@@ -78,7 +78,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           {threadId && <ThreadDetails threadId={threadId} />}
         </PageHeader>
 
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {thread?.fromRun && (
             <div className="mx-auto max-w-chat px-6 pt-4">
               <Button
@@ -93,6 +93,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           )}
           {threadId && detail?.messages.length ? (
             <MessageList
+              key={threadId}
               messages={detail.messages}
               personalities={personalities}
               onOpenFile={setOpenFile}
