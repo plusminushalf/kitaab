@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from "react"
-import { Check, Search } from "lucide-react"
+import { Check, Search, Settings } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { aggregateStatus, ProjectBadge, StatusPill } from "@/components/project-badge"
 import { backend } from "@/lib/backend"
-import { useStore } from "@/lib/store"
+import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 /**
@@ -34,6 +34,13 @@ export function ProjectPicker({
   const pick = (id: string) => {
     setOpen(false)
     if (id !== projectId) void backend.selectProject(id)
+  }
+
+  /** Opens a project's settings, switching to it first. */
+  const openSettings = (id: string) => {
+    setOpen(false)
+    if (id !== projectId) void backend.selectProject(id)
+    store.go({ kind: "project" })
   }
 
   const onOpenChange = (next: boolean) => {
@@ -83,14 +90,14 @@ export function ProjectPicker({
             const own = threads.filter((t) => t.projectId === p.id)
             const status = own.length ? aggregateStatus(own) : "idle"
             return (
-              <button
+              <div
                 key={p.id}
                 role="option"
                 aria-selected={p.id === projectId}
                 onMouseMove={() => setActive(i)}
                 onClick={() => pick(p.id)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none",
+                  "flex w-full cursor-default items-center gap-2 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none",
                   i === active && "bg-accent text-accent-foreground",
                 )}
               >
@@ -102,7 +109,19 @@ export function ProjectPicker({
                 ) : (
                   <span className="size-4 shrink-0" />
                 )}
-              </button>
+                <button
+                  type="button"
+                  title={`${p.name} settings`}
+                  aria-label={`${p.name} settings`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openSettings(p.id)
+                  }}
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground outline-none hover:bg-background/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Settings className="size-3.5" />
+                </button>
+              </div>
             )
           })}
         </div>
