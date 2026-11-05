@@ -30,6 +30,14 @@ const q = encodeURIComponent
 
 // ---- helpers ------------------------------------------------------------------
 
+/** `t` at the top of `list`, replacing any copy already there. A thread listed twice breaks the sidebar. */
+function withFirst(list: Thread[], t: Thread): Thread[] {
+  return [t, ...list.filter((x) => x.id !== t.id)]
+}
+
+/** Threads being marked done (true) or restored (false) whose archive call hasn't landed yet. */
+const settling = new Map<Id, boolean>()
+
 function patchThread(id: Id, patch: Partial<Thread>) {
   store.set((s) => ({ threads: s.threads.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
 }
@@ -207,7 +215,7 @@ async function loadDone(p: string) {
     `/api/sessions?profile=${q(p)}&sources=${THREAD_SOURCE},cron&archived=only&order=recent&limit=100&min_messages=1`,
   )
   // Archived routine runs only count if someone turned them into a thread.
-  const rows = res.sessions.filter((s) => s.source !== "cron" || runOrigin(s.id))
+  const rows = res.sessions.filter((s) => (s.source !== "cron" || runOrigin(s.id)) && settling.get(s.id) !== false)
   const cronRows = res.sessions.length - rows.length
   store.set({
     done: rows.map((s) => toThread(p, s)),
@@ -246,11 +254,13 @@ async function loadThreads(p: string) {
       }),
     ),
   ]
+  // A refresh that lands before an archive call does would bring a just-done thread back.
+  const fresh = threads.filter((t, i) => settling.get(t.id) !== true && threads.findIndex((x) => x.id === t.id) === i)
   store.set((s) => ({
     // Keep live status for threads we're already tracking.
     threads: [
-      ...s.threads.filter((t) => t.projectId !== p),
-      ...threads.map((t) => {
+      ...s.threads.filter((t) => t.projectId !== p && !fresh.some((f) => f.id === t.id)),
+      ...fresh.map((t) => {
         const known = s.threads.find((k) => k.id === t.id)
         return known && known.status !== "idle" ? { ...t, status: known.status } : t
       }),
@@ -669,10 +679,7 @@ export const backend: Backend = {
       }
       const title = text.split("\n")[0].slice(0, 80) || attachments[0]?.name || "New thread"
       store.set((s) => ({
-        threads: [
-          { id: id!, projectId: profile(), title, updatedAt: Date.now(), cast: [], status: "working" },
-          ...s.threads,
-        ],
+        threads: withFirst(s.threads, { id: id!, projectId: profile(), title, updatedAt: Date.now(), cast: [], status: "working" }),
       }))
       store.updateDetail(id, (d) => ({ ...d, loading: false }))
     } else {
@@ -782,8 +789,8 @@ export const backend: Backend = {
       const others = s.threads.filter((t) => t.projectId === p && t.id !== threadId)
       const leavingOpen = done && s.view.kind === "thread" && s.view.threadId === threadId
       return {
-        threads: done ? s.threads.filter((t) => t.id !== threadId) : [{ ...moving, status: "idle" }, ...s.threads],
-        done: done ? [{ ...moving, status: "idle" }, ...s.done] : s.done.filter((t) => t.id !== threadId),
+        threads: done ? s.threads.filter((t) => t.id !== threadId) : withFirst(s.threads, { ...moving, status: "idle" }),
+        done: done ? withFirst(s.done, { ...moving, status: "idle" }) : s.done.filter((t) => t.id !== threadId),
         doneCount: Math.max(0, s.doneCount + (done ? 1 : -1)),
         // Marking the open thread done moves to its neighbour in the list.
         view: leavingOpen ? { kind: "thread", threadId: neighbourOf(threadId, others) } : s.view,
@@ -797,9 +804,12 @@ export const backend: Backend = {
       toast.dismiss(doneToastId(threadId))
     }
 
+    settling.set(threadId, done)
     try {
       await gw.call("session.archive", { session_id: threadId, archived: done, profile: p })
+      if (settling.get(threadId) === done) settling.delete(threadId)
     } catch (e) {
+      if (settling.get(threadId) === done) settling.delete(threadId)
       toast.error(`Couldn't ${done ? "mark as done" : "restore"}: ${e instanceof Error ? e.message : e}`)
       if (done) forgetDone(threadId)
       void loadThreads(p)

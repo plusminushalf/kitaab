@@ -93,7 +93,9 @@ function Shell() {
           case "mark-done": {
             const v = store.get().view
             if (v.kind !== "thread" || !v.threadId) return
-            const isDone = store.get().done.some((t) => t.id === v.threadId)
+            // Listed as a thread wins: only a thread that's gone from the list gets restored.
+            const s = store.get()
+            const isDone = !s.threads.some((t) => t.id === v.threadId) && s.done.some((t) => t.id === v.threadId)
             return void backend.setDone(v.threadId, !isDone)
           }
           case "back":

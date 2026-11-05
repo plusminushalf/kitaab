@@ -23,7 +23,7 @@ export default function ThreadScreen() {
   const id = params.id === "new" ? null : decodeURIComponent(params.id)
 
   const thread = useStore((s) => (id ? (s.threads.find((t) => t.id === id) ?? s.done.find((t) => t.id === id)) : undefined))
-  const isDone = useStore((s) => (id ? s.done.some((t) => t.id === id) : false))
+  const isDone = useStore((s) => (id ? !s.threads.some((t) => t.id === id) && s.done.some((t) => t.id === id) : false))
   const detail = useStore((s) => (id ? s.details[id] : undefined))
   const connected = useStore((s) => s.connection.state === "connected")
   const projectId = useStore((s) => s.projectId)

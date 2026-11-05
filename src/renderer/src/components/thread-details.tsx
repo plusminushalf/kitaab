@@ -39,7 +39,7 @@ import { store, useStore } from "@/lib/store"
  */
 export function ThreadDetails({ threadId }: { threadId: Id }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId) ?? s.done.find((t) => t.id === threadId))
-  const isDone = useStore((s) => s.done.some((t) => t.id === threadId))
+  const isDone = useStore((s) => !s.threads.some((t) => t.id === threadId) && s.done.some((t) => t.id === threadId))
   const messages = useStore((s) => s.details[threadId]?.messages)
   const connection = useStore((s) => s.connection)
   const project = useStore((s) => s.projects.find((p) => p.id === thread?.projectId))
