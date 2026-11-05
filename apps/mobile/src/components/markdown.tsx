@@ -4,6 +4,7 @@ import { EnrichedMarkdownText } from "react-native-enriched-markdown"
 import { mono, useColors } from "@/lib/theme"
 import { isKitabLink } from "@kitab/core/links"
 import { openKitabLink } from "@/lib/links"
+import { withServerImages } from "@kitab/core/server-files"
 
 const DELIMITER_ROW = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
 
@@ -40,7 +41,8 @@ export function liftNestedTables(text: string): string {
 /** Native markdown (GFM), styled like the Mac's prose. */
 export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
   const c = useColors()
-  const markdown = useMemo(() => liftNestedTables(text), [text])
+  // Images written as server paths (![card](/home/me/out/card.png)) load from the server.
+  const markdown = useMemo(() => withServerImages(liftNestedTables(text)), [text])
   return (
     <EnrichedMarkdownText
       flavor="github"
@@ -89,6 +91,7 @@ export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
           borderWidth: 1,
           borderRadius: 8,
         },
+        image: { maxHeight: 420, resizeMode: "contain", borderRadius: 10, marginTop: 4, marginBottom: 10 },
         thematicBreak: { color: c.border } as never,
       }}
     />

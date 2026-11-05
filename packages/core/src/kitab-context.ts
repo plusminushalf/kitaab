@@ -19,7 +19,7 @@ import { http, platform, type Platform } from "./platform"
 export type DeviceKind = Platform["kind"]
 
 /** Bump when the texts change in a way older apps shouldn't undo. */
-const VERSION = 2
+const VERSION = 3
 const DEVICE = "kitab.device."
 const MARKER = "kitab.context"
 const SKILL = "kitab"
@@ -82,9 +82,12 @@ function where(kinds: DeviceKind[]): string {
 }
 
 const RENDERING =
-  "Kitab renders GitHub-flavoured markdown: headings, lists, tables, code blocks and links. It doesn't " +
-  "render math, Mermaid, raw HTML, MEDIA: tags or ::preview widgets, so don't use them; to point to a " +
-  "file, give its full path on the server."
+  "Kitab renders GitHub-flavoured markdown: headings, lists, tables, code blocks and links. To show an " +
+  "image you made or found on the server (a chart, a card, a screenshot), embed it with markdown image " +
+  "syntax and its full path on the server, for example `![Weekly chart](/home/me/out/chart.png)`; " +
+  "Kitab loads it from the server and shows it in your reply. Web image URLs work too. Kitab doesn't " +
+  "render math, Mermaid, raw HTML, MEDIA: tags or ::preview widgets, so don't use them; to point to " +
+  "any other file, give its full path on the server."
 
 function phoneNote(kinds: DeviceKind[]): string {
   return kinds.includes("iphone")
