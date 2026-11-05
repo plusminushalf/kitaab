@@ -197,10 +197,14 @@ async function applyModel(runtimeId: string, choice: { model: string; provider: 
   return true
 }
 
+/** Hermes stores threads started from Kitab (Mac or iPhone) as source "desktop". Sessions from
+ *  scripts, the CLI or chat platforms aren't threads, so the lists leave them out. */
+const THREAD_SOURCE = "desktop"
+
 /** Done threads are Hermes's archived sessions. */
 async function loadDone(p: string) {
   const res = await api<{ sessions: any[]; total?: number }>(
-    `/api/sessions?profile=${q(p)}&archived=only&order=recent&limit=100&min_messages=1`,
+    `/api/sessions?profile=${q(p)}&sources=${THREAD_SOURCE},cron&archived=only&order=recent&limit=100&min_messages=1`,
   )
   // Archived routine runs only count if someone turned them into a thread.
   const rows = res.sessions.filter((s) => s.source !== "cron" || runOrigin(s.id))
@@ -213,7 +217,7 @@ async function loadDone(p: string) {
 
 async function loadThreads(p: string) {
   const res = await api<{ sessions: any[] }>(
-    `/api/sessions?profile=${q(p)}&exclude_sources=cron&order=recent&limit=100&min_messages=1`,
+    `/api/sessions?profile=${q(p)}&sources=${THREAD_SOURCE}&order=recent&limit=100&min_messages=1`,
   )
   void migrateLocal(p, res.sessions.map((s) => s.id))
   const fromRuns = runThreads(p).filter((r) => !r.run.done)
