@@ -1,10 +1,11 @@
 import type React from "react"
 import { useEffect, useRef, useState, type PointerEvent } from "react"
-import { ArrowUp, FileIcon, ListPlus, Paperclip, X } from "lucide-react"
+import { ArrowUp, FileIcon, ListPlus, Paperclip, TextQuote, X } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import type { Attachment } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
+import { withCitations, type Citation } from "@/components/cite-selection"
 
 export type Draft = { file: File; attachment: Attachment }
 
@@ -48,6 +49,8 @@ export function Composer({
   autoFocus,
   extras,
   mentionables = [],
+  citations = [],
+  setCitations,
 }: {
   placeholder: string
   busy?: boolean
@@ -60,6 +63,9 @@ export function Composer({
   extras?: React.ReactNode
   /** Typing @ offers these. */
   mentionables?: Mentionable[]
+  /** Passages cited from the thread; sent as quotes ahead of the text. */
+  citations?: Citation[]
+  setCitations?: (fn: (c: Citation[]) => Citation[]) => void
 }) {
   const [text, setText] = useState("")
   const [minHeight, setMinHeight] = useState(readHeight)
@@ -96,11 +102,19 @@ export function Composer({
     if (autoFocus) input.current?.focus()
   }, [autoFocus])
 
+  // A new citation means you're about to write about it.
+  const cited = useRef(citations.length)
+  useEffect(() => {
+    if (citations.length > cited.current) input.current?.focus()
+    cited.current = citations.length
+  }, [citations.length])
+
   // Sending while a reply runs is fine: Hermes queues or steers it.
-  const canSend = text.trim().length > 0 || drafts.length > 0
+  const canSend = text.trim().length > 0 || drafts.length > 0 || citations.length > 0
   const send = () => {
     if (!canSend) return
-    onSend(text.trim(), drafts)
+    onSend(withCitations(text.trim(), citations), drafts)
+    setCitations?.(() => [])
     setText("")
     setMention(null)
   }
@@ -168,6 +182,17 @@ export function Composer({
           if (e.target === e.currentTarget) input.current?.focus()
         }}
       >
+        {citations.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {citations.map((c) => (
+              <CitationChip
+                key={c.id}
+                citation={c}
+                onRemove={() => setCitations?.((all) => all.filter((x) => x.id !== c.id))}
+              />
+            ))}
+          </div>
+        )}
         {drafts.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {drafts.map((d, i) => (
@@ -281,6 +306,26 @@ export function Composer({
         onDoubleClick={() => saveHeight(MIN_HEIGHT)}
         className="app-no-drag h-1.5 w-10 shrink-0 cursor-row-resize rounded-full border border-input hover:bg-muted"
       />
+    </div>
+  )
+}
+
+function CitationChip({ citation: c, onRemove }: { citation: Citation; onRemove: () => void }) {
+  return (
+    <div className="group relative flex max-w-80 min-w-0 items-start gap-2 rounded-xl border bg-surface-raised px-3 py-2 text-xs">
+      <TextQuote className="mt-px size-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0" title={c.text}>
+        <div className="line-clamp-2 text-muted-foreground">{c.text}</div>
+        {c.comment.trim() && <div className="mt-0.5 line-clamp-2">{c.comment.trim()}</div>}
+      </div>
+      <button
+        aria-label="Remove citation"
+        title="Remove"
+        className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-white/15 bg-black/85 text-white shadow-sm hover:bg-black"
+        onClick={onRemove}
+      >
+        <X className="size-3" />
+      </button>
     </div>
   )
 }

@@ -108,7 +108,17 @@ function MessageRow({
       <div className="flex min-w-0 flex-col items-end gap-2">
         {m.attachments?.length ? <Attachments items={m.attachments} {...files} align="end" /> : null}
         {m.text && (
-          <div className="selectable max-w-[85%] rounded-2xl bg-message px-4 py-2 text-message-foreground wrap-anywhere whitespace-pre-wrap">{m.text}</div>
+          <div className="selectable flex max-w-[85%] flex-col gap-2 rounded-2xl bg-message px-4 py-2 text-message-foreground wrap-anywhere whitespace-pre-wrap">
+            {quoteBlocks(m.text).map((b, i) =>
+              b.quote ? (
+                <blockquote key={i} className="border-l-2 border-current/30 pl-2.5 opacity-70">
+                  {b.text}
+                </blockquote>
+              ) : (
+                <div key={i}>{b.text}</div>
+              ),
+            )}
+          </div>
         )}
       </div>
     )
@@ -126,6 +136,21 @@ function MessageRow({
       ) : null}
     </div>
   )
+}
+
+/** Splits your message into its `> ` quoted passages (from citing) and the rest. */
+function quoteBlocks(text: string): { quote: boolean; text: string }[] {
+  const blocks: { quote: boolean; lines: string[] }[] = []
+  for (const line of text.split("\n")) {
+    const quote = /^>( |$)/.test(line)
+    const body = quote ? line.replace(/^> ?/, "") : line
+    const last = blocks.at(-1)
+    if (last && last.quote === quote) last.lines.push(body)
+    else blocks.push({ quote, lines: [body] })
+  }
+  return blocks
+    .map((b) => ({ quote: b.quote, text: b.lines.join("\n").replace(/^\n+|\n+$/g, "") }))
+    .filter((b) => b.text)
 }
 
 type FileHandlers = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent, type PointerEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CornerDownLeft } from "lucide-react"
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { ModelPicker } from "@/components/model-picker"
+import { CiteSelection, type Citation } from "@/components/cite-selection"
 import { Composer, fileToDraft, type Draft } from "@/components/composer"
 import { FilePanel } from "@/components/file-panel"
 import { MessageList } from "@/components/message-list"
@@ -24,6 +25,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const mentionables = useMemo(() => personalities.filter((p) => castIds?.includes(p.id)), [personalities, castIds])
   const host = thread?.cast.length ? personalities.find((p) => p.id === thread.cast[0]) : undefined
   const [drafts, setDrafts] = useState<Draft[]>([])
+  const [citations, setCitations] = useState<Citation[]>([])
+  const scrollRoot = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState(false)
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
   const connected = useStore((s) => s.connection.state === "connected")
@@ -33,7 +36,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     if (threadId && connected && (!detail || detail.stale)) void backend.loadThread(threadId)
   }, [threadId, connected, detail])
 
-  useEffect(() => setDrafts([]), [threadId])
+  useEffect(() => {
+    setDrafts([])
+    setCitations([])
+  }, [threadId])
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
@@ -78,7 +84,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           {threadId && <ThreadDetails threadId={threadId} />}
         </PageHeader>
 
-        <div data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
+        <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {thread?.fromRun && (
             <div className="mx-auto max-w-chat px-6 pt-4">
               <Button
@@ -133,6 +140,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
             busy={busy}
             drafts={drafts}
             setDrafts={setDrafts}
+            citations={citations}
+            setCitations={setCitations}
             onSend={send}
             onStop={threadId ? () => void backend.interrupt(threadId) : undefined}
             autoFocus

@@ -284,3 +284,8 @@ html[data-word-wrap="on"] .prose pre { white-space: pre-wrap; overflow-wrap: any
 
 /* No custom scrollbars: unstyled, Chromium draws macOS overlay scrollbars that
    fade and follow System Settings → Appearance → Show scroll bars. */
+
+/* Text being cited stays marked while you type the comment. */
+::highlight(kitab-cite) {
+  background-color: color-mix(in oklab, var(--primary) 30%, transparent);
+}
