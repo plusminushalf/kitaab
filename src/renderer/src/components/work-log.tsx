@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Brain, ChevronDown, ChevronRight, Globe, SquareTerminal, Wrench, FileText, Code, BookOpen } from "lucide-react"
+import { Brain, ChevronDown, ChevronRight, Globe, SquareTerminal, Wrench, FileText, Code, BookOpen, Split } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import type { Message, ToolCall } from "@kitab/core/model"
 
@@ -43,6 +43,8 @@ function describe(name: string, n: number): string {
       return `Opened ${plural(n, "a skill", "skills")}`
     case "skill_manage":
       return `Updated ${plural(n, "a skill", "skills")}`
+    case "delegate_task":
+      return `Handed off ${plural(n, "a task", "tasks")}`
     case "vision_analyze":
       return `Looked at ${plural(n, "an image", "images")}`
     default:
@@ -56,6 +58,7 @@ function iconFor(name: string) {
   if (name.startsWith("web_")) return Globe
   if (name.includes("file") || name === "patch") return FileText
   if (name.startsWith("skill")) return BookOpen
+  if (name === "delegate_task") return Split
   return Wrench
 }
 

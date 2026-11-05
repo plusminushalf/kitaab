@@ -1,4 +1,4 @@
-import type { Attachment, Id, Message, PendingQuestion, Personality, Project, Routine, Run, Skill, Thread } from "./model"
+import type { Attachment, Id, Message, PendingQuestion, Personality, Project, Routine, Run, Skill, Subagent, Thread } from "./model"
 
 export type Connection =
   | { state: "idle" }
@@ -54,6 +54,8 @@ export type State = {
   routines: Routine[]
   runs: Record<Id, Run[]>
   details: Record<Id, ThreadDetail>
+  /** Helper agents each thread started, oldest first. */
+  subagents: Record<Id, Subagent[]>
   view: View
   /** The settings overlay's open section, or null when it's closed. */
   settings: SettingsSection | null
@@ -76,6 +78,9 @@ export interface Backend {
   setDone(threadId: Id, done: boolean): Promise<void>
   /** Model for a thread, or for the next new thread when threadId is null. */
   setModel(threadId: Id | null, choice: ModelChoice): Promise<void>
+  /** Re-reads which helper agents the thread has running. */
+  loadSubagents(threadId: Id): Promise<void>
+  stopSubagent(threadId: Id, subagentId: Id): Promise<void>
 }
 
 const initial: State = {
@@ -95,6 +100,7 @@ const initial: State = {
   routines: [],
   runs: {},
   details: {},
+  subagents: {},
   view: { kind: "thread", threadId: null },
   settings: null,
 }

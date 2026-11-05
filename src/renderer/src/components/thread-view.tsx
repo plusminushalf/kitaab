@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent, type RefObject } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CornerDownLeft } from "lucide-react"
@@ -11,7 +11,8 @@ import { Composer, fileToDraft, type Draft } from "@/components/composer"
 import { FilePanel } from "@/components/file-panel"
 import { MessageList } from "@/components/message-list"
 import { PageHeader } from "@/components/page-header"
-import { ThreadDetails } from "@/components/thread-details"
+import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/components/thread-details"
+import { useSubagentPolling } from "@/components/thread-agents"
 import { backend } from "@kitab/core/backend"
 import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
 import { store, useStore } from "@/lib/store"
@@ -30,6 +31,11 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const [dragging, setDragging] = useState(false)
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
   const connected = useStore((s) => s.connection.state === "connected")
+  const column = useRef<HTMLDivElement>(null)
+  const chatColumn = useRef<HTMLDivElement>(null)
+  const roomForDetails = useRoomBesideChat(column, chatColumn)
+  const detailsPinned = useDetailsPinned()
+  useSubagentPolling(threadId)
 
   // Wait for the connection: loading while it's down fails and would leave an empty thread behind.
   useEffect(() => {
@@ -68,6 +74,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   return (
     <div className="flex h-full min-h-0">
       <div
+        ref={column}
         className="relative flex h-full min-h-0 min-w-80 flex-1 flex-col"
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
@@ -81,7 +88,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         onDrop={onDrop}
       >
         <PageHeader title={thread?.title ?? "New thread"} subtitle={project?.name}>
-          {threadId && <ThreadDetails threadId={threadId} />}
+          {threadId && <ThreadDetails threadId={threadId} inline={roomForDetails} />}
         </PageHeader>
 
         <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
@@ -124,7 +131,9 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           )}
         </div>
 
-        <div className="mx-auto w-full max-w-chat px-6 pb-3">
+        {threadId && roomForDetails && detailsPinned && <PinnedThreadDetails threadId={threadId} />}
+
+        <div ref={chatColumn} className="mx-auto w-full max-w-chat px-6 pb-3">
           {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
           <Composer
             placeholder={
@@ -158,6 +167,30 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
       {openFile && <SidePanel file={openFile} onClose={() => setOpenFile(null)} />}
     </div>
   )
+}
+
+/** Width of the thread details card when it sits beside the chat, plus its margin. */
+const DETAILS_ROOM = 288 + 24
+
+/** Whether the gutter right of the chat column is wide enough for the details card. */
+function useRoomBesideChat(column: RefObject<HTMLElement | null>, chat: RefObject<HTMLElement | null>) {
+  const [room, setRoom] = useState(false)
+  useEffect(() => {
+    const outer = column.current
+    const inner = chat.current
+    if (!outer || !inner) return
+    const measure = () => {
+      // The chat column's side padding is empty too, so the card may sit over it.
+      const pad = parseFloat(getComputedStyle(inner).paddingRight) || 0
+      setRoom((outer.clientWidth - inner.offsetWidth) / 2 + pad >= DETAILS_ROOM)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(outer)
+    ro.observe(inner)
+    return () => ro.disconnect()
+  }, [column, chat])
+  return room
 }
 
 const WIDTH_KEY = "kitab.filePanelWidth"

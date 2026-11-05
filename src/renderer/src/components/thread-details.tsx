@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react"
+import { useSyncExternalStore, type ComponentType, type ReactNode } from "react"
 import { toast } from "sonner"
 import {
   Bot,
@@ -26,6 +26,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { ProjectBadge } from "@/components/project-badge"
+import { AgentsSection, useActiveAgentCount, useSubagents } from "@/components/thread-agents"
 import { appearance, THREAD_DETAIL_ITEMS, useAppearance } from "@/lib/appearance/store"
 import { backend } from "@kitab/core/backend"
 import { relativeTime } from "@kitab/core/format"
@@ -33,11 +34,101 @@ import type { Id } from "@kitab/core/model"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
 
+// ---- pinned or not -----------------------------------------------------------------
+// With room beside the chat the card stays open in the right gutter (T3 Code's inline
+// placement) until you close it; without room it opens from the header as a popover.
+
+const PINNED_KEY = "kitab.threadDetailsPinned"
+const pinListeners = new Set<() => void>()
+let pinned = (() => {
+  try {
+    return localStorage.getItem(PINNED_KEY) !== "false"
+  } catch {
+    return true
+  }
+})()
+
+function setPinned(v: boolean) {
+  pinned = v
+  try {
+    localStorage.setItem(PINNED_KEY, String(v))
+  } catch {}
+  pinListeners.forEach((l) => l())
+}
+
+export function useDetailsPinned(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      pinListeners.add(l)
+      return () => void pinListeners.delete(l)
+    },
+    () => pinned,
+  )
+}
+
 /**
- * The header button and its card of facts about the thread (T3 Code's thread details).
- * Right-click the card to choose which rows it shows.
+ * The header button for the thread's details card (T3 Code's thread details).
+ * `inline`: there's room to show the card beside the chat, so the button pins it.
  */
-export function ThreadDetails({ threadId }: { threadId: Id }) {
+export function ThreadDetails({ threadId, inline }: { threadId: Id; inline: boolean }) {
+  const isPinned = useDetailsPinned()
+  const working = useActiveAgentCount(threadId)
+  const badge = working > 0 && !(inline && isPinned) && (
+    <span className="pointer-events-none absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[0.55rem] font-semibold text-primary-foreground tabular-nums">
+      {working}
+    </span>
+  )
+  const label = working ? `Thread details · ${working} ${working === 1 ? "agent" : "agents"} working` : "Thread details"
+
+  if (inline) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={"relative " + (isPinned ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+        aria-label={label}
+        aria-pressed={isPinned}
+        title={label}
+        onClick={() => setPinned(!isPinned)}
+      >
+        <Info />
+        {badge}
+      </Button>
+    )
+  }
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={<Button variant="ghost" size="icon-sm" className="relative text-muted-foreground" />}
+        aria-label={label}
+        title={label}
+      >
+        <Info />
+        {badge}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="max-h-[calc(100vh-80px)] w-80 gap-0 overflow-y-auto rounded-2xl p-1.5">
+        <DetailsBody threadId={threadId} />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** The card pinned in the right gutter beside the chat. */
+export function PinnedThreadDetails({ threadId }: { threadId: Id }) {
+  const known = useStore((s) => s.threads.some((t) => t.id === threadId) || s.done.some((t) => t.id === threadId))
+  if (!known) return null
+  return (
+    <div
+      data-slot="popover-content"
+      className="absolute top-[64px] right-4 z-20 flex max-h-[calc(100%-80px)] w-72 flex-col overflow-y-auto rounded-2xl bg-popover p-1.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+    >
+      <DetailsBody threadId={threadId} />
+    </div>
+  )
+}
+
+/** The card's rows. Right-click to choose which ones it shows. */
+function DetailsBody({ threadId }: { threadId: Id }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId) ?? s.done.find((t) => t.id === threadId))
   const isDone = useStore((s) => !s.threads.some((t) => t.id === threadId) && s.done.some((t) => t.id === threadId))
   const messages = useStore((s) => s.details[threadId]?.messages)
@@ -47,6 +138,7 @@ export function ThreadDetails({ threadId }: { threadId: Id }) {
   const model = useStore((s) => s.threadModels[threadId] ?? s.defaultModel)
   const defaultEffort = useStore((s) => s.defaultEffort)
   const show = useAppearance((s) => s.settings.threadDetails)
+  const agents = useSubagents(threadId)
 
   if (!thread) return null
   const cast = thread.cast.map((id) => personalities.find((p) => p.id === id)?.name ?? id)
@@ -59,76 +151,78 @@ export function ThreadDetails({ threadId }: { threadId: Id }) {
   const local = connection.state === "connected" && /^(localhost|127\.|::1)/.test(connection.server)
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" />}
-        aria-label="Thread details"
-        title="Thread details"
-      >
-        <Info />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 gap-0 rounded-2xl p-1.5">
-        <ContextMenu>
-          <ContextMenuTrigger className="flex flex-col">
-            {show.machine && (
-              <Row icon={local ? Laptop : Server}>
-                {connection.state === "connected" ? connection.server : "Not connected"}
-              </Row>
-            )}
-            {show.project && project && (
-              <Row icon={() => <ProjectBadge name={project.name} className="size-4.5 text-[0.55rem]" />}>{project.name}</Row>
-            )}
-            {show.model && model && (
-              <Row icon={Bot}>
-                {shortModelName(model.model)}
-                {effort && <span className="text-muted-foreground"> · {EFFORT_LABELS[effort] ?? effort}</span>}
-              </Row>
-            )}
-            {show.personalities && cast.length > 0 && <Row icon={Users}>{cast.join(", ")}</Row>}
-            {show.routine && thread.fromRun && (
-              <Row icon={Repeat} onClick={() => store.go({ kind: "run", ...thread.fromRun! })}>
-                From a routine run
-              </Row>
-            )}
-            {show.messages && messages && (
-              <Row icon={MessageSquare}>
-                {messages.length} {messages.length === 1 ? "message" : "messages"}
-              </Row>
-            )}
-            {show.created && startedAt && <Row icon={CalendarClock}>Started {relativeTime(startedAt)}</Row>}
-            {show.updated && <Row icon={Clock}>Last activity {relativeTime(thread.updatedAt)}</Row>}
-            {show.id && (
-              <Row icon={Hash} onClick={copyId} trailing={<Copy className="size-4 text-muted-foreground" />}>
-                <span className="font-mono text-xs">{threadId}</span>
-              </Row>
-            )}
+    <ContextMenu>
+      <ContextMenuTrigger className="flex flex-col">
+        {show.machine && (
+          <Row icon={local ? Laptop : Server}>
+            {connection.state === "connected" ? connection.server : "Not connected"}
+          </Row>
+        )}
+        {show.project && project && (
+          <Row icon={() => <ProjectBadge name={project.name} className="size-4.5 text-[0.55rem]" />}>
+            {project.name}
+          </Row>
+        )}
+        {show.model && model && (
+          <Row icon={Bot}>
+            {shortModelName(model.model)}
+            {effort && <span className="text-muted-foreground"> · {EFFORT_LABELS[effort] ?? effort}</span>}
+          </Row>
+        )}
+        {show.personalities && cast.length > 0 && <Row icon={Users}>{cast.join(", ")}</Row>}
+        {show.routine && thread.fromRun && (
+          <Row icon={Repeat} onClick={() => store.go({ kind: "run", ...thread.fromRun! })}>
+            From a routine run
+          </Row>
+        )}
+        {show.messages && messages && (
+          <Row icon={MessageSquare}>
+            {messages.length} {messages.length === 1 ? "message" : "messages"}
+          </Row>
+        )}
+        {show.created && startedAt && <Row icon={CalendarClock}>Started {relativeTime(startedAt)}</Row>}
+        {show.updated && <Row icon={Clock}>Last activity {relativeTime(thread.updatedAt)}</Row>}
+        {show.id && (
+          <Row icon={Hash} onClick={copyId} trailing={<Copy className="size-4 text-muted-foreground" />}>
+            <span className="font-mono text-xs">{threadId}</span>
+          </Row>
+        )}
+        {show.agents && agents.length > 0 && (
+          <>
             <div className="mx-2 my-1.5 h-px bg-border" />
-            <Row icon={isDone ? Undo2 : Check} onClick={() => void backend.setDone(threadId, !isDone)}>
-              {isDone ? "Mark as not done" : "Mark as done"}
-            </Row>
-            <Row icon={Copy} onClick={copyId}>
-              Copy thread ID
-            </Row>
-          </ContextMenuTrigger>
-          <ContextMenuContent className="min-w-48">
-            <ContextMenuGroup>
-              <ContextMenuLabel>Show in thread details</ContextMenuLabel>
-              {THREAD_DETAIL_ITEMS.map(([key, label]) => (
-                <ContextMenuCheckboxItem
-                  key={key}
-                  checked={show[key]}
-                  onCheckedChange={() =>
-                    appearance.update({ threadDetails: { ...appearance.get().settings.threadDetails, [key]: !show[key] } })
-                  }
-                >
-                  {label}
-                </ContextMenuCheckboxItem>
-              ))}
-            </ContextMenuGroup>
-          </ContextMenuContent>
-        </ContextMenu>
-      </PopoverContent>
-    </Popover>
+            <AgentsSection threadId={threadId} />
+          </>
+        )}
+        <div className="mx-2 my-1.5 h-px bg-border" />
+        <Row icon={isDone ? Undo2 : Check} onClick={() => void backend.setDone(threadId, !isDone)}>
+          {isDone ? "Mark as not done" : "Mark as done"}
+        </Row>
+        <Row icon={Copy} onClick={copyId}>
+          Copy thread ID
+        </Row>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-48">
+        <ContextMenuGroup>
+          <ContextMenuLabel>Show in thread details</ContextMenuLabel>
+          {THREAD_DETAIL_ITEMS.map(([key, label]) => (
+            <ContextMenuCheckboxItem
+              key={key}
+              checked={show[key]}
+              onCheckedChange={() =>
+                appearance.update({
+                  threadDetails: {
+                    ...appearance.get().settings.threadDetails,
+                    [key]: !show[key],
+                  },
+                })
+              }
+            >
+              {label}
+            </ContextMenuCheckboxItem>
+          ))}
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

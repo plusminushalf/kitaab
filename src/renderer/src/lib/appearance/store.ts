@@ -18,6 +18,7 @@ export const THREAD_DETAIL_ITEMS = [
   ["created", "Started"],
   ["updated", "Last activity"],
   ["id", "Thread ID"],
+  ["agents", "Agents"],
 ] as const
 export type ThreadDetailItem = (typeof THREAD_DETAIL_ITEMS)[number][0]
 
@@ -69,6 +70,7 @@ export const DEFAULTS: AppearanceSettings = {
     created: true,
     updated: false,
     id: false,
+    agents: true,
   },
 }
 

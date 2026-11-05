@@ -9,6 +9,7 @@ import { setFileAccess } from "./server-files"
 import { previewText, splitUserText } from "./user-text"
 import { syncKitabContext } from "./kitab-context"
 import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
+import { onSubagentEvent, reconcileSubagents } from "./subagents"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Project
@@ -295,6 +296,7 @@ function onEvent(e: GatewayEvent) {
   const threadId = e.session_id ? storedOf.get(e.session_id) : undefined
   if (!threadId) return
   const p = e.payload ?? {}
+  if (e.type.startsWith("subagent.")) return onSubagentEvent(threadId, e.type, p)
 
   switch (e.type) {
     case "message.start":
@@ -658,6 +660,7 @@ export const backend: Backend = {
     try {
       if (!resuming.has(threadId)) runtimeOf.delete(threadId)
       await ensureRuntime(threadId)
+      void backend.loadSubagents(threadId)
     } catch (e) {
       store.updateDetail(threadId, (d) => ({ ...d, loading: false }))
       toast.error(e instanceof Error ? e.message : String(e))
@@ -715,6 +718,29 @@ export const backend: Backend = {
       throw e
     }
     return threadIdFinal
+  },
+
+  async loadSubagents(threadId) {
+    const runtimeId = runtimeOf.get(threadId)
+    if (!runtimeId) return
+    const before = store.get().subagents[threadId]
+    try {
+      const r = await gw.call<{ subagents?: any[]; delegations?: any[] }>("subagent.list", { session_id: runtimeId })
+      // Answered for a session the thread has since moved off of.
+      if (runtimeOf.get(threadId) !== runtimeId || !Array.isArray(r.subagents)) return
+      reconcileSubagents(threadId, r.subagents, r.delegations ?? [], before)
+    } catch (e) {
+      // Older Hermes without the roster: live events still fill it in.
+      console.warn("[subagents]", e)
+    }
+  },
+
+  async stopSubagent(threadId, subagentId) {
+    const runtimeId = runtimeOf.get(threadId)
+    if (!runtimeId) return
+    const r = await gw.call<{ found?: boolean }>("subagent.interrupt", { session_id: runtimeId, subagent_id: subagentId })
+    if (!r.found) toast.error("Couldn’t stop that agent. It may have finished already.")
+    void backend.loadSubagents(threadId)
   },
 
   async interrupt(threadId) {

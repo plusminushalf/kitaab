@@ -86,6 +86,22 @@ export type Message = {
   endedAt?: number
 }
 
+/** A helper agent a thread handed part of its work to (Hermes delegate_task). */
+export type Subagent = {
+  id: Id
+  /** What it was asked to do. */
+  goal: string
+  status: "queued" | "running" | "completed" | "failed" | "interrupted"
+  model?: string
+  startedAt: number
+  endedAt?: number
+  toolCount?: number
+  /** Its latest step while running, e.g. "terminal: npm test". */
+  activity?: string
+  /** What it reported back, or why it failed. */
+  summary?: string
+}
+
 export type PendingQuestion = {
   id: Id
   kind: "approval" | "clarify" | "other"
