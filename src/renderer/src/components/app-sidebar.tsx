@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
@@ -28,7 +28,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
-import { backend } from "@kitab/core/backend"
+import { backend, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { relativeTime } from "@kitab/core/format"
 import type { Id, Routine, Thread } from "@kitab/core/model"
@@ -76,6 +76,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           : b.updatedAt - a.updatedAt,
     )
   }, [projectThreads, query, sort])
+  useEffect(() => setShownThreadOrder(threads.map((t) => t.id)), [threads])
   const activeThreadId = view.kind === "thread" ? view.threadId : null
   const inRoutines = view.kind === "routines" || view.kind === "routine" || view.kind === "run"
 

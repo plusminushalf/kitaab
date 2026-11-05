@@ -560,6 +560,25 @@ async function refreshProfiles() {
   }))
 }
 
+/** The thread list's order as shown (sort and search applied), so marking the open
+ *  thread done can move to its neighbour. Set by the UI; not state, nothing renders it. */
+let shownOrder: Id[] = []
+export function setShownThreadOrder(ids: Id[]) {
+  shownOrder = ids
+}
+
+/** The thread to open after `threadId` leaves the list: the one above it as shown,
+ *  else the one below, else the most recently active one left. */
+function neighbourOf(threadId: Id, remaining: Thread[]): Id | null {
+  const left = new Set(remaining.map((t) => t.id))
+  const i = shownOrder.indexOf(threadId)
+  if (i >= 0) {
+    for (let j = i - 1; j >= 0; j--) if (left.has(shownOrder[j])) return shownOrder[j]
+    for (let j = i + 1; j < shownOrder.length; j++) if (left.has(shownOrder[j])) return shownOrder[j]
+  }
+  return [...remaining].sort((a, b) => b.updatedAt - a.updatedAt)[0]?.id ?? null
+}
+
 /** Threads marked done this session, newest last, for ⌘Z. */
 const recentlyDone: { threadId: Id; wasOpen: boolean }[] = []
 const doneToastId = (threadId: Id) => `done:${threadId}`
@@ -756,14 +775,14 @@ export const backend: Backend = {
     store.set((s) => {
       const moving = thread ?? s.threads.find((t) => t.id === threadId)
       if (!moving) return {}
-      const others = s.threads.filter((t) => t.projectId === p && t.id !== threadId).sort((a, b) => b.updatedAt - a.updatedAt)
+      const others = s.threads.filter((t) => t.projectId === p && t.id !== threadId)
       const leavingOpen = done && s.view.kind === "thread" && s.view.threadId === threadId
       return {
         threads: done ? s.threads.filter((t) => t.id !== threadId) : [{ ...moving, status: "idle" }, ...s.threads],
         done: done ? [{ ...moving, status: "idle" }, ...s.done] : s.done.filter((t) => t.id !== threadId),
         doneCount: Math.max(0, s.doneCount + (done ? 1 : -1)),
-        // Marking the open thread done moves on to the next one.
-        view: leavingOpen ? { kind: "thread", threadId: others[0]?.id ?? null } : s.view,
+        // Marking the open thread done moves to its neighbour in the list.
+        view: leavingOpen ? { kind: "thread", threadId: neighbourOf(threadId, others) } : s.view,
       }
     })
     const run = threadMeta(threadId).run
