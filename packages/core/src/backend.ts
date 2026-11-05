@@ -7,6 +7,7 @@ import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLi
 import { claimCreatedSkills, noteToolStart } from "./skills"
 import { setFileAccess } from "./server-files"
 import { previewText, splitUserText } from "./user-text"
+import { syncKitabContext } from "./kitab-context"
 import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
@@ -552,6 +553,8 @@ async function connectOnce() {
   store.set({ projects, personalities: readLibrary(profiles) })
   readThreadMeta(profiles)
   void migrateLocal()
+  // Tells Hermes it's talking through Kitab, in every project (see kitab-context.ts).
+  void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
   let saved: string | null = null
   try {
     saved = platform().storage.get("projectId")

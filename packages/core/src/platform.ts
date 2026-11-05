@@ -17,6 +17,8 @@ export type NoticeKind = "info" | "success" | "warning" | "error"
 export type NoticeOptions = { id?: string; action?: { label: string; onClick: () => void } }
 
 export interface Platform {
+  /** Which Kitab app this is. */
+  kind: "mac" | "iphone"
   /** Opens (or reuses) the way to the server and returns a ready-to-use WebSocket URL. */
   connect(): Promise<ConnectionResult>
   /** Authenticated Hermes REST calls; `path` starts with /api/. */

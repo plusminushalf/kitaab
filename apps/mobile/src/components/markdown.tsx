@@ -2,6 +2,8 @@ import { useMemo } from "react"
 import { Linking } from "react-native"
 import { EnrichedMarkdownText } from "react-native-enriched-markdown"
 import { mono, useColors } from "@/lib/theme"
+import { isKitabLink } from "@kitab/core/links"
+import { openKitabLink } from "@/lib/links"
 
 const DELIMITER_ROW = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
 
@@ -43,7 +45,7 @@ export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
     <EnrichedMarkdownText
       flavor="github"
       markdown={markdown}
-      onLinkPress={({ url }) => void Linking.openURL(url)}
+      onLinkPress={({ url }) => void (isKitabLink(url) ? openKitabLink(url) : Linking.openURL(url))}
       enableTaskListItemToggle={false}
       markdownStyle={{
         paragraph: { fontSize: size, lineHeight: size * 1.45, color: c.text, marginBottom: 10 },

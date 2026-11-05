@@ -80,6 +80,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 setPlatform({
+  kind: "iphone",
   connect,
   http: {
     get: (path) => request("GET", path),

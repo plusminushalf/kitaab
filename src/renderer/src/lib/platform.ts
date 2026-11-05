@@ -5,6 +5,7 @@ import { setPlatform } from "@kitab/core/platform"
 // the Dock for attention, localStorage for this device's own settings.
 
 setPlatform({
+  kind: "mac",
   connect: () => window.hermes.connection.open(),
   http: {
     get: (path) => window.hermes.api.get(path),
