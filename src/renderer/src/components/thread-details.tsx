@@ -106,24 +106,31 @@ export function ThreadDetails({ threadId, inline }: { threadId: Id; inline: bool
         <Info />
         {badge}
       </PopoverTrigger>
-      <PopoverContent align="end" className="max-h-[calc(100vh-80px)] w-80 gap-0 overflow-y-auto rounded-2xl p-1.5">
+      <PopoverContent
+        align="end"
+        // Focusing the first button would ring "Previous agents" every time the card opens.
+        initialFocus={false}
+        className="max-h-[calc(100vh-80px)] w-80 gap-0 overflow-y-auto rounded-2xl p-1.5"
+      >
         <DetailsBody threadId={threadId} />
       </PopoverContent>
     </Popover>
   )
 }
 
-/** The card pinned in the right gutter beside the chat. */
+/** The card in its own column right of the chat, as T3 Code keeps it: the chat centers in what's left. */
 export function PinnedThreadDetails({ threadId }: { threadId: Id }) {
   const known = useStore((s) => s.threads.some((t) => t.id === threadId) || s.done.some((t) => t.id === threadId))
   if (!known) return null
   return (
-    <div
-      data-slot="popover-content"
-      className="absolute top-[64px] right-4 z-20 flex max-h-[calc(100%-80px)] w-72 flex-col overflow-y-auto rounded-2xl bg-popover p-1.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
-    >
-      <DetailsBody threadId={threadId} />
-    </div>
+    <aside className="flex w-[304px] shrink-0 flex-col overflow-y-auto pt-3 pr-4 pb-3">
+      <div
+        data-slot="popover-content"
+        className="flex flex-col rounded-2xl bg-popover p-1.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      >
+        <DetailsBody threadId={threadId} />
+      </div>
+    </aside>
   )
 }
 

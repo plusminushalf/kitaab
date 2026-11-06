@@ -32,8 +32,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
   const connected = useStore((s) => s.connection.state === "connected")
   const column = useRef<HTMLDivElement>(null)
-  const chatColumn = useRef<HTMLDivElement>(null)
-  const roomForDetails = useRoomBesideChat(column, chatColumn)
+  const roomForDetails = useRoomForDetails(column)
   const detailsPinned = useDetailsPinned()
   useSubagentPolling(threadId)
 
@@ -91,71 +90,74 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           {threadId && <ThreadDetails threadId={threadId} inline={roomForDetails} />}
         </PageHeader>
 
-        <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
-        <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          {thread?.fromRun && (
-            <div className="mx-auto max-w-chat px-6 pt-4">
-              <Button
-                variant="link"
-                size="sm"
-                className="px-0"
-                onClick={() => store.go({ kind: "run", ...thread.fromRun! })}
-              >
-                From a routine run →
-              </Button>
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
+            <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              {thread?.fromRun && (
+                <div className="mx-auto max-w-chat px-6 pt-4">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="px-0"
+                    onClick={() => store.go({ kind: "run", ...thread.fromRun! })}
+                  >
+                    From a routine run →
+                  </Button>
+                </div>
+              )}
+              {threadId && detail?.messages.length ? (
+                <MessageList
+                  key={threadId}
+                  messages={detail.messages}
+                  personalities={personalities}
+                  onOpenFile={setOpenFile}
+                  openFile={openFile}
+                />
+              ) : (
+                <Empty className="h-full">
+                  <EmptyHeader>
+                    <EmptyTitle>
+                      {threadId
+                        ? !connected
+                          ? "Reconnecting…"
+                          : detail?.loading || !detail || detail.stale
+                            ? "Loading…"
+                            : "Nothing here yet"
+                        : "Start a thread"}
+                    </EmptyTitle>
+                    <EmptyDescription>Drop images, video or files anywhere to attach them.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
             </div>
-          )}
-          {threadId && detail?.messages.length ? (
-            <MessageList
-              key={threadId}
-              messages={detail.messages}
-              personalities={personalities}
-              onOpenFile={setOpenFile}
-              openFile={openFile}
-            />
-          ) : (
-            <Empty className="h-full">
-              <EmptyHeader>
-                <EmptyTitle>
-                  {threadId
-                    ? !connected
-                      ? "Reconnecting…"
-                      : detail?.loading || !detail || detail.stale
-                        ? "Loading…"
-                        : "Nothing here yet"
-                    : "Start a thread"}
-                </EmptyTitle>
-                <EmptyDescription>Drop images, video or files anywhere to attach them.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          )}
-        </div>
 
-        {threadId && roomForDetails && detailsPinned && <PinnedThreadDetails threadId={threadId} />}
-
-        <div ref={chatColumn} className="mx-auto w-full max-w-chat px-6 pb-3">
-          {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
-          <Composer
-            placeholder={
-              host
-                ? `Reply to ${host.name}…`
-                : mentionables.length
-                  ? `${threadId ? "Reply" : "Ask anything"}, or type @ to bring in a personality…`
-                  : threadId
-                    ? "Reply…"
-                    : "Ask anything…"
-            }
-            mentionables={mentionables}
-            busy={busy}
-            drafts={drafts}
-            setDrafts={setDrafts}
-            citations={citations}
-            setCitations={setCitations}
-            onSend={send}
-            onStop={threadId ? () => void backend.interrupt(threadId) : undefined}
-            autoFocus
-            extras={<ModelPicker threadId={threadId} />}
-          />
+            <div className="mx-auto w-full max-w-chat px-6 pb-3">
+              {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
+              <Composer
+                placeholder={
+                  host
+                    ? `Reply to ${host.name}…`
+                    : mentionables.length
+                      ? `${threadId ? "Reply" : "Ask anything"}, or type @ to bring in a personality…`
+                      : threadId
+                        ? "Reply…"
+                        : "Ask anything…"
+                }
+                mentionables={mentionables}
+                busy={busy}
+                drafts={drafts}
+                setDrafts={setDrafts}
+                citations={citations}
+                setCitations={setCitations}
+                onSend={send}
+                onStop={threadId ? () => void backend.interrupt(threadId) : undefined}
+                autoFocus
+                extras={<ModelPicker threadId={threadId} />}
+              />
+            </div>
+          </div>
+          {threadId && roomForDetails && detailsPinned && <PinnedThreadDetails threadId={threadId} />}
         </div>
 
         {dragging && (
@@ -169,27 +171,22 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   )
 }
 
-/** Width of the thread details card when it sits beside the chat, plus its margin. */
-const DETAILS_ROOM = 288 + 24
+/** The details card's column, and the least room the chat may be left with beside it. */
+const DETAILS_COLUMN = 288 + 16
+const MIN_CHAT = 480
 
-/** Whether the gutter right of the chat column is wide enough for the details card. */
-function useRoomBesideChat(column: RefObject<HTMLElement | null>, chat: RefObject<HTMLElement | null>) {
+/** Whether the thread is wide enough to keep the details card in a column beside the chat. */
+function useRoomForDetails(column: RefObject<HTMLElement | null>) {
   const [room, setRoom] = useState(false)
   useEffect(() => {
-    const outer = column.current
-    const inner = chat.current
-    if (!outer || !inner) return
-    const measure = () => {
-      // The chat column's side padding is empty too, so the card may sit over it.
-      const pad = parseFloat(getComputedStyle(inner).paddingRight) || 0
-      setRoom((outer.clientWidth - inner.offsetWidth) / 2 + pad >= DETAILS_ROOM)
-    }
+    const el = column.current
+    if (!el) return
+    const measure = () => setRoom(el.clientWidth >= DETAILS_COLUMN + MIN_CHAT)
     measure()
     const ro = new ResizeObserver(measure)
-    ro.observe(outer)
-    ro.observe(inner)
+    ro.observe(el)
     return () => ro.disconnect()
-  }, [column, chat])
+  }, [column])
   return room
 }
 
