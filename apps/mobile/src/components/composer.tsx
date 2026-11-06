@@ -50,9 +50,9 @@ export function Composer({
     try {
       await onSend(body, files)
     } catch {
-      // Put it back so nothing is lost.
-      setText(body)
-      setAttachments(files)
+      // Put it back so nothing is lost; anything typed since stays, after it.
+      setText((now) => (now.trim() ? `${body}\n\n${now}` : body))
+      setAttachments((now) => [...files, ...now])
     } finally {
       setSending(false)
     }

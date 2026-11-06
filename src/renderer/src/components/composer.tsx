@@ -56,7 +56,8 @@ export function Composer({
   busy?: boolean
   drafts: Draft[]
   setDrafts: (fn: (d: Draft[]) => Draft[]) => void
-  onSend: (text: string, drafts: Draft[]) => void
+  /** Rejects when the message didn't go; the composer then puts it back. */
+  onSend: (text: string, drafts: Draft[]) => Promise<unknown>
   onStop?: () => void
   autoFocus?: boolean
   /** Controls shown in the bottom bar before the send button (e.g. the model picker). */
@@ -111,12 +112,22 @@ export function Composer({
 
   // Sending while a reply runs is fine: Hermes queues or steers it.
   const canSend = text.trim().length > 0 || drafts.length > 0 || citations.length > 0
-  const send = () => {
+  const send = async () => {
     if (!canSend) return
-    onSend(withCitations(text.trim(), citations), drafts)
+    const saved = { text, drafts, citations }
     setCitations?.(() => [])
+    setDrafts(() => [])
     setText("")
     setMention(null)
+    try {
+      await onSend(withCitations(text.trim(), citations), drafts)
+    } catch {
+      // It didn't go (e.g. Hermes is disconnected): put it all back to edit, copy or resend.
+      // Anything typed since stays, after it.
+      setText((now) => (now.trim() ? `${saved.text.trimEnd()}\n\n${now}` : saved.text))
+      setDrafts((now) => [...saved.drafts, ...now])
+      setCitations?.((now) => [...saved.citations, ...now])
+    }
   }
 
   const saveHeight = (h: number) => {
@@ -236,7 +247,7 @@ export function Composer({
             }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
-              send()
+              void send()
             }
           }}
           onPaste={(e) => {
@@ -289,7 +300,7 @@ export function Composer({
                 aria-label={busy ? "Send now (queues behind the current reply)" : "Send"}
                 title={busy ? "Send (steers the running reply)" : "Send"}
                 disabled={!canSend}
-                onClick={send}
+                onClick={() => void send()}
               >
                 {busy ? <ListPlus className="size-4.5" /> : <ArrowUp className="size-4.5" />}
               </Button>

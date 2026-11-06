@@ -447,14 +447,15 @@ export function RunView({ routineId, runId }: { routineId: Id; runId: Id }) {
     else if (run.report === undefined) void backend.loadRunReport(routineId, runId).catch((e) => toast.error(String(e)))
   }, [run, routineId, runId])
 
+  // Throws on failure so the composer keeps what you wrote.
   const reply = async (text: string, sent: Draft[]) => {
-    setDrafts(() => [])
     try {
       const threadId = await backend.replyToRun(routineId, runId, text)
       if (sent.length) await backend.send(threadId, "", sent.map((d) => d.attachment))
       store.go({ kind: "thread", threadId })
     } catch (e) {
       toast.error(String(e instanceof Error ? e.message : e))
+      throw e
     }
   }
 

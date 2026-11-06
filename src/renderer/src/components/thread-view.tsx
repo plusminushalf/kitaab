@@ -53,8 +53,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     if (files.length) setDrafts((d) => [...d, ...files.map(fileToDraft)])
   }
 
+  // Throws on failure so the composer keeps what you wrote.
   const send = async (text: string, sent: Draft[]) => {
-    setDrafts(() => [])
     try {
       const id = await backend.send(
         threadId,
@@ -64,6 +64,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
       if (id !== threadId) store.go({ kind: "thread", threadId: id })
     } catch (err) {
       toast.error(String(err instanceof Error ? err.message : err))
+      throw err
     }
   }
 

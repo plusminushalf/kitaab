@@ -700,9 +700,10 @@ export const backend: Backend = {
       return threadIdFinal
     }
 
+    const optimisticId = `u-${Date.now()}`
     store.updateDetail(threadIdFinal, (d) => ({
       ...d,
-      messages: [...d.messages, { id: `u-${Date.now()}`, role: "user", text, attachments, createdAt: Date.now() }],
+      messages: [...d.messages, { id: optimisticId, role: "user", text, attachments, createdAt: Date.now() }],
     }))
     patchThread(threadIdFinal, { status: "working", updatedAt: Date.now() })
     try {
@@ -715,6 +716,8 @@ export const backend: Backend = {
       await gw.call("prompt.submit", { session_id: runtimeId, text })
     } catch (e) {
       patchThread(threadIdFinal, { status: "idle" })
+      // The composer puts the text back; showing it in the thread too would look sent.
+      store.updateDetail(threadIdFinal, (d) => ({ ...d, messages: d.messages.filter((m) => m.id !== optimisticId) }))
       throw e
     }
     return threadIdFinal
