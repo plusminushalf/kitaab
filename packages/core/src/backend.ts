@@ -11,6 +11,7 @@ import { syncKitabContext } from "./kitab-context"
 import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
+import { inOrder, readProjectOrder, writeProjectOrder } from "./project-order"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 
@@ -303,10 +304,10 @@ async function loadRoutines() {
   store.set({ routines: jobs.map(toRoutine) })
 }
 
-let refreshTimer: ReturnType<typeof setTimeout> | undefined
 /** The thread last open in each project, so switching back reopens it. */
 const lastThread = new Map<Id, Id>()
 
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
 function refreshSoon(what: "threads" | "routines") {
   clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
@@ -629,11 +630,14 @@ async function connectOnce() {
   store.set({ connection: { state: "connected", server: r.label, version: r.version } })
 
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", {})
-  const projects = profiles.map((p) => ({
-    id: p.name as string,
-    name: (p.display_name as string) || (p.name === "default" ? "Default" : (p.name as string)),
-    personalityIds: castOf(p),
-  }))
+  readProjectOrder(profiles)
+  const projects = inOrder(
+    profiles.map((p) => ({
+      id: p.name as string,
+      name: (p.display_name as string) || (p.name === "default" ? "Default" : (p.name as string)),
+      personalityIds: castOf(p),
+    })),
+  )
   store.set({ projects, personalities: readLibrary(profiles) })
   readThreadMeta(profiles)
   readMyModel(profiles)
@@ -666,12 +670,16 @@ async function refreshProfiles() {
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
   readThreadMeta(profiles)
   readMyModel(profiles)
+  // The order can change on another device too.
+  readProjectOrder(profiles)
   store.set((s) => ({
     personalities: readLibrary(profiles),
-    projects: s.projects.map((pr) => {
-      const row = profiles.find((p) => p.name === pr.id)
-      return row ? { ...pr, personalityIds: castOf(row) } : pr
-    }),
+    projects: inOrder(
+      s.projects.map((pr) => {
+        const row = profiles.find((p) => p.name === pr.id)
+        return row ? { ...pr, personalityIds: castOf(row) } : pr
+      }),
+    ),
   }))
 }
 
@@ -777,6 +785,10 @@ export const backend: Backend = {
     void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
     await backend.selectProject(id)
     return id
+  },
+
+  async setProjectOrder(ids) {
+    await writeProjectOrder(gw, ids)
   },
 
   async loadThread(threadId) {

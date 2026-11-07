@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from "react"
 import { Check, Loader2, Plus, Search, Settings } from "lucide-react"
+import { toast } from "sonner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { aggregateStatus, ProjectBadge, StatusPill } from "@/components/project-badge"
 import { backend, projectIdFor } from "@kitab/core/backend"
@@ -9,7 +10,8 @@ import { cn } from "@/lib/utils"
 /**
  * T3-style project switcher: a search field over the project list, each with its
  * badge and what its threads are up to. Arrow keys move, Enter switches. "New project"
- * turns the search field into a name field; Escape goes back to the list.
+ * turns the search field into a name field; Escape goes back to the list. Drag a row,
+ * or press ⌥↑/⌥↓, to change the order (⌘1–⌘9 follow it).
  */
 export function ProjectPicker({
   render,
@@ -30,11 +32,32 @@ export function ProjectPicker({
   const [draft, setDraft] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The project being dragged, and where it would land (an index in the full list). */
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropAt, setDropAt] = useState<number | null>(null)
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return q ? projects.filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)) : projects
   }, [projects, query])
+
+  // Reordering a filtered list would be ambiguous.
+  const reorderable = !query.trim()
+
+  /** Moves a project so it sits before what is now at index `to` (projects.length = last). */
+  const move = (id: string, to: number) => {
+    const from = projects.findIndex((p) => p.id === id)
+    if (from < 0 || to === from || to === from + 1) return
+    const ids = projects.map((p) => p.id)
+    ids.splice(from, 1)
+    ids.splice(to > from ? to - 1 : to, 0, id)
+    backend.setProjectOrder(ids).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+  }
+
+  const endDrag = () => {
+    setDragId(null)
+    setDropAt(null)
+  }
 
   const pick = (id: string) => {
     setOpen(false)
@@ -60,7 +83,12 @@ export function ProjectPicker({
       setQuery("")
       setDraft(null)
       setError(null)
-      setActive(Math.max(0, projects.findIndex((p) => p.id === projectId)))
+      setActive(
+        Math.max(
+          0,
+          projects.findIndex((p) => p.id === projectId),
+        ),
+      )
     }
   }
 
@@ -160,7 +188,16 @@ export function ProjectPicker({
                   setActive(0)
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "ArrowDown") {
+                  if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                    // ⌥↑/⌥↓ move the highlighted project; the highlight goes with it.
+                    e.preventDefault()
+                    const p = shown[active]
+                    if (!reorderable || !p) return
+                    const next = e.key === "ArrowUp" ? active - 1 : active + 1
+                    if (next < 0 || next >= projects.length) return
+                    move(p.id, e.key === "ArrowUp" ? active - 1 : active + 2)
+                    setActive(next)
+                  } else if (e.key === "ArrowDown") {
                     e.preventDefault()
                     setActive((i) => Math.min(shown.length - 1, i + 1))
                   } else if (e.key === "ArrowUp") {
@@ -185,21 +222,61 @@ export function ProjectPicker({
               {shown.map((p, i) => {
                 const own = threads.filter((t) => t.projectId === p.id)
                 const status = own.length ? aggregateStatus(own) : "idle"
+                const n = projects.indexOf(p) + 1
+                // Only where the drop would change something.
+                const from = dragId ? projects.findIndex((x) => x.id === dragId) : -1
+                const moves = dropAt !== null && dropAt !== from && dropAt !== from + 1
+                const lineAbove = moves && dropAt === i
+                const lineBelow = moves && dropAt === shown.length && i === shown.length - 1
                 return (
                   <div
                     key={p.id}
                     role="option"
                     aria-selected={p.id === projectId}
-                    onMouseMove={() => setActive(i)}
+                    draggable={reorderable}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move"
+                      e.dataTransfer.setData("text/plain", p.id)
+                      setDragId(p.id)
+                    }}
+                    onDragOver={(e) => {
+                      if (!dragId) return
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = "move"
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setDropAt(e.clientY < r.top + r.height / 2 ? i : i + 1)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (dragId && dropAt !== null) move(dragId, dropAt)
+                      endDrag()
+                    }}
+                    onDragEnd={endDrag}
+                    onMouseMove={() => !dragId && setActive(i)}
                     onClick={() => pick(p.id)}
                     className={cn(
-                      "flex w-full cursor-default items-center gap-2 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none",
-                      i === active && "bg-accent text-accent-foreground",
+                      "relative flex w-full cursor-default items-center gap-2 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none",
+                      i === active && !dragId && "bg-accent text-accent-foreground",
+                      p.id === dragId && "opacity-50",
                     )}
                   >
+                    {lineAbove && (
+                      <span className="pointer-events-none absolute inset-x-2 -top-px h-0.5 rounded-full bg-primary" />
+                    )}
+                    {lineBelow && (
+                      <span className="pointer-events-none absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />
+                    )}
                     <ProjectBadge name={p.name} />
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>
                     {status !== "done" && <StatusPill status={status} />}
+                    {n <= 9 && (
+                      <kbd
+                        className="shrink-0 font-sans text-xs text-muted-foreground tabular-nums"
+                        title={`⌘${n} switches to ${p.name}`}
+                      >
+                        ⌘{n}
+                      </kbd>
+                    )}
                     {p.id === projectId ? <Check className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
                     <button
                       type="button"

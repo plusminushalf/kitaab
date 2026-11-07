@@ -88,6 +88,8 @@ export interface Backend {
   selectProject(id: Id): Promise<void>
   /** Creates a project (a Hermes profile set up like Default) and switches to it. Resolves to its id. */
   createProject(name: string): Promise<Id>
+  /** Saves the order projects are listed in (and ⌘1–⌘9 follow), for every device. */
+  setProjectOrder(ids: Id[]): Promise<void>
   loadThread(threadId: Id): Promise<void>
   /**
    * Starts a new thread when threadId is null. Resolves to the thread id. While a reply is
