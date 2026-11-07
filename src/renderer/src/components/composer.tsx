@@ -1,6 +1,7 @@
 import type React from "react"
 import { useEffect, useRef, useState, type PointerEvent } from "react"
 import { ArrowUp, FileIcon, ListPlus, Paperclip, TextQuote, X } from "lucide-react"
+import type { SendMode } from "@/lib/store"
 import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import type { Attachment } from "@kitab/core/model"
@@ -8,6 +9,11 @@ import { bytes } from "@kitab/core/format"
 import { withCitations, type Citation } from "@/components/cite-selection"
 
 export type Draft = { file: File; attachment: Attachment }
+
+const SEND_LABELS: Record<SendMode, string> = {
+  queue: "Queue: send when the reply finishes",
+  interrupt: "Interrupt: stop the reply and send now",
+}
 
 export function fileToDraft(file: File): Draft {
   const kind = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "file"
@@ -42,6 +48,7 @@ function mentionAt(text: string, caret: number): Omit<MentionState, "index"> | n
 export function Composer({
   placeholder,
   busy,
+  enterSends = "queue",
   drafts,
   setDrafts,
   onSend,
@@ -53,11 +60,14 @@ export function Composer({
   setCitations,
 }: {
   placeholder: string
+  /** A reply is running: sending queues behind it or interrupts it. */
   busy?: boolean
+  /** What Enter (and the send button) does while busy; ⌘Enter does the other. */
+  enterSends?: SendMode
   drafts: Draft[]
   setDrafts: (fn: (d: Draft[]) => Draft[]) => void
   /** Rejects when the message didn't go; the composer then puts it back. */
-  onSend: (text: string, drafts: Draft[]) => Promise<unknown>
+  onSend: (text: string, drafts: Draft[], how: SendMode) => Promise<unknown>
   onStop?: () => void
   autoFocus?: boolean
   /** Controls shown in the bottom bar before the send button (e.g. the model picker). */
@@ -110,9 +120,10 @@ export function Composer({
     cited.current = citations.length
   }, [citations.length])
 
-  // Sending while a reply runs is fine: Hermes queues or steers it.
+  // While a reply runs, Enter does `enterSends` and ⌘Enter the other.
   const canSend = text.trim().length > 0 || drafts.length > 0 || citations.length > 0
-  const send = async () => {
+  const otherMode: SendMode = enterSends === "queue" ? "interrupt" : "queue"
+  const send = async (how: SendMode = enterSends) => {
     if (!canSend) return
     const saved = { text, drafts, citations }
     setCitations?.(() => [])
@@ -120,7 +131,7 @@ export function Composer({
     setText("")
     setMention(null)
     try {
-      await onSend(withCitations(text.trim(), citations), drafts)
+      await onSend(withCitations(text.trim(), citations), drafts, how)
     } catch {
       // It didn't go (e.g. Hermes is disconnected): put it all back to edit, copy or resend.
       // Anything typed since stays, after it.
@@ -247,7 +258,7 @@ export function Composer({
             }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
-              void send()
+              void send(e.metaKey || e.ctrlKey ? otherMode : enterSends)
             }
           }}
           onPaste={(e) => {
@@ -297,12 +308,12 @@ export function Composer({
               <Button
                 size="icon-lg"
                 className="rounded-full shadow-sm"
-                aria-label={busy ? "Send now (queues behind the current reply)" : "Send"}
-                title={busy ? "Send (steers the running reply)" : "Send"}
+                aria-label={busy ? SEND_LABELS[enterSends] : "Send"}
+                title={busy ? `${SEND_LABELS[enterSends]} (↵) · ${SEND_LABELS[otherMode]} (⌘↵)` : "Send"}
                 disabled={!canSend}
-                onClick={() => void send()}
+                onClick={(e) => void send(e.metaKey || e.ctrlKey ? otherMode : enterSends)}
               >
-                {busy ? <ListPlus className="size-4.5" /> : <ArrowUp className="size-4.5" />}
+                {busy && enterSends === "queue" ? <ListPlus className="size-4.5" /> : <ArrowUp className="size-4.5" />}
               </Button>
             )}
           </div>

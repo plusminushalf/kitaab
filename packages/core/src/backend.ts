@@ -12,6 +12,7 @@ import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, th
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
+import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Project
@@ -49,6 +50,13 @@ function patchThread(id: Id, patch: Partial<Thread>) {
 function lastAssistant(threadId: Id, fn: (m: Message) => Message) {
   store.updateDetail(threadId, (d) => {
     const messages = [...d.messages]
+    // The reply still running gets the update, even when a message you sent since sits below it.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant" && messages[i].streaming) {
+        messages[i] = fn(messages[i])
+        return { ...d, messages }
+      }
+    }
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") {
         messages[i] = fn(messages[i])
@@ -383,8 +391,15 @@ function onEvent(e: GatewayEvent) {
           parts,
         }
       })
+      // Nothing runs once a turn ends: a reply left marked running would show "Working…" forever.
+      store.updateDetail(threadId, (d) =>
+        d.messages.some((m) => m.streaming)
+          ? { ...d, messages: d.messages.map((m) => (m.streaming ? { ...m, streaming: false, endedAt: m.endedAt ?? Date.now() } : m)) }
+          : d,
+      )
       if (p.status === "error" && p.error) toast.error(String(p.error))
       patchThread(threadId, { status: "idle", updatedAt: Date.now() })
+      sendNextQueued(threadId)
       platform().attention()
       void claimCreatedSkills(
         threadId,
@@ -450,6 +465,44 @@ function showRequest(threadId: Id, req: ServerRequest) {
   store.updateDetail(threadId, (d) => ({ ...d, pending: [...d.pending.filter((x) => x.id !== req.id), question] }))
   patchThread(threadId, { status: "needs-you" })
   platform().attention()
+}
+
+// ---- sending while a reply runs -------------------------------------------------
+
+/** Threads being stopped so a message can go right away; their queue waits until it has. */
+const stopping = new Set<Id>()
+
+const statusOf = (threadId: Id) => store.get().threads.find((t) => t.id === threadId)?.status
+const replying = (threadId: Id) => {
+  const status = statusOf(threadId)
+  return status === "working" || status === "needs-you"
+}
+
+/** Resolves true once the thread's reply has ended, or false after `ms`. */
+function untilIdle(threadId: Id, ms: number): Promise<boolean> {
+  if (!replying(threadId)) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    const done = (ended: boolean) => {
+      clearTimeout(timer)
+      off()
+      resolve(ended)
+    }
+    const off = store.subscribe(() => {
+      if (!replying(threadId)) done(true)
+    })
+    const timer = setTimeout(() => done(false), ms)
+  })
+}
+
+/** Sends the next queued message once the thread's reply has ended. */
+function sendNextQueued(threadId: Id) {
+  if (stopping.has(threadId) || replying(threadId) || isPaused(threadId)) return
+  const next = take(threadId)
+  if (!next) return
+  backend.send(threadId, next.text, next.attachments).catch((e) => {
+    putBack(threadId, next)
+    toast.error(`Couldn't send your queued message: ${e instanceof Error ? e.message : e}`)
+  })
 }
 
 // ---- sessions --------------------------------------------------------------------
@@ -678,6 +731,7 @@ export function clearUndoableDone() {
 export const backend: Backend = {
   // Single-flight: overlapping calls (StrictMode, menu, reconnect) share one attempt.
   connect() {
+    readEnterSends()
     connecting ??= connectOnce().finally(() => (connecting = null))
     return connecting
   },
@@ -738,7 +792,7 @@ export const backend: Backend = {
     }
   },
 
-  async send(threadId, text, attachments) {
+  async send(threadId, text, attachments, how = "queue") {
     let id = threadId
     let runtimeId: string
     if (!id) {
@@ -777,6 +831,24 @@ export const backend: Backend = {
       return threadIdFinal
     }
 
+    // A reply is running: hold the message until it ends, or stop it and send now.
+    let ended = true
+    if (replying(threadIdFinal)) {
+      if (how === "queue") {
+        enqueue(threadIdFinal, text, attachments)
+        return threadIdFinal
+      }
+      stopping.add(threadIdFinal)
+      try {
+        await gw.call("session.interrupt", { session_id: runtimeId })
+        ended = await untilIdle(threadIdFinal, 10_000)
+      } finally {
+        stopping.delete(threadIdFinal)
+      }
+    }
+    // Sending again picks the queue back up after a Stop.
+    setPaused(threadIdFinal, false)
+
     const optimisticId = `u-${Date.now()}`
     store.updateDetail(threadIdFinal, (d) => ({
       ...d,
@@ -790,7 +862,8 @@ export const backend: Backend = {
       const cast = await prepareTurn(threadIdFinal, runtimeId, projectId, text)
       patchThread(threadIdFinal, { cast })
       await attach(runtimeId, attachments)
-      await gw.call("prompt.submit", { session_id: runtimeId, text })
+      // A reply that wouldn't stop: Hermes runs this right after it, rather than steering it.
+      await gw.call("prompt.submit", { session_id: runtimeId, text, ...(ended ? {} : { queued: true }) })
     } catch (e) {
       patchThread(threadIdFinal, { status: "idle" })
       // The composer puts the text back; showing it in the thread too would look sent.
@@ -832,8 +905,29 @@ export const backend: Backend = {
   },
 
   async interrupt(threadId) {
+    // Stop means stop: what's queued waits until you send or remove it.
+    setPaused(threadId, true)
     const runtimeId = runtimeOf.get(threadId)
     if (runtimeId) await gw.call("session.interrupt", { session_id: runtimeId })
+  },
+
+  async sendQueuedNow(threadId, queuedId) {
+    const item = take(threadId, queuedId)
+    if (!item) return
+    try {
+      await backend.send(threadId, item.text, item.attachments, "interrupt")
+    } catch (e) {
+      putBack(threadId, item)
+      toast.error(`Couldn't send it: ${e instanceof Error ? e.message : e}`)
+    }
+  },
+
+  unqueue(threadId, queuedId) {
+    take(threadId, queuedId)
+  },
+
+  setEnterSends(mode) {
+    writeEnterSends(mode)
   },
 
   async answer(threadId, question, value) {

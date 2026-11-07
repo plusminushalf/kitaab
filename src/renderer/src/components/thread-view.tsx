@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent, type RefObject } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { CornerDownLeft } from "lucide-react"
+import { CornerDownLeft, ListPlus, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
@@ -15,7 +15,7 @@ import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/componen
 import { useSubagentPolling } from "@/components/thread-agents"
 import { backend } from "@kitab/core/backend"
 import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
-import { store, useStore } from "@/lib/store"
+import { store, useStore, type SendMode } from "@/lib/store"
 
 export function ThreadView({ threadId }: { threadId: Id | null }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId))
@@ -54,12 +54,13 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   }
 
   // Throws on failure so the composer keeps what you wrote.
-  const send = async (text: string, sent: Draft[]) => {
+  const send = async (text: string, sent: Draft[], how: SendMode) => {
     try {
       const id = await backend.send(
         threadId,
         text,
         sent.map((d) => d.attachment),
+        how,
       )
       if (id !== threadId) store.go({ kind: "thread", threadId: id })
     } catch (err) {
@@ -69,7 +70,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   }
 
   const project = useStore((s) => s.projects.find((p) => p.id === (thread?.projectId ?? s.projectId)))
-  const busy = thread?.status === "working"
+  // A reply is running. While Hermes asks a question, your next message answers it instead.
+  const answering = detail?.pending.some((q) => q.kind === "clarify")
+  const busy = thread?.status === "working" || (thread?.status === "needs-you" && !answering)
+  const enterSends = useStore((s) => s.enterSends)
 
   return (
     <div className="flex h-full min-h-0">
@@ -135,6 +139,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
 
             <div className="mx-auto w-full max-w-chat px-6 pb-3">
               {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
+              {threadId && <QueuedMessages threadId={threadId} />}
               <Composer
                 placeholder={
                   host
@@ -147,6 +152,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 }
                 mentionables={mentionables}
                 busy={busy}
+                enterSends={enterSends}
                 drafts={drafts}
                 setDrafts={setDrafts}
                 citations={citations}
@@ -242,6 +248,50 @@ function SidePanel({ file, onClose }: { file: Attachment; onClose: () => void })
       />
       <FilePanel file={file} onClose={onClose} />
     </aside>
+  )
+}
+
+/** Messages waiting for the running reply to finish, oldest first. Each can go now or be dropped. */
+function QueuedMessages({ threadId }: { threadId: Id }) {
+  const queue = useStore((s) => s.queued[threadId])
+  if (!queue?.items.length) return null
+  return (
+    <div className="mb-2 flex flex-col rounded-xl border bg-card p-1.5 text-sm">
+      <div className="px-2 pt-0.5 pb-1 text-xs text-muted-foreground">
+        {queue.paused ? "Queued · held because the reply was stopped" : "Queued · sends when the reply finishes"}
+      </div>
+      {queue.items.map((q) => {
+        const files = q.attachments.length
+        const first = q.text.trim().split("\n")[0]
+        return (
+          <div key={q.id} className="flex items-center gap-2 rounded-lg py-0.5 pr-0.5 pl-2 hover:bg-accent/50">
+            <ListPlus className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate" title={q.text}>
+              {first || `${files} ${files === 1 ? "file" : "files"}`}
+              {first && files ? <span className="text-muted-foreground"> · {files} {files === 1 ? "file" : "files"}</span> : null}
+            </span>
+            <Button
+              size="xs"
+              variant="ghost"
+              title="Interrupt the reply and send this now"
+              onClick={() => void backend.sendQueuedNow(threadId, q.id)}
+            >
+              Send now
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="text-muted-foreground"
+              aria-label="Remove from queue"
+              title="Remove"
+              onClick={() => backend.unqueue(threadId, q.id)}
+            >
+              <X />
+            </Button>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

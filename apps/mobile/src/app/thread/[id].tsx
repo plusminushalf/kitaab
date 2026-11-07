@@ -14,6 +14,7 @@ import { useColors } from "@/lib/theme"
 import { Composer } from "@/components/composer"
 import { MessageRow } from "@/components/message"
 import { PendingCard } from "@/components/pending"
+import { QueuedCard } from "@/components/queued"
 import { Avatar, Empty, Icon } from "@/components/ui"
 
 export default function ThreadScreen() {
@@ -139,6 +140,7 @@ export default function ThreadScreen() {
           />
         )}
         {id ? detail?.pending.map((q) => <PendingCard key={q.id} threadId={id} question={q} />) : null}
+        {id ? <QueuedCard threadId={id} /> : null}
         <Composer
           threadId={id}
           working={working}

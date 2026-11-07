@@ -30,6 +30,18 @@ export type View =
 
 export type SettingsSection = "general" | "threads" | "appearance"
 
+/**
+ * What sending does while a reply is running. "queue" waits for the reply to finish;
+ * "interrupt" stops it and sends right away.
+ */
+export type SendMode = "queue" | "interrupt"
+
+/** A message waiting for the running reply to finish. */
+export type QueuedMessage = { id: string; text: string; attachments: Attachment[] }
+
+/** A thread's waiting messages, sent one at a time in order. Stopping the reply pauses them. */
+export type Queue = { items: QueuedMessage[]; paused: boolean }
+
 export type State = {
   connection: Connection
   projects: Project[]
@@ -64,6 +76,10 @@ export type State = {
   view: View
   /** The settings overlay's open section, or null when it's closed. */
   settings: SettingsSection | null
+  /** Messages each thread is holding until its running reply finishes. */
+  queued: Record<Id, Queue>
+  /** What Enter does while a reply is running (⌘Enter does the other). This device only. */
+  enterSends: SendMode
 }
 
 /** What the UI needs from a backend. The Hermes adapter implements it. */
@@ -73,9 +89,20 @@ export interface Backend {
   /** Creates a project (a Hermes profile set up like Default) and switches to it. Resolves to its id. */
   createProject(name: string): Promise<Id>
   loadThread(threadId: Id): Promise<void>
-  /** Starts a new thread when threadId is null. Resolves to the thread id. */
-  send(threadId: Id | null, text: string, attachments: Attachment[]): Promise<Id>
+  /**
+   * Starts a new thread when threadId is null. Resolves to the thread id. While a reply is
+   * running, `how` decides: "queue" (the default) holds the message until it finishes,
+   * "interrupt" stops it and sends now.
+   */
+  send(threadId: Id | null, text: string, attachments: Attachment[], how?: SendMode): Promise<Id>
+  /** Stops the running reply. Messages queued behind it wait until you send or remove them. */
   interrupt(threadId: Id): Promise<void>
+  /** Sends a queued message now, stopping the running reply if there is one. */
+  sendQueuedNow(threadId: Id, queuedId: string): Promise<void>
+  /** Drops a queued message. */
+  unqueue(threadId: Id, queuedId: string): void
+  /** What Enter does while a reply is running, saved on this device. */
+  setEnterSends(mode: SendMode): void
   answer(threadId: Id, question: PendingQuestion, value: string): Promise<void>
   loadRuns(routineId: Id): Promise<void>
   loadRunReport(routineId: Id, runId: Id): Promise<void>
@@ -115,6 +142,8 @@ const initial: State = {
   subagents: {},
   view: { kind: "thread", threadId: null },
   settings: null,
+  queued: {},
+  enterSends: "queue",
 }
 
 let state = initial
