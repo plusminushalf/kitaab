@@ -296,6 +296,9 @@ async function loadRoutines() {
 }
 
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
+/** The thread last open in each project, so switching back reopens it. */
+const lastThread = new Map<Id, Id>()
+
 function refreshSoon(what: "threads" | "routines") {
   clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
@@ -682,9 +685,17 @@ export const backend: Backend = {
     try {
       platform().storage.set("projectId", id)
     } catch {}
-    const changed = store.get().projectId !== id
+    const { projectId: from, view } = store.get()
+    const changed = from !== id
     store.set({ projectId: id })
-    if (changed) store.go({ kind: "thread", threadId: null })
+    if (changed) {
+      // Coming back to a project reopens the thread you had open there.
+      if (from && view.kind === "thread") {
+        if (view.threadId) lastThread.set(from, view.threadId)
+        else lastThread.delete(from)
+      }
+      store.go({ kind: "thread", threadId: lastThread.get(id) ?? null })
+    }
     await Promise.all([
       loadThreads(id).catch((e) => toast.error(`Threads: ${e.message ?? e}`)),
       loadDone(id).catch(() => {}),
