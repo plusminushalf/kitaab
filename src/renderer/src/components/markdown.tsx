@@ -1,7 +1,9 @@
-import { useState } from "react"
+import { useEffect, useRef, useState, type ComponentProps } from "react"
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ImageOff } from "lucide-react"
+import { Check, Copy, ImageOff } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { isKitabLink, openKitabLink } from "@kitab/core/links"
 import { serverImageUrl, serverPath } from "@kitab/core/server-files"
@@ -37,6 +39,7 @@ export function Markdown({ text }: { text: string }) {
           img: ({ src, alt, node }) => (
             <ReplyImage src={typeof src === "string" ? src : undefined} alt={alt} written={node?.properties?.src} />
           ),
+          pre: ({ node: _node, ...props }) => <CodeBlock {...props} />,
           // Wide tables scroll inside themselves instead of widening the page.
           table: (props) => (
             <div className="overflow-x-auto">
@@ -47,6 +50,44 @@ export function Markdown({ text }: { text: string }) {
       >
         {text}
       </ReactMarkdown>
+    </div>
+  )
+}
+
+/** A fenced code block, with a button in its corner that copies the code. */
+function CodeBlock(props: ComponentProps<"pre">) {
+  const ref = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(t)
+  }, [copied])
+  const copy = () => {
+    const text = ref.current?.textContent?.replace(/\n$/, "") ?? ""
+    void navigator.clipboard.writeText(text).then(() => setCopied(true))
+  }
+  const label = copied ? "Copied" : "Copy"
+  return (
+    <div className="group/code relative">
+      <pre ref={ref} {...props} />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={label}
+              onClick={copy}
+              className="not-prose absolute top-2 right-2 bg-code text-muted-foreground opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
+              data-copied={copied}
+            />
+          }
+        >
+          {copied ? <Check /> : <Copy />}
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
     </div>
   )
 }
