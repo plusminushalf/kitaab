@@ -279,6 +279,9 @@ html[data-word-wrap="on"] .prose pre { white-space: pre-wrap; overflow-wrap: any
   cursor: auto;
 }
 
+/* Links show the pointer, even inside selectable text (the rule above would reset it). */
+a[href], [role="link"] { cursor: pointer; }
+
 .app-drag { -webkit-app-region: drag; }
 .app-drag button, .app-drag a, .app-drag input, .app-no-drag { -webkit-app-region: no-drag; }
 
