@@ -1,0 +1,36 @@
+# Deploys the website in site/ to kitaab.plusminushalf.com (Cloudflare, site/wrangler.jsonc).
+#
+# - Runs on every push to main that changes site/ or this file.
+# - Run it by hand from Actions → Deploy site → Run workflow.
+#
+# Repo secrets: CLOUDFLARE_API_TOKEN (template "Edit Cloudflare Workers", zone plusminushalf.com)
+# and CLOUDFLARE_ACCOUNT_ID.
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+# One deploy at a time, in push order.
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bunx wrangler@4 deploy
+        working-directory: site
