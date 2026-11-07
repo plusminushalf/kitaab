@@ -47,6 +47,33 @@ function readSort(): Sort {
   }
 }
 
+/**
+ * Ctrl+Tab opens the next thread down the list as shown (sort and search applied),
+ * Ctrl+Shift+Tab the one above; both wrap. Away from the list's threads, they start
+ * from the top or the bottom.
+ */
+function useThreadCycling(threads: Thread[], activeThreadId: Id | null) {
+  const latest = useRef({ threads, activeThreadId })
+  latest.current = { threads, activeThreadId }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !e.ctrlKey || e.metaKey || e.altKey) return
+      // Ctrl+Tab never moves focus here, even when there's nowhere to go.
+      e.preventDefault()
+      if (store.get().settings) return
+      const { threads, activeThreadId } = latest.current
+      if (!threads.length) return
+      const by = e.shiftKey ? -1 : 1
+      const i = threads.findIndex((t) => t.id === activeThreadId)
+      const next = i === -1 ? (by === 1 ? 0 : threads.length - 1) : (i + by + threads.length) % threads.length
+      if (threads[next].id !== activeThreadId) store.go({ kind: "thread", threadId: threads[next].id })
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [])
+}
+
 export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const projects = useStore((s) => s.projects)
   const projectId = useStore((s) => s.projectId)
@@ -79,6 +106,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, [projectThreads, query, sort])
   useEffect(() => setShownThreadOrder(threads.map((t) => t.id)), [threads])
   const activeThreadId = view.kind === "thread" ? view.threadId : null
+  useThreadCycling(threads, activeThreadId)
   const inRoutines = view.kind === "routines" || view.kind === "routine" || view.kind === "run"
 
   return (

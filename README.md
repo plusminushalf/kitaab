@@ -143,9 +143,11 @@ To sign and notarize the app with Apple, so it opens on any Mac with no Gatekeep
 |---|---|
 | `⌘N` | New thread |
 | `⌘⇧S` | Mark thread as done |
-| `⌘K` | Find |
+| `⌘F` | Find in thread (`⌘G` / `⌘⇧G` for next / previous match) |
+| `⌃Tab` `⌃⇧Tab` | Next / previous thread in the sidebar |
 | `⌘B` | Toggle sidebar |
-| `⌘1` `⌘2` `⌘3` | Threads, Routines, Personalities |
+| `⌘1`–`⌘9` | Switch project |
+| `⌥⌘1`–`⌥⌘4` | Threads, Routines, Personalities, Project settings |
 | `⌘[` `⌘]` | Back, forward |
 | `⌘,` | Settings |
 
