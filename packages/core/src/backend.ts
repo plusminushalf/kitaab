@@ -10,6 +10,7 @@ import { previewText, splitUserText } from "./user-text"
 import { syncKitabContext } from "./kitab-context"
 import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
+import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Project
@@ -83,20 +84,29 @@ function mapTranscript(rows: any[]): Message[] {
       })
     } else if (r.role === "assistant" || r.role === "tool") {
       if (!turn) {
-        turn = { id: `a-${r.row_id ?? out.length}`, role: "assistant", text: "", tools: [], createdAt: ts, startedAt: lastUserAt ?? ts }
+        turn = { id: `a-${r.row_id ?? out.length}`, role: "assistant", text: "", tools: [], parts: [], createdAt: ts, startedAt: lastUserAt ?? ts }
         out.push(turn)
       }
       turn.endedAt = ts
       if (r.role === "assistant") {
-        if (text) turn.text = turn.text ? `${turn.text}\n\n${text}` : text
-        if (r.reasoning) turn.reasoning = turn.reasoning ? `${turn.reasoning}\n\n${r.reasoning}` : r.reasoning
+        // A row's thinking comes before its text, and its tool calls (the tool rows) after.
+        if (r.reasoning) {
+          turn.reasoning = turn.reasoning ? `${turn.reasoning}\n\n${r.reasoning}` : r.reasoning
+          turn.parts = addReasoning(turn.parts!, r.reasoning, "\n\n")
+        }
+        if (text) {
+          turn.text = turn.text ? `${turn.text}\n\n${text}` : text
+          turn.parts = addText(breakText(turn.parts!), text)
+        }
       } else {
-        turn.tools!.push({
+        const call: ToolCall = {
           id: r.tool_call_id ?? `t-${turn.tools!.length}`,
           name: r.name ?? "tool",
           summary: r.labels?.[0]?.text ?? r.context ?? undefined,
           status: "done",
-        })
+        }
+        turn.tools!.push(call)
+        turn.parts = addTool(turn.parts!, call)
       }
     }
   }
@@ -310,6 +320,7 @@ function onEvent(e: GatewayEvent) {
             role: "assistant",
             text: "",
             tools: [],
+            parts: [],
             createdAt: Date.now(),
             startedAt: Date.now(),
             streaming: true,
@@ -322,21 +333,19 @@ function onEvent(e: GatewayEvent) {
       lastAssistant(threadId, (m) => ({
         ...m,
         text: p.text == null ? (m.text && !m.text.endsWith("\n\n") ? m.text + "\n\n" : m.text) : m.text + p.text,
+        parts: p.text == null ? breakText(partsOf(m)) : addText(partsOf(m), p.text),
       }))
       break
     case "reasoning.delta":
     case "thinking.delta":
-      if (p.text) lastAssistant(threadId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + p.text }))
+      if (p.text) lastAssistant(threadId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + p.text, parts: addReasoning(partsOf(m), p.text) }))
       break
     case "tool.start":
       noteToolStart(threadId, p.name, p.args)
-      lastAssistant(threadId, (m) => ({
-        ...m,
-        tools: [
-          ...(m.tools ?? []),
-          { id: p.tool_id ?? String(Date.now()), name: p.name ?? "tool", summary: p.preview ?? undefined, status: "running" } as ToolCall,
-        ],
-      }))
+      lastAssistant(threadId, (m) => {
+        const call: ToolCall = { id: p.tool_id ?? String(Date.now()), name: p.name ?? "tool", summary: p.preview ?? undefined, status: "running" }
+        return { ...m, tools: [...(m.tools ?? []), call], parts: addTool(partsOf(m), call) }
+      })
       break
     case "tool.complete":
       lastAssistant(threadId, (m) => ({
@@ -344,16 +353,24 @@ function onEvent(e: GatewayEvent) {
         tools: (m.tools ?? []).map((t) =>
           t.id === p.tool_id ? { ...t, status: "done", summary: p.summary ?? t.summary } : t,
         ),
+        parts: updateTool(partsOf(m), p.tool_id, (t) => ({ ...t, status: "done", summary: p.summary ?? t.summary })),
       }))
       break
     case "message.complete":
-      lastAssistant(threadId, (m) => ({
-        ...m,
-        streaming: false,
-        endedAt: Date.now(),
-        text: m.text.trim() ? m.text.trim() : (p.text ?? ""),
-        reasoning: m.reasoning ?? p.reasoning ?? undefined,
-      }))
+      lastAssistant(threadId, (m) => {
+        // Text or thinking that only came with the end (nothing streamed) still belongs in the parts.
+        let parts = partsOf(m)
+        if (!m.text.trim() && p.text) parts = addText(parts, p.text)
+        if (!m.reasoning && p.reasoning) parts = [{ type: "work", reasoning: p.reasoning, tools: [] }, ...parts]
+        return {
+          ...m,
+          streaming: false,
+          endedAt: Date.now(),
+          text: m.text.trim() ? m.text.trim() : (p.text ?? ""),
+          reasoning: m.reasoning ?? p.reasoning ?? undefined,
+          parts,
+        }
+      })
       if (p.status === "error" && p.error) toast.error(String(p.error))
       patchThread(threadId, { status: "idle", updatedAt: Date.now() })
       platform().attention()

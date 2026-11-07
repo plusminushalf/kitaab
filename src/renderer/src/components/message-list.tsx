@@ -6,6 +6,7 @@ import type { Attachment, Message, Personality } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
 import { Markdown } from "@/components/markdown"
 import { WorkLog } from "@/components/work-log"
+import { splitTurn } from "@kitab/core/turn"
 
 export function MessageList({
   messages,
@@ -124,14 +125,15 @@ function MessageRow({
     )
   }
 
+  const { work, answer } = splitTurn(m)
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {author && <div className="text-xs font-medium text-muted-foreground">{author}</div>}
-      <WorkLog message={m} />
+      <WorkLog message={m} work={work} />
       {m.attachments?.length ? <Attachments items={m.attachments} {...files} /> : null}
-      {m.text ? (
-        <Markdown text={m.text} />
-      ) : m.streaming ? (
+      {answer ? (
+        <Markdown text={answer} />
+      ) : m.streaming && !work.length ? (
         <Spinner className="text-muted-foreground" />
       ) : null}
     </div>

@@ -1,11 +1,13 @@
 import { useState } from "react"
 import { Brain, ChevronDown, ChevronRight, Globe, SquareTerminal, Wrench, FileText, Code, BookOpen, Split } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import type { Message, ToolCall } from "@kitab/core/model"
+import type { Message, Part, ToolCall } from "@kitab/core/model"
+import { Markdown } from "@/components/markdown"
 
 // The work behind an answer, the way T3 Code shows it: one "Worked for 3m 8s"
-// line that opens to the thinking and tool calls, with runs of the same tool
-// folded into one row ("Ran 8 commands"). Open while the turn is running.
+// line that opens to the thinking, tool calls and the text written between them,
+// in the order they happened, with runs of the same tool folded into one row
+// ("Ran 8 commands"). Open while the turn is running.
 
 type Group = { name: string; calls: ToolCall[] }
 
@@ -70,11 +72,11 @@ function duration(ms: number): string {
   return `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-export function WorkLog({ message: m }: { message: Message }) {
-  const tools = m.tools ?? []
+/** `work` is the turn up to its answer (see splitTurn in @kitab/core/turn). */
+export function WorkLog({ message: m, work }: { message: Message; work: Part[] }) {
   const running = Boolean(m.streaming)
   const [open, setOpen] = useState<boolean | null>(null) // null = follow running state
-  if (!tools.length && !m.reasoning) return null
+  if (!work.length) return null
 
   const expanded = open ?? running
   const ms = m.startedAt && m.endedAt ? m.endedAt - m.startedAt : 0
@@ -92,11 +94,19 @@ export function WorkLog({ message: m }: { message: Message }) {
         <ChevronDown className={"size-3.5 transition-transform " + (expanded ? "" : "-rotate-90")} />
       </button>
       {expanded && (
-        <div className="mt-1 flex flex-col gap-0.5 border-l pl-3">
-          {m.reasoning && <ThinkingRow text={m.reasoning} />}
-          {groupTools(tools).map((g, i) => (
-            <ToolGroupRow key={`${g.name}-${i}`} group={g} />
-          ))}
+        <div className="mt-1 flex flex-col gap-3">
+          {work.map((p, i) =>
+            p.type === "text" ? (
+              <Markdown key={i} text={p.text.trim()} />
+            ) : (
+              <div key={i} className="flex flex-col gap-0.5 border-l pl-3">
+                {p.reasoning?.trim() && <ThinkingRow text={p.reasoning} />}
+                {groupTools(p.tools).map((g, j) => (
+                  <ToolGroupRow key={`${g.name}-${j}`} group={g} />
+                ))}
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>

@@ -71,12 +71,18 @@ export type ToolCall = {
   status: "running" | "done" | "error"
 }
 
+/** A stretch of an assistant turn: text it wrote, or thinking and tool calls in a row. */
+export type Part = { type: "text"; text: string } | { type: "work"; reasoning?: string; tools: ToolCall[] }
+
 export type Message = {
   id: Id
   role: "user" | "assistant" | "system"
+  /** All of the turn's text, joined. `parts` has it in order with the work between. */
   text: string
   reasoning?: string
   tools?: ToolCall[]
+  /** An assistant turn in the order it happened (see turn.ts). */
+  parts?: Part[]
   attachments?: Attachment[]
   personalityId?: Id
   createdAt: number

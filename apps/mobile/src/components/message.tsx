@@ -3,14 +3,16 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native"
 import { Image } from "expo-image"
 import * as Clipboard from "expo-clipboard"
 import * as Haptics from "expo-haptics"
-import type { Message, ToolCall } from "@kitab/core/model"
+import type { Message, Part, ToolCall } from "@kitab/core/model"
+import { splitTurn } from "@kitab/core/turn"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Markdown } from "./markdown"
 import { Avatar, Icon } from "./ui"
 
 // One turn in a thread. Same reading as the Mac: user messages in a bubble on the right,
-// answers full width with a "Worked for …" line that opens to the thinking and tool calls.
+// answers full width with a "Worked for …" line that opens to the thinking, tool calls and
+// the text written between them, in the order they happened.
 
 type Group = { name: string; calls: ToolCall[] }
 
@@ -71,12 +73,11 @@ function duration(ms: number): string {
   return `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-function WorkLog({ message: m }: { message: Message }) {
+function WorkLog({ message: m, work }: { message: Message; work: Part[] }) {
   const c = useColors()
-  const tools = m.tools ?? []
   const running = Boolean(m.streaming)
   const [open, setOpen] = useState<boolean | null>(null)
-  if (!tools.length && !m.reasoning) return null
+  if (!work.length) return null
   const expanded = open ?? running
   const ms = m.startedAt && m.endedAt ? m.endedAt - m.startedAt : 0
   const label = running ? "Working…" : ms ? `Worked for ${duration(ms)}` : "Worked"
@@ -89,35 +90,45 @@ function WorkLog({ message: m }: { message: Message }) {
         <Icon name={expanded ? "chevron.down" : "chevron.right"} size={11} color={c.textMuted} weight="semibold" />
       </Pressable>
       {expanded ? (
-        <View style={{ marginLeft: 4, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: c.border, gap: 8, marginTop: 4 }}>
-          {m.reasoning ? (
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Icon name="brain" size={14} color={c.textMuted} />
-              <Text style={{ flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={running ? undefined : 8}>
-                {m.reasoning.trim()}
-              </Text>
-            </View>
-          ) : null}
-          {groupTools(tools).map((g, i) => {
-            const busy = g.calls.some((t) => t.status === "running")
-            const summary = g.calls.length === 1 ? g.calls[0].summary : undefined
-            return (
-              <View key={`${g.name}-${i}`} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-                <Icon name={iconFor(g.name)} size={14} color={c.textMuted} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.text, fontSize: 13 }}>{describe(g.name, g.calls.length)}</Text>
-                  {summary ? (
-                    <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 1 }} numberOfLines={2}>
-                      {summary}
-                    </Text>
-                  ) : null}
-                </View>
-                {busy ? <ActivityIndicator size="small" /> : null}
-              </View>
-            )
-          })}
+        <View style={{ gap: 10, marginTop: 4 }}>
+          {work.map((p, i) => (p.type === "text" ? <Markdown key={i} text={p.text.trim()} /> : <WorkPart key={i} part={p} running={running} />))}
         </View>
       ) : null}
+    </View>
+  )
+}
+
+function WorkPart({ part, running }: { part: Extract<Part, { type: "work" }>; running: boolean }) {
+  const c = useColors()
+  const reasoning = part.reasoning?.trim()
+  return (
+    <View style={{ marginLeft: 4, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: c.border, gap: 8 }}>
+      {reasoning ? (
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Icon name="brain" size={14} color={c.textMuted} />
+          <Text style={{ flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={running ? undefined : 8}>
+            {reasoning}
+          </Text>
+        </View>
+      ) : null}
+      {groupTools(part.tools).map((g, i) => {
+        const busy = g.calls.some((t) => t.status === "running")
+        const summary = g.calls.length === 1 ? g.calls[0].summary : undefined
+        return (
+          <View key={`${g.name}-${i}`} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+            <Icon name={iconFor(g.name)} size={14} color={c.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontSize: 13 }}>{describe(g.name, g.calls.length)}</Text>
+              {summary ? (
+                <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 1 }} numberOfLines={2}>
+                  {summary}
+                </Text>
+              ) : null}
+            </View>
+            {busy ? <ActivityIndicator size="small" /> : null}
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -130,6 +141,7 @@ function copy(text: string) {
 export const MessageRow = memo(function MessageRow({ message: m }: { message: Message }) {
   const c = useColors()
   const speaker = useStore((s) => s.personalities.find((p) => p.id === m.personalityId))
+  const { work, answer } = splitTurn(m)
 
   if (m.role === "user") {
     return (
@@ -169,10 +181,10 @@ export const MessageRow = memo(function MessageRow({ message: m }: { message: Me
           <Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>{speaker.name}</Text>
         </View>
       ) : null}
-      <WorkLog message={m} />
-      {m.text ? (
-        <Markdown text={m.text} />
-      ) : m.streaming && !m.tools?.length && !m.reasoning ? (
+      <WorkLog message={m} work={work} />
+      {answer ? (
+        <Markdown text={answer} />
+      ) : m.streaming && !work.length ? (
         <ActivityIndicator style={{ alignSelf: "flex-start" }} />
       ) : null}
     </View>
