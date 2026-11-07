@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1C1D29"/>
+      <stop offset="1" stop-color="#07070A"/>
+    </linearGradient>
+    <!-- The book is cut along one diagonal; the top half slides off it. -->
+    <clipPath id="above"><path d="M0 0 H1024 V257 L0 776 Z"/></clipPath>
+    <clipPath id="below"><path d="M0 776 L1024 257 V1024 H0 Z"/></clipPath>
+    <g id="book" fill="#F2F0EA">
+      <path d="M494 372 L222 252 L278 676 L494 772 Z"/>
+      <path d="M530 372 L802 252 L746 676 L530 772 Z"/>
+    </g>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="96" fill="url(#bg)"/>
+  <use href="#book" clip-path="url(#below)"/>
+  <g transform="translate(14 -18)"><use href="#book" clip-path="url(#above)"/></g>
+</svg>

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kitaab, a Hermes client for macOS and iPhone</title>
+  <meta name="description" content="A Hermes client for macOS and iPhone, made for entrepreneurs and solopreneurs to organize their work across multiple projects.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#"><img src="icon.svg" alt="" width="28" height="28"><span>Kitaab</span></a>
+    <nav>
+      <a href="#download">Download</a>
+      <a href="https://github.com/plusminushalf/kitaab" class="gh">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="wrap hero-inner">
+      <h1>An organizer for Hermes.</h1>
+      <p class="lede">Made for entrepreneurs and solopreneurs who run several projects.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/plusminushalf/kitaab/releases/latest">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76-1.48.02-2.85.86-3.61 2.19-1.54 2.67-.39 6.63 1.11 8.8.73 1.06 1.6 2.25 2.75 2.21 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.88.69 1.19-.02 1.94-1.08 2.67-2.15.84-1.23 1.19-2.42 1.21-2.48-.03-.01-2.32-.89-2.33-3.56zM14.17 6.13c.61-.74 1.02-1.76.91-2.78-.88.04-1.94.59-2.57 1.32-.56.65-1.06 1.69-.93 2.69.98.08 1.98-.5 2.59-1.23z"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn ghost" href="https://github.com/plusminushalf/kitaab">View on GitHub</a>
+      </div>
+      <p class="fine">Apple silicon &middot; v0.1.1 &middot; Free and open source</p>
+      <p class="fine">The iPhone app isn&rsquo;t on the App Store yet. You build it from the code.</p>
+    </div>
+
+    <!-- The real app -->
+    <div class="wrap">
+      <figure class="window">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <img src="img/thread.webp" width="2560" height="1920" alt="Kitaab on the Mac, showing a thread in the pit-wall project where Designer and Developer answer in turn">
+      </figure>
+    </div>
+  </section>
+
+  <!-- Projects -->
+  <section class="row">
+    <div class="wrap split">
+      <div class="copy">
+        <h2>Make a project for each thing you work on.</h2>
+        <p>Think of a project as a folder for one part of your work, like your product, a client, or a personal goal like getting fit. Everything about it goes inside, including your conversations, your files and what Hermes remembers. None of it mixes with your other projects.</p>
+        <p class="how"><span>How</span>Click the project name at the top of the sidebar, then New project.</p>
+      </div>
+      <div class="visual">
+        <figure class="shot narrow"><img src="img/projects.webp" width="660" height="608" alt="The project switcher in the Kitaab sidebar, listing Default, healthy-life, kitaab and pit-wall"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Threads -->
+  <section class="row">
+    <div class="wrap split reverse">
+      <div class="copy">
+        <h2>Every conversation is a thread inside a project.</h2>
+        <p>A thread is one conversation about one thing, like fixing a bug or planning a launch. Each thread belongs to a project. You can have many threads open in a project and switch between them. Every thread knows what its project knows, so you never start from zero.</p>
+        <p class="how"><span>How</span>Press <kbd>&#8984;N</kbd> to start a thread.</p>
+      </div>
+      <div class="visual">
+        <figure class="shot narrow"><img src="img/threads.webp" width="512" height="620" alt="The Kitaab sidebar with the threads of the pit-wall project"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Personalities -->
+  <section class="row">
+    <div class="wrap split">
+      <div class="copy">
+        <h2>Work with a team of agents, each with its own role.</h2>
+        <p>A personality is an agent with a role, like Designer, Developer or Coach. You write each one once, with its name, its job and how it should work. Then you add it to the projects where you need it. The agent knows how to do its job, and the project tells it about your work. So the same Designer can work on all your projects.</p>
+        <p class="how"><span>How</span>In a thread, type @ and the agent's name, and it answers. You can bring several agents into one thread, and each reply shows who wrote it.</p>
+      </div>
+      <div class="visual">
+        <figure class="shot"><img src="img/personalities.webp" width="1504" height="980" alt="The Personalities page in Kitaab, with Designer, Developer, X-poster and X-searcher turned on for pit-wall"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Routines -->
+  <section class="row">
+    <div class="wrap split reverse">
+      <div class="copy">
+        <h2>Let Hermes do a task on a schedule.</h2>
+        <p>A routine is a task Hermes does again and again, like checking GitHub every morning or searching X every 90 minutes. You don't need to be there. After each run, Hermes writes a short report. Reply to the report and it turns into a thread, so you can ask follow-up questions.</p>
+        <p class="how"><span>How</span>Ask for one in a thread, for example &ldquo;Check my GitHub every morning at 9 and tell me what's new.&rdquo; Hermes sets it up, and it shows under Routines.</p>
+      </div>
+      <div class="visual">
+        <div class="stack">
+          <figure class="shot"><img src="img/routine.webp" width="1504" height="980" alt="A routine in Kitaab called Find sideline posts, running every 90 minutes, with its list of runs"></figure>
+          <figure class="shot front"><img src="img/run-thread.webp" width="1504" height="1048" alt="A routine run that became a thread after a reply"></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Server -->
+  <section class="row">
+    <div class="wrap split">
+      <div class="copy">
+        <h2>It connects to your own Hermes.</h2>
+        <p>Kitaab connects over SSH to the computer where Hermes runs. You don't make an account, and no other server sits in between. Your Mac and your iPhone connect to the same Hermes, so you see the same threads on both.</p>
+        <ul class="checks">
+          <li>Your SSH key is the only login.</li>
+          <li>Kitaab never installs or updates Hermes.</li>
+          <li>You can also connect to a Hermes dashboard URL.</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="panel diagram">
+          <div class="devices">
+            <div class="device"><span class="dev-icon mac"></span>Mac</div>
+            <div class="device"><span class="dev-icon phone"></span>iPhone</div>
+          </div>
+          <div class="link"><span>SSH</span></div>
+          <div class="server">
+            <div class="server-head">your-server</div>
+            <code>hermes serve --isolated</code>
+            <small>Kitaab starts this. Only your SSH connection can reach it.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Open source -->
+  <section class="row">
+    <div class="wrap">
+      <h2 class="center">All the code is on GitHub.</h2>
+      <div class="split even">
+        <div class="term">
+          <div class="term-bar"><span class="lights"><i></i><i></i><i></i></span><span>~</span></div>
+          <pre><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/install.sh | bash
+<span class="o"><b>==&gt;</b> Downloading the signed checksums</span>
+<span class="o"><b>==&gt;</b> Checking the release signature</span>
+<span class="o"><b>==&gt;</b> Downloading Kitab-0.1.1-arm64.dmg</span>
+<span class="o"><b>==&gt;</b> Verified: sha256 e02ff326&hellip;46bae88b</span>
+<span class="o"><b>==&gt;</b> Installing to /Applications/Kitaab.app</span>
+<span class="o"><b>==&gt;</b> Kitaab is installed. Opening it.</span>
+<span class="p">$</span> <span class="cursor"></span></pre>
+        </div>
+        <div class="panel side">
+          <ul class="checks big">
+            <li><strong>Read the code.</strong> The Mac app, the iPhone app and the installer are all there, under the MIT license.</li>
+            <li><strong>The installer checks the download.</strong> Before it installs anything, it checks the release signature and the file's SHA-256.</li>
+            <li><strong>Apple hasn't notarized the app yet.</strong> If you download the DMG in a browser, macOS blocks it the first time. Allow it once in System Settings, under Privacy &amp; Security.</li>
+          </ul>
+          <div class="cta left">
+            <a class="btn primary small" href="https://github.com/plusminushalf/kitaab">Open on GitHub</a>
+            <a class="quiet" href="https://github.com/plusminushalf/kitaab#verifying-a-download">How to check a download yourself &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing -->
+  <section class="closing" id="download">
+    <div class="wrap center">
+      <h2>Download Kitaab for Mac.</h2>
+      <p class="lede">You need a Mac with Apple silicon and a computer that runs <a href="https://hermes-agent.nousresearch.com/docs">Hermes</a>.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/plusminushalf/kitaab/releases/latest">Download for Mac</a>
+        <a class="btn ghost" href="https://github.com/plusminushalf/kitaab#iphone">Set up the iPhone app</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>Kitaab &middot; MIT licensed &middot; Kitaab isn&rsquo;t made by Nous Research</span>
+    <nav>
+      <a href="https://github.com/plusminushalf/kitaab">GitHub</a>
+      <a href="https://github.com/plusminushalf/kitaab/releases">Releases</a>
+      <a href="https://hermes-agent.nousresearch.com/docs">Hermes docs</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
