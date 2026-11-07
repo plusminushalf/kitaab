@@ -96,7 +96,7 @@ The first command should print `Good "kitab-release" signature`, the second `Kit
 
 ### Updates
 
-Kitaab updates itself from GitHub releases. About 15 seconds after launch, and every 30 minutes after that, it downloads the latest release's `SHA256SUMS` and checks its signature against the same pinned release key. If that names a newer DMG, a download button appears at the bottom of the sidebar. Hover it to see what's new, and click it to download. When the download is done, the button turns into a restart arrow. Click it, confirm, and Kitaab quits, replaces itself and reopens. **Kitaab → Check for Updates…** and Settings → General check right away.
+Kitaab updates itself from GitHub releases. About 15 seconds after launch, and every 30 minutes after that, it downloads the latest release's `SHA256SUMS` and checks its signature against the same pinned release key. If that names a newer DMG, a download button appears at the bottom of the sidebar. Hover it to see what's new, and click it to download. When the download is done, the button turns into a restart arrow. Click it, or **Restart** on the "downloaded" notification, and Kitaab quits, replaces itself and reopens. **Kitaab → Check for Updates…** and Settings → General check right away.
 
 Before staging an update, Kitaab checks that the DMG matches its signed SHA-256, that the app inside has Kitaab's bundle id, that its version is the one the signed file names, and that its code signature is intact. It only ever moves forward a version. If the folder Kitaab is in isn't writable by you, macOS asks for an administrator password when installing. If an update doesn't take, the next launch says so.
 

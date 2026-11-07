@@ -20,11 +20,11 @@
 // folder isn't writable), and opens it again. If the new version doesn't come up,
 // the next launch says so.
 
-import { app, BrowserWindow, dialog } from "electron"
+import { app, BrowserWindow } from "electron"
 import { execFile, spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { createWriteStream, existsSync, openSync, readFileSync } from "node:fs"
-import { access, constants, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable, Transform } from "node:stream"
@@ -423,6 +423,7 @@ fi
 
 let installing = false
 
+// The Restart click that calls this is the confirmation; asking again here meant confirming twice.
 export async function installUpdate(): Promise<boolean> {
   const version = state.downloadedVersion
   const target = bundlePath()
@@ -431,24 +432,6 @@ export async function installUpdate(): Promise<boolean> {
     set({ status: state.availableVersion ? "available" : "up-to-date", downloadedVersion: null, downloadPercent: null })
     return false
   }
-
-  const needsAdmin = await access(dirname(target), constants.W_OK).then(
-    () => access(target, constants.W_OK).then(() => false, () => true),
-    () => true,
-  )
-  const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  const options: Electron.MessageBoxOptions = {
-    type: "question",
-    buttons: ["Restart and Update", "Later"],
-    defaultId: 0,
-    cancelId: 1,
-    message: `Restart Kitaab to install ${version}?`,
-    detail:
-      "Kitaab will close and reopen. Your Hermes backend keeps running, so threads and routines pick up where they were." +
-      (needsAdmin ? "\n\nmacOS will ask for an administrator password, because Kitaab's folder isn't writable by you." : ""),
-  }
-  const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
-  if (response !== 0) return false
 
   installing = true
   try {
