@@ -1,5 +1,5 @@
 #!/bin/bash
-# Writes dist/SHA256SUMS for every DMG in dist/ and signs it with Kitab's release
+# Writes dist/SHA256SUMS for every DMG in dist/ and signs it with Kitaab's release
 # key, producing dist/SHA256SUMS.sig. install.sh, and anyone checking a download
 # by hand, verifies that signature against release-key.pub.
 #
@@ -9,9 +9,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../dist"
 [ -n "${RELEASE_SIGNING_KEY:-}" ] || { echo "RELEASE_SIGNING_KEY is not set" >&2; exit 1; }
-ls Kitab-*.dmg > /dev/null 2>&1 || { echo "No DMG in dist/; run pnpm dmg first" >&2; exit 1; }
+ls Kitaab-*.dmg > /dev/null 2>&1 || { echo "No DMG in dist/; run pnpm dmg first" >&2; exit 1; }
 
-shasum -a 256 Kitab-*.dmg > SHA256SUMS
+shasum -a 256 Kitaab-*.dmg > SHA256SUMS
 
 key="$(mktemp)"
 trap 'rm -f "$key"' EXIT

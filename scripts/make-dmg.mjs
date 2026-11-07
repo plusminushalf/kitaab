@@ -1,5 +1,5 @@
-// Wraps dist/Kitab.app in a drag-to-Applications disk image:
-// dist/Kitab-<version>-<arch>.dmg. Run `pnpm package` first (`pnpm dmg` does both).
+// Wraps dist/Kitaab.app in a drag-to-Applications disk image:
+// dist/Kitaab-<version>-<arch>.dmg. Run `pnpm package` first (`pnpm dmg` does both).
 //
 // With APPLE_SIGNING_IDENTITY set, the image is signed too. With APPLE_ID,
 // APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID also set, it is notarized by
@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-const NAME = "Kitab"
+const NAME = "Kitaab"
 const root = join(import.meta.dirname, "..")
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 const app = join(root, "dist", `${NAME}.app`)
@@ -22,7 +22,7 @@ if (!existsSync(app)) {
 }
 
 // The window shows the app next to a link to /Applications.
-const stage = mkdtempSync(join(tmpdir(), "kitab-dmg-"))
+const stage = mkdtempSync(join(tmpdir(), "kitaab-dmg-"))
 run("cp", ["-R", app, join(stage, `${NAME}.app`)])
 symlinkSync("/Applications", join(stage, "Applications"))
 

@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name           = 'KitabSsh'
   s.version        = '1.0.0'
-  s.summary        = 'SSH exec and port forwarding for Kitab'
+  s.summary        = 'SSH exec and port forwarding for Kitaab'
   s.description    = 'Keychain-held Ed25519 key, pinned host key, exec with stdin, and local port forwards over swift-nio-ssh.'
   s.author         = ''
   s.homepage       = 'https://github.com/plusminushalf/kitaab'

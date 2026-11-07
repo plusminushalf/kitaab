@@ -70,7 +70,7 @@ export default function Settings() {
       <KeyboardAwareScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ backgroundColor: c.surfaceRaised }} contentContainerStyle={{ padding: 16 }} bottomOffset={24}>
         <Section
           title="Hermes host"
-          footer="Kitab signs in over SSH and shares one private Hermes backend with your Mac, so threads, routines and personalities are the same on both. Use the address your phone can reach, like a Tailscale name."
+          footer="Kitaab signs in over SSH and shares one private Hermes backend with your Mac, so threads, routines and personalities are the same on both. Use the address your phone can reach, like a Tailscale name."
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text style={{ color: c.textMuted, fontSize: 16, width: 64, paddingLeft: 16 }}>Host</Text>
@@ -110,7 +110,7 @@ export default function Settings() {
         </Section>
 
         {saved.hostKey ? (
-          <Section title="Host key" footer="Kitab trusted this key the first time it connected and refuses a host that shows a different one.">
+          <Section title="Host key" footer="Kitaab trusted this key the first time it connected and refuses a host that shows a different one.">
             <View style={{ padding: 16, gap: 4 }}>
               <Text style={{ fontFamily: mono, fontSize: 12, color: c.text, lineHeight: 17 }} selectable>
                 {saved.hostFingerprint ?? saved.hostKey}
@@ -133,7 +133,7 @@ export default function Settings() {
         ) : null}
 
         {saved.host ? (
-          <Section title="Server" footer="Restarting stops Kitab's Hermes backend on the host for every device. The next connection starts a fresh one.">
+          <Section title="Server" footer="Restarting stops Kitaab's Hermes backend on the host for every device. The next connection starts a fresh one.">
             {conn.state === "connected" ? <Row title="Hermes" detail={conn.version ? `Version ${conn.version}` : undefined} /> : null}
             <Row
               title="Restart Hermes backend"
@@ -165,7 +165,7 @@ export default function Settings() {
           </Section>
         ) : null}
 
-        <Text style={{ color: c.textMuted, fontSize: 13, textAlign: "center" }}>Kitab {Constants.expoConfig?.version}</Text>
+        <Text style={{ color: c.textMuted, fontSize: 13, textAlign: "center" }}>Kitaab {Constants.expoConfig?.version}</Text>
       </KeyboardAwareScrollView>
     </>
   )

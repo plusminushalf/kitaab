@@ -1,11 +1,11 @@
-# Builds Kitab-<version>-arm64.dmg.
+# Builds Kitaab-<version>-arm64.dmg.
 #
 # - Push a tag like v0.1.0: the DMG is built with that version and attached to
 #   a GitHub release for the tag.
 # - Run it by hand (Actions → Build DMG → Run workflow): the DMG is uploaded as
 #   a workflow artifact only.
 #
-# Every DMG gets a SHA256SUMS file signed with Kitab's release key (secret
+# Every DMG gets a SHA256SUMS file signed with Kitaab's release key (secret
 # RELEASE_SIGNING_KEY; the public half is release-key.pub). install.sh refuses
 # anything that doesn't verify, so a tagged release fails without that secret.
 #
@@ -94,14 +94,14 @@ jobs:
               exit 1
             fi
             echo "::warning::RELEASE_SIGNING_KEY is not set; writing an unsigned SHA256SUMS."
-            (cd dist && shasum -a 256 Kitab-*.dmg > SHA256SUMS && cat SHA256SUMS)
+            (cd dist && shasum -a 256 Kitaab-*.dmg > SHA256SUMS && cat SHA256SUMS)
             exit 0
           fi
           scripts/sign-release.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kitab-dmg
+          name: kitaab-dmg
           path: |
             dist/*.dmg
             dist/SHA256SUMS
@@ -129,5 +129,5 @@ jobs:
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
           gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "Kitab $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
+            || gh release create "$GITHUB_REF_NAME" --title "Kitaab $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
           gh release upload "$GITHUB_REF_NAME" dist/*.dmg dist/SHA256SUMS dist/SHA256SUMS.sig --clobber

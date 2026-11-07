@@ -1,19 +1,19 @@
 import type { ExpoConfig } from "expo/config"
 
 const config: ExpoConfig = {
-  name: "Kitab",
-  slug: "kitab",
-  scheme: "kitab",
+  name: "Kitaab",
+  slug: "kitaab",
+  scheme: "kitaab",
   version: "0.0.1",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "app.kitab.ios",
+    bundleIdentifier: "app.kitaab.ios",
     supportsTablet: false,
     infoPlist: {
-      NSPhotoLibraryUsageDescription: "Kitab attaches the photos you pick to a message.",
-      NSCameraUsageDescription: "Kitab attaches the photos you take to a message.",
+      NSPhotoLibraryUsageDescription: "Kitaab attaches the photos you pick to a message.",
+      NSCameraUsageDescription: "Kitaab attaches the photos you take to a message.",
       ITSAppUsesNonExemptEncryption: false,
     },
   },

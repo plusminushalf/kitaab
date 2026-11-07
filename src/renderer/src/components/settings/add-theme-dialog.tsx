@@ -68,7 +68,7 @@ export function AddThemeDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           variants.push({ ...v, name: t.label })
         } catch {}
       }
-      if (!variants.length) throw new Error("None of its themes have the colors Kitab needs.")
+      if (!variants.length) throw new Error("None of its themes have the colors Kitaab needs.")
       const source = `open-vsx:${key}`
       const existing = custom.find((f) => f.source === source)
       const family = familyFromVariants(displayName, variants, source)
@@ -198,7 +198,7 @@ export function AddThemeDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
           <Textarea
             className="h-20 font-mono text-xs"
-            placeholder="Or paste theme JSON (Kitab, T3 Code or VS Code)"
+            placeholder="Or paste theme JSON (Kitaab, T3 Code or VS Code)"
             value={json}
             onChange={(e) => setJson(e.target.value)}
           />

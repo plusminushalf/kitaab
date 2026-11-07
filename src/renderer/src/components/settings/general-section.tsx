@@ -7,7 +7,7 @@ import { useStore } from "@/lib/store"
 import type { Settings } from "../../../../shared/bridge"
 import { SettingRow, SettingsCard, SettingsGroup } from "./settings-page"
 
-/** Where Kitab connects. Over SSH it starts (and reuses) its own private Hermes backend. */
+/** Where Kitaab connects. Over SSH it starts (and reuses) its own private Hermes backend. */
 export function GeneralSection() {
   const [s, setS] = useState<Settings | null>(null)
   const [saved, setSaved] = useState<Settings | null>(null)
@@ -62,7 +62,7 @@ export function GeneralSection() {
           </SettingRow>
           <SettingRow
             label="SSH host"
-            description="A host or an alias from ~/.ssh/config. Kitab starts its own private Hermes backend there and reuses it on every launch. Your SSH key must be in the agent."
+            description="A host or an alias from ~/.ssh/config. Kitaab starts its own private Hermes backend there and reuses it on every launch. Your SSH key must be in the agent."
           >
             <Input className="w-56" placeholder="dev" {...field("sshHost")} />
           </SettingRow>

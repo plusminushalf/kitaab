@@ -18,7 +18,7 @@ const tunnel = new Tunnel()
 
 // The official Hermes desktop app owns ~/Library/Application Support/Hermes.
 // Keep our own folder so we never share its settings or its single-instance lock.
-// The folder keeps its pre-Kitab name so existing settings survive the rename.
+// The folder keeps its pre-Kitaab name so existing settings survive the rename.
 app.setPath("userData", join(app.getPath("appData"), "hermes-desktop"))
 
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -33,7 +33,7 @@ function createWindow(): BrowserWindow {
     minWidth: 880,
     minHeight: 560,
     show: false,
-    title: "Kitab",
+    title: "Kitaab",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 18 },
     vibrancy: "sidebar",
@@ -53,15 +53,15 @@ function createWindow(): BrowserWindow {
   win.once("ready-to-show", () => win.show())
 
   // Links open in the default browser, never inside the app.
-  // kitab:// links are followed by the renderer itself; never hand them to macOS.
+  // kitaab:// (and older kitab://) links are followed by the renderer itself; never hand them to macOS.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (!/^kitab:/i.test(url)) void shell.openExternal(url)
+    if (!/^kitaa?b:/i.test(url)) void shell.openExternal(url)
     return { action: "deny" }
   })
   win.webContents.on("will-navigate", (event, url) => {
     if (url !== win.webContents.getURL()) {
       event.preventDefault()
-      if (!/^kitab:/i.test(url)) void shell.openExternal(url)
+      if (!/^kitaa?b:/i.test(url)) void shell.openExternal(url)
     }
   })
 

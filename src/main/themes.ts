@@ -13,7 +13,7 @@ import type { ExtensionTheme, ThemeExtension, ThemeSearchSort } from "../shared/
 const run = promisify(execFile)
 const OPEN_VSX = "https://open-vsx.org/api"
 const MAX_VSIX = 20 * 1024 * 1024
-const UA = { "user-agent": `Kitab/${app.getVersion()}` }
+const UA = { "user-agent": `Kitaab/${app.getVersion()}` }
 
 async function json<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: UA })

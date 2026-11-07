@@ -1,18 +1,18 @@
 {
-  "name": "kitab",
-  "productName": "Kitab",
+  "name": "kitaab",
+  "productName": "Kitaab",
   "version": "0.0.1",
   "license": "MIT",
   "private": true,
-  "description": "Kitab: a small macOS client for a Hermes Agent server",
+  "description": "Kitaab: a small macOS client for a Hermes Agent server",
   "main": "./out/main/index.js",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev-electron.mjs && env -u ELECTRON_RUN_AS_NODE ELECTRON_EXEC_PATH=node_modules/.kitab-electron/Kitab.app/Contents/MacOS/Electron electron-vite dev",
+    "dev": "node scripts/dev-electron.mjs && env -u ELECTRON_RUN_AS_NODE ELECTRON_EXEC_PATH=node_modules/.kitab-electron/Kitaab.app/Contents/MacOS/Electron electron-vite dev",
     "build": "electron-vite build",
     "package": "electron-vite build && node scripts/package-mac.mjs",
     "install-app": "electron-vite build && node scripts/package-mac.mjs --install",
-    "start": "node scripts/dev-electron.mjs && env -u ELECTRON_RUN_AS_NODE ELECTRON_EXEC_PATH=node_modules/.kitab-electron/Kitab.app/Contents/MacOS/Electron electron-vite preview",
+    "start": "node scripts/dev-electron.mjs && env -u ELECTRON_RUN_AS_NODE ELECTRON_EXEC_PATH=node_modules/.kitab-electron/Kitaab.app/Contents/MacOS/Electron electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dmg": "electron-vite build && node scripts/package-mac.mjs && node scripts/make-dmg.mjs"
   },

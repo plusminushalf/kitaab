@@ -6,7 +6,7 @@ import { useServerSettings } from "@/lib/settings"
 import { useColors } from "@/lib/theme"
 import { Icon } from "./ui"
 
-/** Shown above a list while Kitab isn't connected to Hermes. */
+/** Shown above a list while Kitaab isn't connected to Hermes. */
 export function ConnectionBanner() {
   const c = useColors()
   const conn = useStore((s) => s.connection)
@@ -15,7 +15,7 @@ export function ConnectionBanner() {
 
   const setup = !settings.host || !settings.user
   const connecting = conn.state === "connecting"
-  const message = setup ? "Connect Kitab to your Hermes host to get started." : connecting ? `Connecting to ${settings.host}…` : conn.state === "error" ? conn.message : "Not connected"
+  const message = setup ? "Connect Kitaab to your Hermes host to get started." : connecting ? `Connecting to ${settings.host}…` : conn.state === "error" ? conn.message : "Not connected"
 
   return (
     <Pressable

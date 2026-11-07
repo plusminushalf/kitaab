@@ -12,7 +12,7 @@ export function Markdown({ text }: { text: string }) {
     <div className="selectable prose prose-neutral max-w-none min-w-0 wrap-anywhere dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-code prose-pre:text-code-foreground prose-pre:wrap-normal prose-th:wrap-normal prose-td:wrap-normal prose-code:before:content-none prose-code:after:content-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        // Keeps kitab:// links (react-markdown drops unknown schemes by default), and loads
+        // Keeps kitaab:// links (react-markdown drops unknown schemes by default), and loads
         // images given as server paths (![card](/home/me/out/card.png)) from the server.
         urlTransform={(url, key) => {
           if (isKitabLink(url)) return url
@@ -20,7 +20,7 @@ export function Markdown({ text }: { text: string }) {
           return defaultUrlTransform(url)
         }}
         components={{
-          // kitab:// links open inside the app; the rest go to the browser (main process).
+          // kitaab:// links open inside the app; the rest go to the browser (main process).
           a: ({ href, node: _node, ...props }) =>
             isKitabLink(href) ? (
               <a

@@ -2,15 +2,15 @@ import type { Id } from "./model"
 import { gw } from "./backend"
 import { http, platform, type Platform } from "./platform"
 
-// What Hermes is told about Kitab, so the agent knows which app it's talking through.
+// What Hermes is told about Kitaab, so the agent knows which app it's talking through.
 //
-// Kitab starts its backend with HERMES_DESKTOP=1, so Hermes treats every Kitab chat as the
+// Kitaab starts its backend with HERMES_DESKTOP=1, so Hermes treats every Kitaab chat as the
 // official Hermes desktop app and gives the agent that app's paragraph (MEDIA: cards,
-// ::preview widgets…), none of which Kitab shows. In every project (profile) Kitab writes:
-//   config.yaml  platform_hints.desktop.replace   Kitab's own paragraph for chats
+// ::preview widgets…), none of which Kitaab shows. In every project (profile) Kitaab writes:
+//   config.yaml  platform_hints.desktop.replace   Kitaab's own paragraph for chats
 //   config.yaml  platform_hints.cron.append       a note for routine runs
 // (platform_hints is a top-level key; Hermes ignores it under agent:)
-//   skill        kitab                                  words and kitab:// links, read on demand
+//   skill        kitab                                  words and kitaab:// links, read on demand
 //   ui_meta      kitab.context                          what was written, so it's written once
 //
 // Which apps the user has is kept on the default profile, one key per install:
@@ -19,7 +19,7 @@ import { http, platform, type Platform } from "./platform"
 export type DeviceKind = Platform["kind"]
 
 /** Bump when the texts change in a way older apps shouldn't undo. */
-const VERSION = 3
+const VERSION = 4
 const DEVICE = "kitab.device."
 const MARKER = "kitab.context"
 const SKILL = "kitab"
@@ -82,10 +82,10 @@ function where(kinds: DeviceKind[]): string {
 }
 
 const RENDERING =
-  "Kitab renders GitHub-flavoured markdown: headings, lists, tables, code blocks and links. To show an " +
+  "Kitaab renders GitHub-flavoured markdown: headings, lists, tables, code blocks and links. To show an " +
   "image you made or found on the server (a chart, a card, a screenshot), embed it with markdown image " +
   "syntax and its full path on the server, for example `![Weekly chart](/home/me/out/chart.png)`; " +
-  "Kitab loads it from the server and shows it in your reply. Web image URLs work too. Kitab doesn't " +
+  "Kitaab loads it from the server and shows it in your reply. Web image URLs work too. Kitaab doesn't " +
   "render math, Mermaid, raw HTML, MEDIA: tags or ::preview widgets, so don't use them; to point to " +
   "any other file, give its full path on the server."
 
@@ -98,45 +98,45 @@ function phoneNote(kinds: DeviceKind[]): string {
 /** Replaces Hermes's "desktop" paragraph in this project's chats. */
 export function chatHint(project: Project, kinds: DeviceKind[]): string {
   return [
-    `You're chatting through Kitab, the user's own app for Hermes (not the official Hermes desktop app). ` +
-      `The user has Kitab ${where(kinds)}. Every Kitab app shows the same projects, threads and routines, ` +
+    `You're chatting through Kitaab, the user's own app for Hermes (not the official Hermes desktop app). ` +
+      `The user has Kitaab ${where(kinds)}. Every Kitaab app shows the same projects, threads and routines, ` +
       `kept in sync through this server, so the user may read your reply on any of them.${phoneNote(kinds)}`,
     RENDERING,
-    `In Kitab, a Hermes profile is a project, a session is a thread, a cron job is a routine, and each run ` +
+    `In Kitaab, a Hermes profile is a project, a session is a thread, a cron job is a routine, and each run ` +
       `of a cron job is a run. This chat is a thread in the project "${project.name}" (profile ` +
-      `\`${project.id}\`). Use Kitab's words with the user. For links that open a thread, routine or run ` +
-      `inside Kitab, and what you can change there, load the \`${SKILL}\` skill.`,
+      `\`${project.id}\`). Use Kitaab's words with the user. For links that open a thread, routine or run ` +
+      `inside Kitaab, and what you can change there, load the \`${SKILL}\` skill.`,
   ].join("\n\n")
 }
 
 /** Added to Hermes's own paragraph for cron runs in this project. */
 export function routineHint(project: Project, kinds: DeviceKind[]): string {
   return [
-    `This cron job is a routine in Kitab, the user's own app for Hermes, in the project "${project.name}". ` +
-      `The user reads each run's final response as its report in Kitab ${where(kinds)}, under the ` +
+    `This cron job is a routine in Kitaab, the user's own app for Hermes, in the project "${project.name}". ` +
+      `The user reads each run's final response as its report in Kitaab ${where(kinds)}, under the ` +
       `routine's runs, and can reply to it there.${phoneNote(kinds)}`,
     RENDERING,
   ].join("\n\n")
 }
 
-/** The `kitab` skill: Kitab's words, links into the app, and what the agent may change. */
+/** The `kitab` skill: Kitaab's words, links into the app, and what the agent may change. */
 export function skillText(project: Project, kinds: DeviceKind[]): string {
   const p = project.id
-  const description = "Links that open threads, routines and runs in Kitab"
+  const description = "Links that open threads, routines and runs in Kitaab"
   return `---
 name: ${SKILL}
 description: ${JSON.stringify(description)}
 ---
 
-# Kitab
+# Kitaab
 
-Kitab is the user's own app for Hermes. They have it ${where(kinds)}. Every Kitab app reads this
+Kitaab is the user's own app for Hermes. They have it ${where(kinds)}. Every Kitaab app reads this
 server, so all of them show the same projects, threads, routines and runs. You're in the project
 "${project.name}", which is the Hermes profile \`${p}\`.
 
-## Kitab's words
+## Kitaab's words
 
-| Hermes | Kitab |
+| Hermes | Kitaab |
 |---|---|
 | profile | project |
 | session (not from cron) | thread |
@@ -144,41 +144,41 @@ server, so all of them show the same projects, threads, routines and runs. You'r
 | the session a cron job ran in | run (its last reply is the run's report) |
 | archived session | done thread |
 
-Personalities are Kitab's own: characters (Designer, Coach…) the user adds to a project and to
-threads. Kitab manages them; don't edit them yourself.
+Personalities are Kitaab's own: characters (Designer, Coach…) the user adds to a project and to
+threads. Kitaab manages them; don't edit them yourself.
 
-## Links into Kitab
+## Links into Kitaab
 
-Write these as ordinary markdown links. When the user taps one inside Kitab, the app opens that
+Write these as ordinary markdown links. When the user taps one inside Kitaab, the app opens that
 place, switching project first if needed. Always keep \`?project=\`.
 
 | Opens | Link |
 |---|---|
-| a thread | \`kitab://thread/<session id>?project=${p}\` |
-| a routine | \`kitab://routine/<cron job id>?project=${p}\` |
-| one run's report | \`kitab://run/<cron job id>/<run session id>?project=${p}\` |
-| the project's routines | \`kitab://routines?project=${p}\` |
-| the project's done threads | \`kitab://done?project=${p}\` |
-| the project's settings | \`kitab://project?project=${p}\` |
-| the personality library | \`kitab://personalities\` |
+| a thread | \`kitaab://thread/<session id>?project=${p}\` |
+| a routine | \`kitaab://routine/<cron job id>?project=${p}\` |
+| one run's report | \`kitaab://run/<cron job id>/<run session id>?project=${p}\` |
+| the project's routines | \`kitaab://routines?project=${p}\` |
+| the project's done threads | \`kitaab://done?project=${p}\` |
+| the project's settings | \`kitaab://project?project=${p}\` |
+| the personality library | \`kitaab://personalities\` |
 
-Example: \`[Open the routine](kitab://routine/3f9a1c2b?project=${p})\`
+Example: \`[Open the routine](kitaab://routine/3f9a1c2b?project=${p})\`
 
 Only link to ids you have looked up, never guessed ones:
 - **Cron job ids:** the \`cronjob\` tool with \`action: "list"\`.
 - **Session ids** (threads and runs): \`session_search\`. A run's session has the source \`cron\`.
 
-Links only open inside Kitab. Anywhere else (Telegram, email), describe where to look instead,
-for example "Kitab → ${project.name} → Routines → Morning brief".
+Links only open inside Kitaab. Anywhere else (Telegram, email), describe where to look instead,
+for example "Kitaab → ${project.name} → Routines → Morning brief".
 
-## What you can change in Kitab
+## What you can change in Kitaab
 
-Kitab shows what is on this server, so these show up in the app:
+Kitaab shows what is on this server, so these show up in the app:
 - Creating, editing, pausing or removing a cron job (the \`cronjob\` tool) changes the project's routines.
 - Creating or editing a skill changes the project's skills.
 
-Kitab keeps its own data in each profile's \`profile.yaml\` under \`ui_meta\` keys starting with
-\`kitab.\`. Never edit those, or this skill: Kitab rewrites the skill when it changes.
+Kitaab keeps its own data in each profile's \`profile.yaml\` under \`ui_meta\` keys starting with
+\`kitab.\`. Never edit those, or this skill: Kitaab rewrites the skill when it changes.
 `
 }
 
@@ -217,7 +217,7 @@ async function writeProject(project: Project, kinds: DeviceKind[], stamp: { vers
 
 let syncing: Promise<void> | null = null
 
-/** Records this app and brings every project's Kitab context up to date. Cheap when nothing changed. */
+/** Records this app and brings every project's Kitaab context up to date. Cheap when nothing changed. */
 export function syncKitabContext(rows: ProfileRow[]): Promise<void> {
   syncing ??= (async () => {
     const kinds = await registerDevice(rows)
@@ -228,7 +228,7 @@ export function syncKitabContext(rows: ProfileRow[]): Promise<void> {
         hash: hash([chatHint(project, kinds), routineHint(project, kinds), skillText(project, kinds)].join("\0")),
       }
       const had = row.ui_meta?.[MARKER]
-      // A newer Kitab manages this project; don't undo its texts.
+      // A newer Kitaab manages this project; don't undo its texts.
       if (typeof had?.version === "number" && had.version > VERSION) continue
       if (had?.version === stamp.version && had?.hash === stamp.hash) continue
       try {

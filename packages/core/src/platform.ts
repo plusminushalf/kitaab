@@ -17,7 +17,7 @@ export type NoticeKind = "info" | "success" | "warning" | "error"
 export type NoticeOptions = { id?: string; action?: { label: string; onClick: () => void } }
 
 export interface Platform {
-  /** Which Kitab app this is. */
+  /** Which Kitaab app this is. */
   kind: "mac" | "iphone"
   /** Opens (or reuses) the way to the server and returns a ready-to-use WebSocket URL. */
   connect(): Promise<ConnectionResult>
@@ -45,7 +45,7 @@ export function setPlatform(p: Platform) {
 }
 
 export function platform(): Platform {
-  if (!current) throw new Error("Kitab core used before setPlatform()")
+  if (!current) throw new Error("Kitaab core used before setPlatform()")
   return current
 }
 

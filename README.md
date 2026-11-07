@@ -2,11 +2,11 @@
   <img src="resources/icon.png" alt="" width="96" height="96">
 </p>
 
-<h1 align="center">Kitab</h1>
+<h1 align="center">Kitaab</h1>
 
 <p align="center">A small macOS and iPhone client for a <a href="https://hermes-agent.nousresearch.com/docs">Hermes Agent</a> server.</p>
 
-Kitab connects to a Hermes install on another machine, usually over SSH, and organizes your work into **projects**, **threads**, **routines** and **personalities**. It never installs or updates Hermes; it only talks to it.
+Kitaab connects to a Hermes install on another machine, usually over SSH, and organizes your work into **projects**, **threads**, **routines** and **personalities**. It never installs or updates Hermes; it only talks to it.
 
 ## How it's organized
 
@@ -28,16 +28,16 @@ See [`docs/product/concept.md`](docs/product/concept.md) for the full model.
 
 Open **Settings** (`⌘,`) and pick one of two ways in:
 
-**SSH (recommended).** Enter a host or an alias from `~/.ssh/config`. Kitab starts its own private `hermes serve --isolated` on that machine, bound to loopback with a session token it creates, and reaches it through an SSH tunnel. The backend keeps running after you quit and is reused on the next launch. No login is needed, because SSH access is the credential.
+**SSH (recommended).** Enter a host or an alias from `~/.ssh/config`. Kitaab starts its own private `hermes serve --isolated` on that machine, bound to loopback with a session token it creates, and reaches it through an SSH tunnel. The backend keeps running after you quit and is reused on the next launch. No login is needed, because SSH access is the credential.
 
 - `hermes` must be on the remote `PATH` (or in `~/.local/bin`).
-- Your SSH key must be loaded in the agent. Kitab runs `ssh` in batch mode and can't answer a passphrase prompt.
+- Your SSH key must be loaded in the agent. Kitaab runs `ssh` in batch mode and can't answer a passphrase prompt.
 
-**Dashboard URL.** Leave the SSH host empty and point Kitab at an existing Hermes dashboard, such as `http://127.0.0.1:9119`. If the dashboard requires login, Kitab opens your browser to sign in (OAuth with PKCE) and never sees your password.
+**Dashboard URL.** Leave the SSH host empty and point Kitaab at an existing Hermes dashboard, such as `http://127.0.0.1:9119`. If the dashboard requires login, Kitaab opens your browser to sign in (OAuth with PKCE) and never sees your password.
 
-**The Mac and the iPhone share one backend.** Kitab keeps a private copy of the backend's session token next to its lockfile on the server (`~/.hermes/desktop-ssh/<id>/kitab-token`, mode 600), so whichever device connects next finds the running backend and joins it instead of starting another. Every device picks the oldest live one, so they converge, and a device that joins someone else's backend stops the one it left behind. Because they share a backend, a reply streaming on one device streams on the other, and approvals show up on both. What Kitab adds on top of Hermes (which personalities are in a thread, who answered each turn, which routine runs became threads) is saved on the server in each project's profile, never on one device.
+**The Mac and the iPhone share one backend.** Kitaab keeps a private copy of the backend's session token next to its lockfile on the server (`~/.hermes/desktop-ssh/<id>/kitab-token`, mode 600), so whichever device connects next finds the running backend and joins it instead of starting another. Every device picks the oldest live one, so they converge, and a device that joins someone else's backend stops the one it left behind. Because they share a backend, a reply streaming on one device streams on the other, and approvals show up on both. What Kitaab adds on top of Hermes (which personalities are in a thread, who answered each turn, which routine runs became threads) is saved on the server in each project's profile, never on one device.
 
-Tokens are stored encrypted with the macOS keychain. Kitab keeps its settings in `~/Library/Application Support/hermes-desktop`, separate from the official Hermes app.
+Tokens are stored encrypted with the macOS keychain. Kitaab keeps its settings in `~/Library/Application Support/hermes-desktop`, separate from the official Hermes app.
 
 ## iPhone
 
@@ -45,7 +45,7 @@ The iPhone app (`apps/mobile`) has the same projects, threads, routines and pers
 
 1. Open **Settings** in the app and enter the host, your user name and the port. Use an address the phone can reach, such as a Tailscale name.
 2. Copy **This iPhone's key** (an Ed25519 key made on the phone and kept in its Keychain) and add it to `~/.ssh/authorized_keys` on the host.
-3. Tap **Connect**. The first time, Kitab trusts the host's key and shows its fingerprint. After that it refuses a host that shows a different key.
+3. Tap **Connect**. The first time, Kitaab trusts the host's key and shows its fingerprint. After that it refuses a host that shows a different key.
 
 To run it from source (needs Xcode):
 
@@ -60,7 +60,7 @@ It uses native modules, so it can't run in Expo Go. A real iPhone needs your App
 
 ## Requirements
 
-- macOS. Kitab doesn't try to be cross-platform.
+- macOS. Kitaab doesn't try to be cross-platform.
 - Node.js 24 and pnpm 10.
 - A machine running [Hermes Agent](https://hermes-agent.nousresearch.com/docs).
 
@@ -72,13 +72,13 @@ On an Apple silicon Mac:
 curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/install.sh | bash
 ```
 
-This installs the latest release into `/Applications` and opens it. Set `KITAB_VERSION=0.1.0` before `bash` to install a specific release. The installer verifies the release signature and the DMG's SHA-256 before installing anything (see below).
+This installs the latest release into `/Applications` and opens it. Set `KITAAB_VERSION=0.1.0` before `bash` to install a specific release. The installer verifies the release signature and the DMG's SHA-256 before installing anything (see below).
 
-Kitab isn't notarized by Apple. An app downloaded with `curl` opens without a Gatekeeper prompt. A DMG downloaded in a browser is blocked the first time it opens: allow it in System Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Kitab.app`.
+Kitaab isn't notarized by Apple. An app downloaded with `curl` opens without a Gatekeeper prompt. A DMG downloaded in a browser is blocked the first time it opens: allow it in System Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Kitaab.app`.
 
 ### Verifying a download
 
-Each release has a `SHA256SUMS` file with the DMG's hash, signed with Kitab's release key. The public key is [`release-key.pub`](release-key.pub):
+Each release has a `SHA256SUMS` file with the DMG's hash, signed with Kitaab's release key. The public key is [`release-key.pub`](release-key.pub):
 
 ```
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIKSxxZ9QRwqldlKJi68n/FSXG32Hpy8JCzYGIDVPSGo
@@ -92,7 +92,7 @@ ssh-keygen -Y verify -f allowed_signers -I kitab-release -n kitab-release -s SHA
 shasum -a 256 -c SHA256SUMS
 ```
 
-The first command should print `Good "kitab-release" signature`, the second `Kitab-<version>-arm64.dmg: OK`. Both tools ship with macOS.
+The first command should print `Good "kitab-release" signature`, the second `Kitaab-<version>-arm64.dmg: OK`. Both tools ship with macOS.
 
 ## Development
 
@@ -102,13 +102,13 @@ pnpm dev          # run with hot reload
 pnpm typecheck
 ```
 
-`pnpm dev` runs a private copy of Electron renamed to Kitab (in `node_modules/.kitab-electron`), so the menu bar and Dock show the right name and icon.
+`pnpm dev` runs a private copy of Electron renamed to Kitaab (in `node_modules/.kitab-electron`), so the menu bar and Dock show the right name and icon.
 
 ## Building the app
 
 ```sh
-pnpm package      # builds dist/Kitab.app
-pnpm install-app  # builds it and replaces /Applications/Kitab.app
+pnpm package      # builds dist/Kitaab.app
+pnpm install-app  # builds it and replaces /Applications/Kitaab.app
 ```
 
 The app is ad-hoc signed, which is enough to run it on the Mac that built it. It isn't notarized, so Gatekeeper will block a copy moved to another Mac. Build it on each Mac instead.
@@ -116,7 +116,7 @@ The app is ad-hoc signed, which is enough to run it on the Mac that built it. It
 ## Releasing
 
 ```sh
-pnpm dmg          # builds dist/Kitab-<version>-<arch>.dmg
+pnpm dmg          # builds dist/Kitaab-<version>-<arch>.dmg
 ```
 
 Pushing a tag like `v0.1.0` runs `.github/workflows/dmg.yml`. It builds the DMG with that version, writes `SHA256SUMS`, signs it with `scripts/sign-release.sh`, and attaches all three files to a GitHub release. You can also run the workflow by hand from the Actions tab, which uploads them as a workflow artifact.

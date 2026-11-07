@@ -1,6 +1,6 @@
 import { useColorScheme } from "react-native"
 
-// Kitab's default theme on the Mac (stock shadcn neutral), as hex for React Native.
+// Kitaab's default theme on the Mac (stock shadcn neutral), as hex for React Native.
 // Same token names as the desktop's appearance/tokens.ts, trimmed to what the phone uses.
 
 export type Colors = {

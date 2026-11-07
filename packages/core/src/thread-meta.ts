@@ -2,7 +2,7 @@ import type { Id } from "./model"
 import { gw } from "./backend"
 import { platform } from "./platform"
 
-// What Kitab knows about a thread that Hermes doesn't, kept on the server so every
+// What Kitaab knows about a thread that Hermes doesn't, kept on the server so every
 // device sees the same thing:
 //   ui_meta["kitab.thread.<session id>"] on the thread's project profile
 // One key per thread: ui_meta merges key by key, so two devices editing different

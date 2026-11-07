@@ -1,14 +1,14 @@
-// Builds a standalone Kitab.app from the electron-vite output: a copy of
-// Electron.app renamed Kitab, with our icon and the built app in
-// Contents/Resources/app. With --install it also replaces /Applications/Kitab.app.
+// Builds a standalone Kitaab.app from the electron-vite output: a copy of
+// Electron.app renamed Kitaab, with our icon and the built app in
+// Contents/Resources/app. With --install it also replaces /Applications/Kitaab.app.
 // The app is ad-hoc signed, which is enough to run it on this Mac.
 import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 
-const NAME = "Kitab"
-const BUNDLE_ID = "app.kitab.desktop"
+const NAME = "Kitaab"
+const BUNDLE_ID = "app.kitaab.desktop"
 const root = join(import.meta.dirname, "..")
 const require = createRequire(import.meta.url)
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))

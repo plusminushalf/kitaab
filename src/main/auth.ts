@@ -109,9 +109,9 @@ async function runSignIn(server: string, baseUrl: string) {
       const ok = url.searchParams.get("state") === state && url.searchParams.get("code")
       res.writeHead(ok ? 200 : 400, { "content-type": "text/html; charset=utf-8" })
       res.end(
-        `<!doctype html><meta charset="utf-8"><title>Kitab</title>` +
+        `<!doctype html><meta charset="utf-8"><title>Kitaab</title>` +
           `<body style="font:15px -apple-system,system-ui;display:grid;place-items:center;height:90vh;margin:0">` +
-          (ok ? "Signed in. You can close this tab and go back to Kitab." : "Sign-in failed. Try again from the app.") +
+          (ok ? "Signed in. You can close this tab and go back to Kitaab." : "Sign-in failed. Try again from the app.") +
           `<script>setTimeout(()=>window.close(),800)</script>`,
       )
       srv.close()

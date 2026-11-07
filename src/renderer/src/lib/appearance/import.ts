@@ -1,4 +1,4 @@
-// Theme files in and out: Kitab theme files, T3 Code theme files and VS Code color themes.
+// Theme files in and out: Kitaab theme files, T3 Code theme files and VS Code color themes.
 
 import { parseJsonc } from "../../../../shared/jsonc"
 import { contrast, flatten, isDark, parseColor, readableOn, rgbToHex, type Rgba } from "./color"
@@ -23,7 +23,7 @@ function prettyName(raw: string): string {
     .join(" ")
 }
 
-/** Builds a Kitab variant from a VS Code color theme (same idea as T3 Code's importer). */
+/** Builds a Kitaab variant from a VS Code color theme (same idea as T3 Code's importer). */
 export function variantFromVsCode(theme: Record<string, unknown>, fallbackName = "VS Code theme", uiTheme?: string): ThemeVariant {
   const colors = (isObject(theme.colors) ? theme.colors : {}) as Record<string, unknown>
   const pick = (...keys: string[]): Rgba | null => {
@@ -151,7 +151,7 @@ export function familyFromVariants(name: string, variants: ThemeVariant[], sourc
   return { id: `${slug(name)}-${Math.random().toString(36).slice(2, 7)}`, name, variants: unique, source }
 }
 
-/** Accepts a Kitab theme file, a T3 Code theme file or a VS Code color theme. */
+/** Accepts a Kitaab theme file, a T3 Code theme file or a VS Code color theme. */
 export function parseThemeFile(text: string, fileName?: string): ThemeFamily {
   let data: unknown
   try {
@@ -168,7 +168,7 @@ export function parseThemeFile(text: string, fileName?: string): ThemeFamily {
 
   const name = typeof data.name === "string" && data.name.trim() ? data.name.trim().slice(0, 48) : "Imported theme"
 
-  // Kitab: { kitabTheme: 1, name, variants: [{ name, appearance, colors }] }
+  // Kitaab: { kitabTheme: 1, name, variants: [{ name, appearance, colors }] }
   if (Array.isArray(data.variants)) {
     const variants = data.variants.filter(isObject).map((v, i): ThemeVariant => {
       const appearance: Appearance = v.appearance === "dark" ? "dark" : "light"
@@ -197,7 +197,7 @@ export function parseThemeFile(text: string, fileName?: string): ThemeFamily {
     return { id: `${slug(name)}-${Math.random().toString(36).slice(2, 7)}`, name, variants }
   }
 
-  throw new Error("That file isn't a theme Kitab understands. Use a Kitab, T3 Code or VS Code theme file.")
+  throw new Error("That file isn't a theme Kitaab understands. Use a Kitaab, T3 Code or VS Code theme file.")
 }
 
 function pickTokens(v: unknown): Partial<ThemeColors> {

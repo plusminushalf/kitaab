@@ -10,7 +10,7 @@ import { ownershipId, serverSettings } from "./settings"
 import { dismissToast, showToast } from "./toast"
 
 // The iPhone side of the shared core. Same job as the Mac's main process: reach the Hermes
-// host over SSH (in-app, see modules/kitab-ssh), find or start the shared Kitab backend,
+// host over SSH (in-app, see modules/kitab-ssh), find or start the shared Kitaab backend,
 // tunnel to it, and make authenticated REST calls with its session token.
 
 let current: { baseUrl: string; token: string } | null = null
@@ -50,7 +50,7 @@ async function connect(): Promise<ConnectionResult> {
   }
 }
 
-/** Stops the shared Kitab backend on the host; the next connect starts a fresh one. */
+/** Stops the shared Kitaab backend on the host; the next connect starts a fresh one. */
 export async function restartServer() {
   await openSsh()
   await runner.exec(stopScript())
@@ -91,7 +91,7 @@ setPlatform({
   dismiss: dismissToast,
   confirm: (message) =>
     new Promise((resolve) =>
-      Alert.alert("Kitab", message, [
+      Alert.alert("Kitaab", message, [
         { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
         { text: "Continue", onPress: () => resolve(true) },
       ]),

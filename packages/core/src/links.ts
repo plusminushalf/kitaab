@@ -3,21 +3,21 @@ import { backend } from "./backend"
 import { toast } from "./platform"
 import { store, type View } from "./store"
 
-// kitab:// links, which the agent writes into replies (see the `kitab` skill in kitab-context.ts):
-//   kitab://thread/<session id>?project=<profile>
-//   kitab://routine/<cron job id>?project=<profile>
-//   kitab://run/<cron job id>/<run session id>?project=<profile>
-//   kitab://routines | done | project ?project=<profile>
-//   kitab://personalities
+// kitaab:// links, which the agent writes into replies (see the `kitab` skill in kitab-context.ts):
+//   kitaab://thread/<session id>?project=<profile>
+//   kitaab://routine/<cron job id>?project=<profile>
+//   kitaab://run/<cron job id>/<run session id>?project=<profile>
+//   kitaab://routines | done | project ?project=<profile>
+//   kitaab://personalities
 // Parsed by hand: React Native's URL has no reliable searchParams.
 
 export type KitabLink = { projectId?: Id; view: View }
 
-export const isKitabLink = (url: string | undefined): url is string => !!url && /^kitab:\/\//i.test(url)
+export const isKitabLink = (url: string | undefined): url is string => !!url && /^kitaa?b:\/\//i.test(url)
 
 export function parseKitabLink(url: string): KitabLink | null {
   if (!isKitabLink(url)) return null
-  const [path, query = ""] = url.replace(/^kitab:\/\//i, "").split("#")[0].split("?")
+  const [path, query = ""] = url.replace(/^kitaa?b:\/\//i, "").split("#")[0].split("?")
   const parts = path.split("/").filter(Boolean).map((s) => {
     try {
       return decodeURIComponent(s)
@@ -55,9 +55,9 @@ export async function enterProject(link: KitabLink): Promise<boolean> {
   return true
 }
 
-/** Follows a kitab:// link inside the Mac app's own navigation. */
+/** Follows a kitaab:// link inside the Mac app's own navigation. */
 export async function openKitabLink(url: string) {
   const link = parseKitabLink(url)
-  if (!link) return void toast.error("Kitab can't open that link")
+  if (!link) return void toast.error("Kitaab can't open that link")
   if (await enterProject(link)) store.go(link.view)
 }

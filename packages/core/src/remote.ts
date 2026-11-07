@@ -1,8 +1,8 @@
-// Kitab's private Hermes backend on an SSH host, shared by every device.
+// Kitaab's private Hermes backend on an SSH host, shared by every device.
 //
-// Over SSH, a Kitab app starts `hermes serve --isolated` bound to loopback with a token it
+// Over SSH, a Kitaab app starts `hermes serve --isolated` bound to loopback with a token it
 // mints, the way the official Hermes app does, under ~/.hermes/desktop-ssh/<ownershipId>/.
-// Hermes deletes its token file once it has read it, so Kitab also keeps a private copy
+// Hermes deletes its token file once it has read it, so Kitaab also keeps a private copy
 // (`kitab-token`, mode 600) next to the lockfile. That copy is what lets the Mac and the
 // iPhone find and share one backend: SSH access is already the credential, and anyone who
 // can read the file could equally start a backend of their own.
@@ -19,7 +19,7 @@ const hex = (s: string, len: number) => {
   return s
 }
 
-/** Lists every live Kitab backend on the host. One `LIVE …` line each. */
+/** Lists every live Kitaab backend on the host. One `LIVE …` line each. */
 export function discoverScript(): string {
   return `
 root=${ROOT}
@@ -47,7 +47,7 @@ export function parseDiscover(out: string): LiveBackend[] {
   return found.sort((a, b) => (a.startedAt ?? "").localeCompare(b.startedAt ?? ""))
 }
 
-/** Records the token for a backend started before Kitab kept a copy (so other devices can find it). */
+/** Records the token for a backend started before Kitaab kept a copy (so other devices can find it). */
 export function adoptScript(ownershipId: string, token: string): string {
   return `umask 077; d=${ROOT}/${hex(ownershipId, 32)}; [ -d "$d" ] && printf '%s' ${sq(hex(token, 64))} > "$d/kitab-token"; true`
 }
@@ -112,7 +112,7 @@ export function parseSpawn(out: string): { pid: number; port: number } {
   return { pid: Number(m[1]), port: Number(m[2]) }
 }
 
-/** Stops every Kitab backend on the host and forgets their tokens. */
+/** Stops every Kitaab backend on the host and forgets their tokens. */
 export function stopScript(): string {
   return `
 root=${ROOT}
@@ -150,7 +150,7 @@ export async function tokenWorks(baseUrl: string, token: string, fetchImpl: type
 }
 
 /**
- * Finds the live Kitab backend on the host (the oldest, so every device picks the same one), or starts one.
+ * Finds the live Kitaab backend on the host (the oldest, so every device picks the same one), or starts one.
  * Resolves to the local base URL and token. `known` is a token this device remembers for
  * its own backend, used once to adopt a backend started before tokens were shared.
  */
@@ -168,7 +168,7 @@ export async function ensureBackend(
     return { baseUrl, token: b.token, pid: b.pid, port: b.port }
   }
 
-  // A backend this device started before Kitab shared tokens: adopt it.
+  // A backend this device started before Kitaab shared tokens: adopt it.
   if (opts.known?.token) {
     const lock = await ssh.exec(`cat ${ROOT}/${hex(opts.ownershipId, 32)}/hermes-desktop.json 2>/dev/null || true`)
     const pid = Number(lock.match(/"pid":(\d+)/)?.[1])

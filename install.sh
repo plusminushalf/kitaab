@@ -1,11 +1,11 @@
 #!/bin/bash
-# Installs Kitab into /Applications from the latest GitHub release.
+# Installs Kitaab into /Applications from the latest GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/install.sh | bash
 #
-# Set KITAB_VERSION=0.1.0 to install a specific release instead of the latest.
+# Set KITAAB_VERSION=0.1.0 to install a specific release instead of the latest.
 #
-# Before installing, it checks that SHA256SUMS was signed by Kitab's release key
+# Before installing, it checks that SHA256SUMS was signed by Kitaab's release key
 # (pinned below, also in release-key.pub) and that the DMG matches the signed hash.
 # Anything that doesn't verify is refused.
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 REPO="plusminushalf/kitaab"
 PRINCIPAL="kitab-release"
 PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIKSxxZ9QRwqldlKJi68n/FSXG32Hpy8JCzYGIDVPSGo"
-APP="/Applications/Kitab.app"
+APP="/Applications/Kitaab.app"
 
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -31,13 +31,14 @@ cleanup() {
 
 # Everything runs inside main, so a download cut off halfway through runs nothing.
 main() {
-  [ "$(uname -s)" = "Darwin" ] || die "Kitab runs on macOS only."
+  [ "$(uname -s)" = "Darwin" ] || die "Kitaab runs on macOS only."
   # hw.optional.arm64 is 1 on Apple silicon, even in a shell running under Rosetta.
-  [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ] || die "Kitab builds are for Apple silicon Macs only."
+  [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ] || die "Kitaab builds are for Apple silicon Macs only."
 
   local base
-  if [ -n "${KITAB_VERSION:-}" ]; then
-    base="https://github.com/$REPO/releases/download/v${KITAB_VERSION#v}"
+  local version="${KITAAB_VERSION:-${KITAB_VERSION:-}}"
+  if [ -n "$version" ]; then
+    base="https://github.com/$REPO/releases/download/v${version#v}"
   else
     base="https://github.com/$REPO/releases/latest/download"
   fi
@@ -53,10 +54,10 @@ main() {
   echo "$PRINCIPAL $PUBLIC_KEY" > "$tmp/allowed_signers"
   ssh-keygen -Y verify -f "$tmp/allowed_signers" -I "$PRINCIPAL" -n "$PRINCIPAL" \
     -s "$tmp/SHA256SUMS.sig" < "$tmp/SHA256SUMS" > /dev/null 2>&1 \
-    || die "SHA256SUMS is not signed by Kitab's release key. Not installing."
+    || die "SHA256SUMS is not signed by Kitaab's release key. Not installing."
 
   local dmg expected actual
-  dmg="$(awk '$2 ~ /^Kitab-.*-arm64\.dmg$/ { print $2; exit }' "$tmp/SHA256SUMS")"
+  dmg="$(awk '$2 ~ /^Kitaab-.*-arm64\.dmg$/ { print $2; exit }' "$tmp/SHA256SUMS")"
   [ -n "$dmg" ] || die "This release has no Apple silicon DMG."
   expected="$(awk -v f="$dmg" '$2 == f { print $1; exit }' "$tmp/SHA256SUMS")"
 
@@ -70,21 +71,23 @@ main() {
   mnt="$tmp/mnt"
   mkdir "$mnt"
   hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mnt" "$tmp/$dmg"
-  [ -d "$mnt/Kitab.app" ] || die "The DMG doesn't contain Kitab.app."
+  [ -d "$mnt/Kitaab.app" ] || die "The DMG doesn't contain Kitaab.app."
 
-  # Quit a running copy so it can be replaced.
-  osascript -e 'if application id "app.kitab.desktop" is running then tell application id "app.kitab.desktop" to quit' > /dev/null 2>&1 || true
+  # Quit a running copy so it can be replaced (app.kitab.desktop is the app from before the rename).
+  for id in app.kitaab.desktop app.kitab.desktop; do
+    osascript -e "if application id \"$id\" is running then tell application id \"$id\" to quit" > /dev/null 2>&1 || true
+  done
 
   say "Installing to $APP"
   local sudo=""
   [ -w /Applications ] || sudo="sudo"
-  $sudo rm -rf "$APP"
-  $sudo ditto "$mnt/Kitab.app" "$APP"
+  $sudo rm -rf "$APP" "/Applications/Kitab.app"
+  $sudo ditto "$mnt/Kitaab.app" "$APP"
 
   hdiutil detach -quiet "$mnt"
   mnt=""
 
-  say "Kitab is installed. Opening it."
+  say "Kitaab is installed. Opening it."
   open "$APP"
 }
 

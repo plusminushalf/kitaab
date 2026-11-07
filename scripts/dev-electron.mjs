@@ -1,6 +1,6 @@
 // Dev only. macOS takes the menu-bar name and the dock icon from the app
 // bundle, so stock Electron shows "Electron". This makes a private copy of
-// Electron.app named Kitab with our icon, and `pnpm dev` runs that copy
+// Electron.app named Kitaab with our icon, and `pnpm dev` runs that copy
 // (electron-vite reads ELECTRON_EXEC_PATH). The copy is a clone (cp -c), so it costs
 // almost no disk, and node_modules/electron itself is never touched: pnpm
 // hard-links it from the shared store.
@@ -10,7 +10,7 @@ import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync, copyFileSyn
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 
-const NAME = "Kitab"
+const NAME = "Kitaab"
 const root = join(import.meta.dirname, "..")
 const icon = join(root, "resources/icon.icns")
 const require = createRequire(import.meta.url)

@@ -29,7 +29,7 @@ function starterVariants(): ThemeVariant[] {
   const family = resolved().family
   return (["light", "dark"] as const).map((mode) => {
     const seed = seedOf(variantFor(family, mode).colors)
-    // Kitab's accent is near-black/white; give a fresh theme a real accent to start from.
+    // Kitaab's accent is near-black/white; give a fresh theme a real accent to start from.
     const accent = family.native ? (mode === "dark" ? "#7aa2f7" : "#3b6fe0") : seed.accent
     return { id: mode, name: mode === "dark" ? "Dark" : "Light", appearance: mode, colors: derivePalette(mode, seed.background, accent) }
   })

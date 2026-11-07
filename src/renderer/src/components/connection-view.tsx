@@ -39,7 +39,7 @@ export function ConnectionView({ onOpenSettings }: { onOpenSettings: () => void 
               ? "Finish signing in in your browser."
               : connection.state === "error"
                 ? connection.message
-                : "Kitab needs you to sign in before it can reach Hermes."}
+                : "Kitaab needs you to sign in before it can reach Hermes."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">

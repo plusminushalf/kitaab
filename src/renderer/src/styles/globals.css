@@ -112,7 +112,7 @@
     --sidebar-border: color-mix(in oklab, var(--app-theme-sidebar-border), var(--contrast-target, var(--app-theme-text)) var(--contrast-amount, 0%));
     --sidebar-ring: var(--app-theme-focus);
 
-    /* Kitab-specific roles, T3-style. */
+    /* Kitaab-specific roles, T3-style. */
     --surface-raised: var(--app-theme-surface-raised);
     --composer: color-mix(in oklab, var(--app-theme-surface-raised) var(--glass, 100%), transparent);
     --message: var(--app-theme-message-surface);
@@ -150,7 +150,7 @@
 }
 
 /* ---- macOS layer ----------------------------------------------------------
-   Adapts the tokens to a native window: Kitab's own theme keeps the sidebar
+   Adapts the tokens to a native window: Kitaab's own theme keeps the sidebar
    see-through so the window's vibrancy shows; other themes paint it, at the glass
    opacity. Chrome behaves like AppKit chrome (no text selection, draggable title area). */
 
@@ -190,7 +190,7 @@ body {
   background: color-mix(in oklab, var(--background) var(--glass, 100%), transparent);
 }
 
-/* Chromium can only blur an opaque backdrop, and Kitab's own theme leaves the sidebar
+/* Chromium can only blur an opaque backdrop, and Kitaab's own theme leaves the sidebar
    see-through for the window's vibrancy, so nothing over it can be frosted: menus
    opened from the sidebar (marked data-over-vibrancy) go solid instead of showing
    the rows behind them sharp. */

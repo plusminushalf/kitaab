@@ -32,7 +32,7 @@ export function ProjectMenu() {
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8 }}>
         <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }} numberOfLines={1}>
-          {current?.name ?? "Kitab"}
+          {current?.name ?? "Kitaab"}
         </Text>
         <Icon name="chevron.down" size={11} weight="semibold" color={c.textMuted} />
       </View>

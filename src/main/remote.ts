@@ -65,7 +65,7 @@ export function sshScript(host: string, script: string, timeoutMs = 30_000): Pro
   })
 }
 
-/** Returns a Kitab backend on the host: one any device already runs, else a fresh one. */
+/** Returns a Kitaab backend on the host: one any device already runs, else a fresh one. */
 export async function ensureRemoteBackend(host: string, forward: (remotePort: number) => Promise<string>) {
   const local = readLocal(host)
   const backend = await ensureBackend(
@@ -83,7 +83,7 @@ const tokenOf = (local: Local) => {
   return token ? { token } : null
 }
 
-/** Stops the Kitab backend on the host (whichever device started it) and forgets its token. */
+/** Stops the Kitaab backend on the host (whichever device started it) and forgets its token. */
 export async function stopRemoteBackend(host: string) {
   const local = readLocal(host)
   await sshScript(host, stopScript())

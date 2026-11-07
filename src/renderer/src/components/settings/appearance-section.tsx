@@ -201,7 +201,7 @@ export function AppearanceSection() {
   )
 }
 
-/** Kitab's own palette has a see-through sidebar; a copy gets a painted one so it can be edited. */
+/** Kitaab's own palette has a see-through sidebar; a copy gets a painted one so it can be edited. */
 function nativeSidebar(colors: ThemeFamily["variants"][number]["colors"]) {
   return colors.sidebar === "transparent" ? { sidebar: colors.surfaceRaised } : {}
 }

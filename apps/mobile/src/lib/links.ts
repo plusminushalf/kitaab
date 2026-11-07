@@ -3,7 +3,7 @@ import type { View } from "@kitab/core/store"
 import { enterProject, parseKitabLink } from "@kitab/core/links"
 import { toast } from "@kitab/core/platform"
 
-// kitab:// links in replies (see @kitab/core/links), mapped onto this app's routes.
+// kitaab:// links in replies (see @kitab/core/links), mapped onto this app's routes.
 
 function pathFor(view: View): string | null {
   const e = encodeURIComponent
@@ -30,6 +30,6 @@ function pathFor(view: View): string | null {
 export async function openKitabLink(url: string) {
   const link = parseKitabLink(url)
   const path = link && pathFor(link.view)
-  if (!link || !path) return void toast.error("Kitab can't open that link")
+  if (!link || !path) return void toast.error("Kitaab can't open that link")
   if (await enterProject(link)) router.push(path as never)
 }

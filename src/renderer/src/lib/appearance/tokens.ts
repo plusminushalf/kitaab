@@ -126,7 +126,7 @@ export type ThemeFamily = {
   builtIn?: boolean
   /** Where an imported theme came from, e.g. "open-vsx:catppuccin.catppuccin-vsc". */
   source?: string
-  /** Kitab's own default: keeps the see-through (vibrancy) sidebar. */
+  /** Kitaab's own default: keeps the see-through (vibrancy) sidebar. */
   native?: boolean
 }
 
@@ -260,7 +260,7 @@ const KITAB_DARK: ThemeColors = {
 
 export const KITAB_FAMILY: ThemeFamily = {
   id: "kitab",
-  name: "Kitab",
+  name: "Kitaab",
   builtIn: true,
   native: true,
   variants: [
