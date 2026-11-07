@@ -70,6 +70,8 @@ export type State = {
 export interface Backend {
   connect(): Promise<void>
   selectProject(id: Id): Promise<void>
+  /** Creates a project (a Hermes profile set up like Default) and switches to it. Resolves to its id. */
+  createProject(name: string): Promise<Id>
   loadThread(threadId: Id): Promise<void>
   /** Starts a new thread when threadId is null. Resolves to the thread id. */
   send(threadId: Id | null, text: string, attachments: Attachment[]): Promise<Id>

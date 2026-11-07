@@ -593,6 +593,18 @@ async function connectOnce() {
   resumeLive()
 }
 
+/** Hermes profile names: lowercase letters, digits, "-" and "_", starting with a letter or digit, at most 64. */
+export function projectIdFor(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+/, "")
+    .slice(0, 64)
+    .replace(/-+$/, "")
+}
+
 /** Re-reads the library, each project's cast and thread details (they can change on another device). */
 async function refreshProfiles() {
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
@@ -680,6 +692,26 @@ export const backend: Backend = {
       loadRoutines().catch((e) => toast.error(`Routines: ${e.message ?? e}`)),
       changed ? refreshProfiles().catch(() => {}) : undefined,
     ])
+  },
+
+  async createProject(name) {
+    const id = projectIdFor(name)
+    if (!id) throw new Error("Use letters or numbers in the name")
+    if (store.get().projects.some((p) => p.id === id)) throw new Error(`A project called ${id} already exists`)
+    // Cloned from Default so it starts with the same model, keys and skills.
+    await gw.call("profiles.create", { name: id, clone_from: "default" })
+    const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
+    const row = profiles.find((p) => p.name === id)
+    store.set((s) => ({
+      projects: [
+        ...s.projects.filter((p) => p.id !== id),
+        { id, name: (row?.display_name as string) || id, personalityIds: row ? castOf(row) : [] },
+      ],
+    }))
+    // Tells Hermes it's talking through Kitab in the new project too.
+    void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
+    await backend.selectProject(id)
+    return id
   },
 
   async loadThread(threadId) {

@@ -120,7 +120,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       <SidebarContent>
         <SidebarGroup className="pt-0">
-          {/* Projects are Hermes profiles: switched here, not created. A label, not a row,
+          {/* Projects are Hermes profiles, switched and created here. A label, not a row,
               so threads keep the full width. */}
           <ProjectPicker
             render={
