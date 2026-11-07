@@ -184,13 +184,22 @@ ipcMain.handle("api:get", async (_e, path: string) => {
   return (await authedFetch(t.server, t.baseUrl, path)).json()
 })
 
-// Authenticated REST writes, kept to an allowlist: config saves and a project's skills.
+// Authenticated REST writes, kept to an allowlist: config saves, a project's skills, and
+// installing Kitaab's own Hermes plugin (packages/core/src/kitaab-plugin.ts).
 const WRITABLE: Record<"PUT" | "POST", RegExp> = {
   PUT: /^\/api\/(config|skills\/toggle|skills\/content)(\?|$)/,
-  POST: /^\/api\/skills(\?|$)/,
+  POST: /^\/api\/(skills|files\/upload|dashboard\/agent-plugins\/activate)(\?|$)/,
 }
+/** File uploads may only write the Kitaab plugin's own files. */
+const PLUGIN_FILE = /^\/[^\0]*\/plugins\/kitaab\/(plugin\.yaml|__init__\.py)$/
 async function write(method: "PUT" | "POST", path: string, body: unknown) {
   if (typeof path !== "string" || !WRITABLE[method].test(path)) throw new Error(`Writing ${path} isn't allowed`)
+  if (path.startsWith("/api/files/upload")) {
+    const file = (body as { path?: unknown } | null)?.path
+    if (typeof file !== "string" || !PLUGIN_FILE.test(file) || file.includes("/../")) {
+      throw new Error("Uploading that file isn't allowed")
+    }
+  }
   const t = await target()
   const init: RequestInit = { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
   if (t.kind !== "ssh") return (await authedFetch(t.server, t.baseUrl, path, init)).json()

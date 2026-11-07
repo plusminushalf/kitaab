@@ -110,10 +110,15 @@ export type Subagent = {
 
 export type PendingQuestion = {
   id: Id
-  kind: "approval" | "clarify" | "other"
+  /** "secret": a masked field whose answer goes straight to Hermes and is never kept in the app. */
+  kind: "approval" | "clarify" | "secret" | "other"
   title: string
   detail?: string
   choices?: string[]
+  /** A secret: where the value goes once entered, e.g. "Goes into ~/app/.env as OPENAI_API_KEY". */
+  destination?: string
+  /** A sudo password: the command it's for. */
+  command?: string
 }
 
 export type Routine = {

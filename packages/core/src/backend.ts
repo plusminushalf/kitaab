@@ -434,19 +434,60 @@ function removePending(threadId: Id, id: string) {
   patchThread(threadId, { status: anyLeft ? "needs-you" : "working" })
 }
 
+const ANSWERED = new Set(["approval", "clarify", "secret", "sudo"])
+
 function onRequest(req: ServerRequest) {
   const threadId = req.params?.session_id ? storedOf.get(req.params.session_id) : undefined
-  if (!threadId || (req.method !== "approval" && req.method !== "clarify")) {
+  if (!threadId || !ANSWERED.has(req.method)) {
     gw.respondError(req.id, -32601, `${req.method} isn't supported by this app yet`)
     return
   }
   showRequest(threadId, req)
 }
 
+/**
+ * A `secret` request: from Kitaab's request_secret tool (metadata.kitaab, see kitaab-plugin.ts)
+ * or from Hermes itself, when a skill needs a key it saves in the project's .env.
+ */
+function secretQuestion(req: ServerRequest): PendingQuestion {
+  const p = req.params ?? {}
+  const m = p.metadata ?? {}
+  const name = m.name || p.env_var
+  if (m.kitaab) {
+    const replacing = m.replaces ? ", replacing the current value" : ""
+    const destination =
+      m.destination === "env_file"
+        ? `Goes into ${m.path} as ${name}${replacing}`
+        : m.destination === "hermes"
+          ? `Goes into Hermes's settings for this project (${m.path}) as ${name}${replacing}`
+          : m.path
+            ? `Saved to ${m.path}${m.replaces ? ", replacing it" : ""}`
+            : "Kept in a private file on the server, for Hermes to use in a command"
+    return { id: req.id, kind: "secret", title: m.label || p.prompt || "Hermes needs a secret", detail: m.reason || undefined, destination }
+  }
+  return {
+    id: req.id,
+    kind: "secret",
+    title: p.prompt || `Hermes needs ${p.env_var}`,
+    detail: m.help || (m.skill_name ? `The ${m.skill_name} skill needs it.` : undefined),
+    destination: `Goes into Hermes's settings for this project as ${p.env_var}`,
+  }
+}
+
 function showRequest(threadId: Id, req: ServerRequest) {
   openRequests.set(req.id, { threadId, req })
   let question: PendingQuestion
-  if (req.method === "approval") {
+  if (req.method === "secret") {
+    question = secretQuestion(req)
+  } else if (req.method === "sudo") {
+    question = {
+      id: req.id,
+      kind: "secret",
+      title: "Hermes needs your sudo password",
+      command: req.params.command || undefined,
+      destination: "Used for this command only, not saved",
+    }
+  } else if (req.method === "approval") {
     question = {
       id: req.id,
       kind: "approval",
@@ -948,6 +989,9 @@ export const backend: Backend = {
     if (!open) return removePending(threadId, question.id)
     if (open.req.method === "approval") {
       gw.respond(question.id, { choice: value })
+    } else if (open.req.method === "secret" || open.req.method === "sudo") {
+      // Straight onto the socket: never into the store, the thread or a log. "" means skipped.
+      gw.respond(question.id, { value })
     } else {
       const qid = open.req.params.questions?.[0]?.qid ?? "0"
       gw.respond(question.id, { answers: { [qid]: value } })

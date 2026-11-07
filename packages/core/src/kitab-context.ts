@@ -1,5 +1,6 @@
 import type { Id } from "./model"
 import { gw } from "./backend"
+import { installPlugin, PLUGIN_FILES } from "./kitaab-plugin"
 import { http, platform, type Platform } from "./platform"
 
 // What Hermes is told about Kitaab, so the agent knows which app it's talking through.
@@ -11,6 +12,7 @@ import { http, platform, type Platform } from "./platform"
 //   config.yaml  platform_hints.cron.append       a note for routine runs
 // (platform_hints is a top-level key; Hermes ignores it under agent:)
 //   skill        kitab                                  words and kitaab:// links, read on demand
+//   plugin       plugins/kitaab                         the request_secret tool (kitaab-plugin.ts)
 //   ui_meta      kitab.context                          what was written, so it's written once
 //
 // Which apps the user has is kept on the default profile, one key per install:
@@ -19,14 +21,14 @@ import { http, platform, type Platform } from "./platform"
 export type DeviceKind = Platform["kind"]
 
 /** Bump when the texts change in a way older apps shouldn't undo. */
-const VERSION = 4
+const VERSION = 5
 const DEVICE = "kitab.device."
 const MARKER = "kitab.context"
 const SKILL = "kitab"
 /** An app not seen for this long is treated as gone. */
 const STALE_DAYS = 60
 
-type ProfileRow = { name: string; display_name?: string; is_default?: boolean; ui_meta?: Record<string, any> }
+type ProfileRow = { name: string; path?: string; display_name?: string; is_default?: boolean; ui_meta?: Record<string, any> }
 
 const today = () => new Date().toISOString().slice(0, 10)
 const q = encodeURIComponent
@@ -89,6 +91,12 @@ const RENDERING =
   "render math, Mermaid, raw HTML, MEDIA: tags or ::preview widgets, so don't use them; to point to " +
   "any other file, give its full path on the server."
 
+const SECRETS =
+  "When you need a secret from the user (an API key, token or password), call the `request_secret` tool. " +
+  "Kitaab shows the user a masked field, and the value goes straight into the .env file, private file or " +
+  "Hermes setting you name, without you or this chat ever seeing it. Never ask the user to paste a secret " +
+  "into the chat, and never print one you've saved."
+
 function phoneNote(kinds: DeviceKind[]): string {
   return kinds.includes("iphone")
     ? " The iPhone screen is narrow: keep tables to a few columns and paragraphs short."
@@ -106,6 +114,7 @@ export function chatHint(project: Project, kinds: DeviceKind[]): string {
       `of a cron job is a run. This chat is a thread in the project "${project.name}" (profile ` +
       `\`${project.id}\`). Use Kitaab's words with the user. For links that open a thread, routine or run ` +
       `inside Kitaab, and what you can change there, load the \`${SKILL}\` skill.`,
+    SECRETS,
   ].join("\n\n")
 }
 
@@ -203,7 +212,7 @@ async function upsertSkill(profile: Id, content: string) {
   }
 }
 
-async function writeProject(project: Project, kinds: DeviceKind[], stamp: { version: number; hash: string }) {
+async function writeProject(project: Project, home: string | undefined, kinds: DeviceKind[], stamp: { version: number; hash: string }) {
   const chat = chatHint(project, kinds)
   const routine = routineHint(project, kinds)
   // Deep-merged into config.yaml by Hermes; other settings are left alone.
@@ -212,6 +221,7 @@ async function writeProject(project: Project, kinds: DeviceKind[], stamp: { vers
     config: { platform_hints: { desktop: { replace: chat }, cron: { append: routine } } },
   })
   await upsertSkill(project.id, skillText(project, kinds))
+  if (home) await installPlugin(project.id, home)
   await gw.call("profiles.configure", { name: project.id, ui_meta: { [MARKER]: stamp } })
 }
 
@@ -225,14 +235,16 @@ export function syncKitabContext(rows: ProfileRow[]): Promise<void> {
       const project = { id: row.name, name: row.display_name || (row.name === "default" ? "Default" : row.name) }
       const stamp = {
         version: VERSION,
-        hash: hash([chatHint(project, kinds), routineHint(project, kinds), skillText(project, kinds)].join("\0")),
+        hash: hash(
+          [chatHint(project, kinds), routineHint(project, kinds), skillText(project, kinds), ...Object.values(PLUGIN_FILES)].join("\0"),
+        ),
       }
       const had = row.ui_meta?.[MARKER]
       // A newer Kitaab manages this project; don't undo its texts.
       if (typeof had?.version === "number" && had.version > VERSION) continue
       if (had?.version === stamp.version && had?.hash === stamp.hash) continue
       try {
-        await writeProject(project, kinds, stamp)
+        await writeProject(project, row.path, kinds, stamp)
       } catch (e) {
         console.warn(`[kitab-context] couldn't update ${project.id}`, e)
       }

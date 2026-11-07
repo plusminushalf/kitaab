@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent, type RefObject } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { CornerDownLeft, ListPlus, X } from "lucide-react"
+import { CornerDownLeft, KeyRound, ListPlus, Lock, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
@@ -109,11 +109,16 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
           {threadId && <ThreadDetails threadId={threadId} inline={roomForDetails} />}
         </PageHeader>
 
-        <div className="flex min-h-0 flex-1">
+        {/* The pinned card floats over the scroller's right side (which is padded by
+            --details-w), so the scrollbar sits at the window edge, not beside the card. */}
+        <div
+          className="relative flex min-h-0 flex-1"
+          style={{ "--details-w": showPinned ? "304px" : "0px" } as React.CSSProperties}
+        >
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {finding && <FindBar root={scrollRoot} focusSignal={findFocus} onClose={() => setFinding(false)} />}
             <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
-            <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-(--details-w)">
               {thread?.fromRun && (
                 <div className="mx-auto max-w-chat px-6 pt-4">
                   <Button
@@ -152,6 +157,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
               )}
             </div>
 
+            <div className="pr-(--details-w)">
             <div className="mx-auto w-full max-w-chat px-6 pb-3">
               {threadId && detail?.pending.length ? (
                 // Capped so a long command can't push the thread and the composer off screen.
@@ -185,8 +191,9 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 extras={<ModelPicker threadId={threadId} />}
               />
             </div>
+            </div>
           </div>
-          {threadId && roomForDetails && detailsPinned && <PinnedThreadDetails threadId={threadId} />}
+          {showPinned && <PinnedThreadDetails threadId={threadId} />}
         </div>
 
         {dragging && (
@@ -321,6 +328,8 @@ function QuestionCard({ threadId, question }: { threadId: Id; question: PendingQ
   const [custom, setCustom] = useState("")
   const answer = (value: string) => void backend.answer(threadId, question, value)
 
+  if (question.kind === "secret") return <SecretCard threadId={threadId} question={question} />
+
   if (question.kind === "approval") {
     const choices = question.choices?.length ? question.choices : ["Allow", "Deny"]
     return (
@@ -389,6 +398,71 @@ function QuestionCard({ threadId, question }: { threadId: Id; question: PendingQ
             Send
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Hermes asks for a secret or a sudo password. The value lives only in this field: it goes
+ * straight to the server, which puts it where it belongs, and never reaches the thread or the model.
+ */
+function SecretCard({ threadId, question }: { threadId: Id; question: PendingQuestion }) {
+  const [value, setValue] = useState("")
+  const [sent, setSent] = useState(false)
+  const submit = (v: string) => {
+    if (sent) return
+    setSent(true)
+    setValue("")
+    void backend.answer(threadId, question, v)
+  }
+  return (
+    <Card size="sm" className="mb-3">
+      <CardHeader>
+        <CardTitle className="selectable flex items-center gap-2 leading-snug">
+          <KeyRound className="size-4 shrink-0 text-muted-foreground" />
+          {question.title}
+        </CardTitle>
+        {question.detail && (
+          <CardDescription className="selectable whitespace-pre-wrap">{question.detail}</CardDescription>
+        )}
+        {question.command && (
+          <CardDescription className="selectable max-h-60 overflow-y-auto font-mono text-xs break-all whitespace-pre-wrap">
+            {question.command}
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (value.trim()) submit(value)
+          }}
+        >
+          <Input
+            type="password"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Paste or type it here"
+            aria-label={question.title}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={sent}
+          />
+          <Button type="submit" size="sm" disabled={sent || !value.trim()}>
+            Save
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={sent} onClick={() => submit("")}>
+            Skip
+          </Button>
+        </form>
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Lock className="mt-px size-3 shrink-0" />
+          <span className="selectable">
+            {question.destination ? `${question.destination}. ` : ""}The agent never sees it, and it isn't kept in this thread.
+          </span>
+        </p>
       </CardContent>
     </Card>
   )
