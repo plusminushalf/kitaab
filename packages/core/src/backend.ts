@@ -10,6 +10,7 @@ import { previewText, splitUserText } from "./user-text"
 import { syncKitabContext } from "./kitab-context"
 import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
+import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
@@ -177,10 +178,11 @@ async function loadModels(p: string) {
         )
         return { slug: x.slug, name: x.name, models, caps }
       }),
-    defaultModel: r.model ? { model: r.model, provider: r.provider, fast: fast.value === "fast" } : null,
-    defaultEffort: effort.value && effort.value !== "none" ? effort.value : "medium",
+    projectModel: r.model ? { model: r.model, provider: r.provider, fast: fast.value === "fast" } : null,
+    projectEffort: effort.value && effort.value !== "none" ? effort.value : "medium",
     draftModel: null,
   })
+  resolveDefault()
 }
 
 function rememberModel(threadId: Id, info: any) {
@@ -199,15 +201,22 @@ function rememberModel(threadId: Id, info: any) {
 }
 
 /** Applies a model (and effort) to a live session. Asks before switching to an expensive model. */
-async function applyModel(runtimeId: string, choice: { model: string; provider: string; effort?: string; fast?: boolean }) {
-  const value = `${choice.model} --provider ${choice.provider} --session`
-  let r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value })
-  if (r?.confirm_required) {
-    if (!(await platform().confirm(r.confirm_message || `Switch to ${choice.model}? It costs more.`))) return false
-    r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value, confirm_expensive_model: true })
+/** Switches a live session's model. `sameModel`: it already runs this model, so only effort and speed change. */
+async function applyModel(
+  runtimeId: string,
+  choice: { model: string; provider: string; effort?: string; fast?: boolean },
+  sameModel = false,
+) {
+  if (!sameModel) {
+    const value = `${choice.model} --provider ${choice.provider} --session`
+    let r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value })
+    if (r?.confirm_required) {
+      if (!(await platform().confirm(r.confirm_message || `Switch to ${choice.model}? It costs more.`))) return false
+      r = await gw.call<any>("config.set", { session_id: runtimeId, key: "model", value, confirm_expensive_model: true })
+    }
+    if (r?.warning) toast.warning(r.warning)
+    if (r?.deferred) toast(`${choice.model} will be used from the next message`)
   }
-  if (r?.warning) toast.warning(r.warning)
-  if (r?.deferred) toast(`${choice.model} will be used from the next message`)
   if (choice.effort) {
     await gw.call("config.set", { session_id: runtimeId, key: "reasoning", value: choice.effort, scope: "session" })
   }
@@ -571,6 +580,7 @@ async function connectOnce() {
   }))
   store.set({ projects, personalities: readLibrary(profiles) })
   readThreadMeta(profiles)
+  readMyModel(profiles)
   void migrateLocal()
   // Tells Hermes it's talking through Kitab, in every project (see kitab-context.ts).
   void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
@@ -587,6 +597,7 @@ async function connectOnce() {
 async function refreshProfiles() {
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
   readThreadMeta(profiles)
+  readMyModel(profiles)
   store.set((s) => ({
     personalities: readLibrary(profiles),
     projects: s.projects.map((pr) => {
@@ -695,10 +706,16 @@ export const backend: Backend = {
       storedOf.set(runtimeId, id)
       rememberModel(id, r.info)
       noteSession(runtimeId, r.info)
-      const draft = store.get().draftModel
-      if (draft) {
-        await applyModel(runtimeId, draft).catch((e) => toast.error(`Model: ${e.message ?? e}`))
-        rememberModel(id, { model: draft.model, provider: draft.provider, reasoning_effort: draft.effort, fast: draft.fast })
+      // The composer's pick for this thread, else your default from Settings.
+      const pick = store.get().draftModel ?? usableMyModel()
+      if (pick) {
+        const started = store.get().threadModels[id]
+        const same = started?.model === pick.model && started?.provider === pick.provider
+        const applied = await applyModel(runtimeId, pick, same).catch((e) => {
+          toast.error(`Model: ${e.message ?? e}`)
+          return false
+        })
+        if (applied) rememberModel(id, { model: pick.model, provider: pick.provider, reasoning_effort: pick.effort, fast: pick.fast })
       }
       const title = text.split("\n")[0].slice(0, 80) || attachments[0]?.name || "New thread"
       store.set((s) => ({
@@ -738,6 +755,14 @@ export const backend: Backend = {
       throw e
     }
     return threadIdFinal
+  },
+
+  async setMyModel(choice) {
+    try {
+      await writeMyModel(gw, choice)
+    } catch (e) {
+      toast.error(`Couldn't save your default model: ${e instanceof Error ? e.message : e}`)
+    }
   },
 
   async loadSubagents(threadId) {

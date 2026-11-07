@@ -28,7 +28,7 @@ export type View =
   | { kind: "project" }
   | { kind: "done" }
 
-export type SettingsSection = "general" | "appearance"
+export type SettingsSection = "general" | "threads" | "appearance"
 
 export type State = {
   connection: Connection
@@ -43,10 +43,15 @@ export type State = {
   doneCount: number
   /** Models the server can use, grouped by provider. */
   models: ModelProvider[]
-  /** The project's default model, used for new threads unless changed. */
+  /** The model new threads start on: yours (myModel) when this project has it, else the project's. */
   defaultModel: ModelChoice | null
-  /** The profile's reasoning effort when a thread doesn't set one. */
+  /** Reasoning effort new threads start with, the same way. */
   defaultEffort: string
+  /** The model set in the project's own Hermes config. */
+  projectModel: ModelChoice | null
+  projectEffort: string
+  /** Your default for new threads in every project, from Settings (shared by all your devices). */
+  myModel: ModelChoice | null
   /** Model picked for the next new thread. */
   draftModel: ModelChoice | null
   /** Model each open thread is running on. */
@@ -78,6 +83,8 @@ export interface Backend {
   setDone(threadId: Id, done: boolean): Promise<void>
   /** Model for a thread, or for the next new thread when threadId is null. */
   setModel(threadId: Id | null, choice: ModelChoice): Promise<void>
+  /** Your default model for new threads; null goes back to each project's own. */
+  setMyModel(choice: ModelChoice | null): Promise<void>
   /** Re-reads which helper agents the thread has running. */
   loadSubagents(threadId: Id): Promise<void>
   stopSubagent(threadId: Id, subagentId: Id): Promise<void>
@@ -95,6 +102,9 @@ const initial: State = {
   models: [],
   defaultModel: null,
   defaultEffort: "medium",
+  projectModel: null,
+  projectEffort: "medium",
+  myModel: null,
   draftModel: null,
   threadModels: {},
   routines: [],

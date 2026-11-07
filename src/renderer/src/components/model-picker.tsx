@@ -39,13 +39,20 @@ function readFavorites(): string[] {
   }
 }
 
-export function ModelPicker({ threadId }: { threadId: Id | null }) {
+type Props =
+  /** In the composer: the thread's model, or the next new thread's when threadId is null. */
+  | { threadId: Id | null; value?: never; onChange?: never }
+  /** Anywhere else (Settings): a controlled model choice. */
+  | { threadId?: never; value: ModelChoice | null; onChange: (choice: ModelChoice) => void }
+
+export function ModelPicker(props: Props) {
+  const { threadId = null, onChange } = props
   const providers = useStore((s) => s.models)
   const fallback = useStore((s) => s.defaultModel)
   const defaultEffort = useStore((s) => s.defaultEffort)
   const draft = useStore((s) => s.draftModel)
   const threadModel = useStore((s) => (threadId ? s.threadModels[threadId] : undefined))
-  const current: ModelChoice | null = (threadId ? threadModel : draft) ?? fallback
+  const current: ModelChoice | null = onChange ? props.value : ((threadId ? threadModel : draft) ?? fallback)
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -72,7 +79,7 @@ export function ModelPicker({ threadId }: { threadId: Id | null }) {
 
   const caps = providers.find((p) => p.slug === current.provider)?.caps[current.model]
   const effort = current.effort ?? defaultEffort
-  const pick = (choice: ModelChoice) => void backend.setModel(threadId, choice)
+  const pick = (choice: ModelChoice) => (onChange ? onChange(choice) : void backend.setModel(threadId, choice))
   const toggleFavorite = (k: string) => {
     const next = favorites.includes(k) ? favorites.filter((f) => f !== k) : [...favorites, k]
     setFavorites(next)
@@ -85,7 +92,13 @@ export function ModelPicker({ threadId }: { threadId: Id | null }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={<Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground" />}
+        render={
+          onChange ? (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 px-2.5 text-sm" />
+          ) : (
+            <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground" />
+          )
+        }
         title="Model and reasoning"
       >
         <Icon className={"size-4 " + providerTint(current.provider)} />
@@ -94,7 +107,11 @@ export function ModelPicker({ threadId }: { threadId: Id | null }) {
         </span>
         {current.fast && <Zap className="opacity-70" />}
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-[min(640px,calc(100vw-2rem))] gap-0 p-0">
+      <PopoverContent
+        side={onChange ? "bottom" : "top"}
+        align={onChange ? "end" : "start"}
+        className="w-[min(640px,calc(100vw-2rem))] gap-0 p-0"
+      >
         <div className="flex h-80 min-h-0">
           {/* Providers */}
           <div className="flex w-12 shrink-0 flex-col items-center gap-1 border-r py-2">
@@ -165,7 +182,7 @@ export function ModelPicker({ threadId }: { threadId: Id | null }) {
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
                   >
                     <span>{EFFORT_LABELS[e]}</span>
-                    {e === defaultEffort && <span className="text-xs text-muted-foreground">Default</span>}
+                    {!onChange && e === defaultEffort && <span className="text-xs text-muted-foreground">Default</span>}
                     {effort === e && <Check className="ml-auto size-4" />}
                   </button>
                 ))

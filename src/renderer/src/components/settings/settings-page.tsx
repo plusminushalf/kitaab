@@ -1,14 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Paintbrush, Server, X } from "lucide-react"
+import { MessageSquare, Paintbrush, Server, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { store, useStore, type SettingsSection } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { AppearanceSection } from "./appearance-section"
 import { GeneralSection } from "./general-section"
+import { ThreadsSection } from "./threads-section"
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Server }[] = [
   { id: "general", label: "Server", icon: Server },
+  { id: "threads", label: "Threads", icon: MessageSquare },
   { id: "appearance", label: "Appearance", icon: Paintbrush },
 ]
 
@@ -61,7 +63,13 @@ export function SettingsOverlay() {
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-4xl px-8 py-8">
-              {shown === "appearance" ? <AppearanceSection /> : <GeneralSection />}
+              {shown === "appearance" ? (
+                <AppearanceSection />
+              ) : shown === "threads" ? (
+                <ThreadsSection />
+              ) : (
+                <GeneralSection />
+              )}
             </div>
           </div>
         </div>
