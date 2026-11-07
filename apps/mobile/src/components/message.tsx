@@ -73,29 +73,43 @@ function duration(ms: number): string {
   return `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
+// While the turn runs its steps show in full, with "Working…" as the last line, where the
+// next step lands. Once it ends they fold under a "Worked for …" line above the answer.
 function WorkLog({ message: m, work }: { message: Message; work: Part[] }) {
   const c = useColors()
-  const running = Boolean(m.streaming)
-  const [open, setOpen] = useState<boolean | null>(null)
-  if (!work.length) return null
-  const expanded = open ?? running
-  const ms = m.startedAt && m.endedAt ? m.endedAt - m.startedAt : 0
-  const label = running ? "Working…" : ms ? `Worked for ${duration(ms)}` : "Worked"
+  const [open, setOpen] = useState(false)
 
+  if (m.streaming) {
+    return (
+      <View style={{ gap: 10, marginBottom: 8 }}>
+        <Steps work={work} running />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
+          <ActivityIndicator size="small" />
+          <Text style={{ color: c.textMuted, fontSize: 14 }}>Working…</Text>
+        </View>
+      </View>
+    )
+  }
+
+  if (!work.length) return null
+  const ms = m.startedAt && m.endedAt ? m.endedAt - m.startedAt : 0
   return (
     <View style={{ marginBottom: 8 }}>
-      <Pressable onPress={() => setOpen(!expanded)} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
-        {running ? <ActivityIndicator size="small" /> : null}
-        <Text style={{ color: c.textMuted, fontSize: 14 }}>{label}</Text>
-        <Icon name={expanded ? "chevron.down" : "chevron.right"} size={11} color={c.textMuted} weight="semibold" />
+      <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
+        <Text style={{ color: c.textMuted, fontSize: 14 }}>{ms ? `Worked for ${duration(ms)}` : "Worked"}</Text>
+        <Icon name={open ? "chevron.down" : "chevron.right"} size={11} color={c.textMuted} weight="semibold" />
       </Pressable>
-      {expanded ? (
+      {open ? (
         <View style={{ gap: 10, marginTop: 4 }}>
-          {work.map((p, i) => (p.type === "text" ? <Markdown key={i} text={p.text.trim()} /> : <WorkPart key={i} part={p} running={running} />))}
+          <Steps work={work} running={false} />
         </View>
       ) : null}
     </View>
   )
+}
+
+function Steps({ work, running }: { work: Part[]; running: boolean }) {
+  return work.map((p, i) => (p.type === "text" ? <Markdown key={i} text={p.text.trim()} /> : <WorkPart key={i} part={p} running={running} />))
 }
 
 function WorkPart({ part, running }: { part: Extract<Part, { type: "work" }>; running: boolean }) {
@@ -182,11 +196,7 @@ export const MessageRow = memo(function MessageRow({ message: m }: { message: Me
         </View>
       ) : null}
       <WorkLog message={m} work={work} />
-      {answer ? (
-        <Markdown text={answer} />
-      ) : m.streaming && !work.length ? (
-        <ActivityIndicator style={{ alignSelf: "flex-start" }} />
-      ) : null}
+      {answer ? <Markdown text={answer} /> : null}
     </View>
   )
 })

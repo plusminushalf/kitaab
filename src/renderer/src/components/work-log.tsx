@@ -72,44 +72,59 @@ function duration(ms: number): string {
   return `${Math.floor(m / 60)}h ${m % 60}m`
 }
 
-/** `work` is the turn up to its answer (see splitTurn in @kitab/core/turn). */
+/**
+ * `work` is the turn up to its answer (see splitTurn in @kitab/core/turn). While the turn
+ * runs it is shown in full, with "Working…" as its last line, where the next step lands.
+ * Once it ends it folds under a "Worked for …" line above the answer.
+ */
 export function WorkLog({ message: m, work }: { message: Message; work: Part[] }) {
-  const running = Boolean(m.streaming)
-  const [open, setOpen] = useState<boolean | null>(null) // null = follow running state
+  const [open, setOpen] = useState(false)
+
+  if (m.streaming) {
+    return (
+      <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+        <Steps work={work} />
+        <div className="flex items-center gap-1.5 py-1">
+          <Spinner className="size-3.5" />
+          <span>Working…</span>
+        </div>
+      </div>
+    )
+  }
+
   if (!work.length) return null
-
-  const expanded = open ?? running
   const ms = m.startedAt && m.endedAt ? m.endedAt - m.startedAt : 0
-  const label = running ? "Working…" : ms ? `Worked for ${duration(ms)}` : "Worked"
-
   return (
     <div className="flex flex-col text-sm text-muted-foreground">
       <button
         className="flex w-fit items-center gap-1.5 py-1 hover:text-foreground"
-        onClick={() => setOpen(!expanded)}
-        aria-expanded={expanded}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
       >
-        {running && <Spinner className="size-3.5" />}
-        <span>{label}</span>
-        <ChevronDown className={"size-3.5 transition-transform " + (expanded ? "" : "-rotate-90")} />
+        <span>{ms ? `Worked for ${duration(ms)}` : "Worked"}</span>
+        <ChevronDown className={"size-3.5 transition-transform " + (open ? "" : "-rotate-90")} />
       </button>
-      {expanded && (
+      {open && (
         <div className="mt-1 flex flex-col gap-3">
-          {work.map((p, i) =>
-            p.type === "text" ? (
-              <Markdown key={i} text={p.text.trim()} />
-            ) : (
-              <div key={i} className="flex flex-col gap-0.5 border-l pl-3">
-                {p.reasoning?.trim() && <ThinkingRow text={p.reasoning} />}
-                {groupTools(p.tools).map((g, j) => (
-                  <ToolGroupRow key={`${g.name}-${j}`} group={g} />
-                ))}
-              </div>
-            ),
-          )}
+          <Steps work={work} />
         </div>
       )}
     </div>
+  )
+}
+
+function Steps({ work }: { work: Part[] }) {
+  return work.map((p, i) =>
+    p.type === "text" ? (
+      <Markdown key={i} text={p.text.trim()} />
+    ) : (
+      <div key={i} className="flex flex-col gap-0.5 border-l pl-3">
+        {p.reasoning?.trim() && <ThinkingRow text={p.reasoning} />}
+        {groupTools(p.tools).map((g, j) => (
+          <ToolGroupRow key={`${g.name}-${j}`} group={g} />
+        ))}
+      </div>
+    ),
   )
 }
 

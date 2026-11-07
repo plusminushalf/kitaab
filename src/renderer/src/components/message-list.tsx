@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { Spinner } from "@/components/ui/spinner"
 import type { Attachment, Message, Personality } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
 import { Markdown } from "@/components/markdown"
@@ -131,11 +130,7 @@ function MessageRow({
       {author && <div className="text-xs font-medium text-muted-foreground">{author}</div>}
       <WorkLog message={m} work={work} />
       {m.attachments?.length ? <Attachments items={m.attachments} {...files} /> : null}
-      {answer ? (
-        <Markdown text={answer} />
-      ) : m.streaming && !work.length ? (
-        <Spinner className="text-muted-foreground" />
-      ) : null}
+      {answer ? <Markdown text={answer} /> : null}
     </div>
   )
 }
