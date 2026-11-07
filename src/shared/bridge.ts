@@ -30,6 +30,41 @@ export type ExtensionTheme = { label: string; uiTheme?: string; json: string }
 
 export type ThemeSearchSort = "relevance" | "downloadCount" | "averageRating" | "timestamp"
 
+/** Where the app updater is. Mirrors T3 Code's flow: check → download → restart to install. */
+export type UpdateStatus =
+  | "disabled" // running from source, or from a place it can't replace itself
+  | "idle" // hasn't checked yet
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error"
+
+/** One release between the running version and the newest, for the "what's new" card. */
+export type ReleaseNote = { version: string; publishedAt: string | null; url: string; body: string }
+
+export type UpdateState = {
+  status: UpdateStatus
+  currentVersion: string
+  /** Newest release the signed feed offers, when it's newer than this app. */
+  availableVersion: string | null
+  /** A verified copy of this version is staged and installs on restart. */
+  downloadedVersion: string | null
+  downloadPercent: number | null
+  /** ms since epoch of the last finished check. */
+  checkedAt: number | null
+  /** Why updates are off, or what went wrong. */
+  message: string | null
+  errorContext: "check" | "download" | "install" | null
+  /** Newest first; empty when GitHub couldn't be reached for notes. */
+  releaseNotes: ReleaseNote[]
+  /** An update that was installed but the app came back on the old version. */
+  notAppliedVersion: string | null
+  /** Set once, on the first launch after an update succeeded. */
+  justUpdatedFrom: string | null
+}
+
 export type HermesBridge = {
   settings: {
     get(): Promise<Settings>
@@ -85,4 +120,14 @@ export type HermesBridge = {
   }
   /** Absolute path of a dropped File (Electron removed File.path). */
   pathForFile(file: File): string
+  updates: {
+    get(): Promise<UpdateState>
+    check(): Promise<UpdateState>
+    download(): Promise<UpdateState>
+    /** Asks to confirm, then quits, swaps the app and reopens it. false if cancelled or refused. */
+    install(): Promise<boolean>
+    /** Clears justUpdatedFrom once the renderer has shown it. */
+    acknowledge(): void
+    onState(cb: (state: UpdateState) => void): () => void
+  }
 }

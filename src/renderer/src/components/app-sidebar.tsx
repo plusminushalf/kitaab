@@ -28,6 +28,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
+import { UpdateButton } from "@/components/update-button"
 import { backend, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { relativeTime } from "@kitab/core/format"
@@ -214,8 +215,8 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       </SidebarContent>
 
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
+        <SidebarMenu className="flex-row items-center gap-1">
+          <SidebarMenuItem className="min-w-0 flex-1">
             <SidebarMenuButton onClick={onOpenSettings}>
               <span
                 className={
@@ -237,6 +238,8 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               <Settings className="ml-auto" />
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {/* Shows only when there's an update to download or install. */}
+          <UpdateButton />
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

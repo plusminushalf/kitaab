@@ -12,6 +12,7 @@ export function installMenu(send: Send) {
       label: app.name,
       submenu: [
         { role: "about" },
+        { label: "Check for Updates…", click: cmd("check-updates") },
         { type: "separator" },
         { label: "Settings…", accelerator: "Cmd+,", click: cmd("settings") },
         { type: "separator" },

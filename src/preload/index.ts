@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
-import type { ConnectionResult, FileText, HermesBridge, Settings, ThemeSearchSort } from "../shared/bridge"
+import type { ConnectionResult, FileText, HermesBridge, Settings, ThemeSearchSort, UpdateState } from "../shared/bridge"
 
 const api: HermesBridge = {
   settings: {
@@ -54,6 +54,18 @@ const api: HermesBridge = {
   },
   /** Absolute path of a dropped File (Electron removed File.path). */
   pathForFile: (file: File) => webUtils.getPathForFile(file),
+  updates: {
+    get: (): Promise<UpdateState> => ipcRenderer.invoke("update:get"),
+    check: (): Promise<UpdateState> => ipcRenderer.invoke("update:check"),
+    download: (): Promise<UpdateState> => ipcRenderer.invoke("update:download"),
+    install: (): Promise<boolean> => ipcRenderer.invoke("update:install"),
+    acknowledge: () => ipcRenderer.send("update:acknowledge"),
+    onState: (cb: (state: UpdateState) => void) => {
+      const h = (_: unknown, v: UpdateState) => cb(v)
+      ipcRenderer.on("update:state", h)
+      return () => void ipcRenderer.off("update:state", h)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld("hermes", api)

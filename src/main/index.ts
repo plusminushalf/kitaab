@@ -10,6 +10,7 @@ import { Tunnel } from "./tunnel"
 import { AuthError, authedFetch, authRequired, forgetAuthMode, signIn, signOut, wsTicket } from "./auth"
 import { ensureRemoteBackend, stopRemoteBackend } from "./remote"
 import { installThemeIpc } from "./themes"
+import { acknowledgeUpdate, checkForUpdates, downloadUpdate, getUpdateState, installUpdate, startUpdater } from "./updater"
 
 // macOS only. Nothing here tries to be cross-platform.
 
@@ -253,10 +254,17 @@ ipcMain.on("app:bounce", () => app.dock?.bounce("informational"))
 
 installThemeIpc()
 
+ipcMain.handle("update:get", () => getUpdateState())
+ipcMain.handle("update:check", () => checkForUpdates())
+ipcMain.handle("update:download", () => downloadUpdate())
+ipcMain.handle("update:install", () => installUpdate())
+ipcMain.on("update:acknowledge", () => acknowledgeUpdate())
+
 app.whenReady().then(() => {
   nativeTheme.themeSource = "system"
   installMenu(send)
   mainWindow = createWindow()
+  startUpdater()
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()

@@ -6,8 +6,9 @@
 #   a workflow artifact only.
 #
 # Every DMG gets a SHA256SUMS file signed with Kitaab's release key (secret
-# RELEASE_SIGNING_KEY; the public half is release-key.pub). install.sh refuses
-# anything that doesn't verify, so a tagged release fails without that secret.
+# RELEASE_SIGNING_KEY; the public half is release-key.pub). install.sh and the
+# app's updater refuse anything that doesn't verify, so a tagged release fails
+# without that secret. Installed apps pick up a new tag within about half an hour.
 #
 # Apple signing and notarization are optional. Without the secrets below the app is
 # ad-hoc signed, and people who download it must allow it in
@@ -37,6 +38,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release notes list commits since the previous tag
 
       - uses: pnpm/action-setup@v4 # version comes from packageManager in package.json
 
@@ -113,7 +116,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # "What's new" is what the app's update card shows; it hides the Install and
+          # SHA-256 sections below. Commit subjects since the previous tag, newest first.
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)"
           {
+            echo "## What's new"
+            echo
+            if [ -n "$prev" ]; then
+              git log --no-merges --format='- %s' "$prev..$GITHUB_REF_NAME"
+              echo
+              echo "[All changes since $prev](https://github.com/$GITHUB_REPOSITORY/compare/$prev...$GITHUB_REF_NAME)"
+            else
+              echo "The first release."
+            fi
+            echo
             echo '## Install'
             echo
             echo '```sh'
@@ -129,5 +145,5 @@ jobs:
             echo '```'
           } > "$RUNNER_TEMP/notes.md"
           gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "Kitaab $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
+            || gh release create "$GITHUB_REF_NAME" --title "Kitaab $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
           gh release upload "$GITHUB_REF_NAME" dist/*.dmg dist/SHA256SUMS dist/SHA256SUMS.sig --clobber

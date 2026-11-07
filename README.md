@@ -94,6 +94,16 @@ shasum -a 256 -c SHA256SUMS
 
 The first command should print `Good "kitab-release" signature`, the second `Kitaab-<version>-arm64.dmg: OK`. Both tools ship with macOS.
 
+### Updates
+
+Kitaab updates itself from GitHub releases. About 15 seconds after launch, and every 30 minutes after that, it downloads the latest release's `SHA256SUMS` and checks its signature against the same pinned release key. If that names a newer DMG, a download button appears at the bottom of the sidebar. Hover it to see what's new, and click it to download. When the download is done, the button turns into a restart arrow. Click it, confirm, and Kitaab quits, replaces itself and reopens. **Kitaab → Check for Updates…** and Settings → General check right away.
+
+Before staging an update, Kitaab checks that the DMG matches its signed SHA-256, that the app inside has Kitaab's bundle id, that its version is the one the signed file names, and that its code signature is intact. It only ever moves forward a version. If the folder Kitaab is in isn't writable by you, macOS asks for an administrator password when installing. If an update doesn't take, the next launch says so.
+
+Updates are off when Kitaab runs from source, from a disk image, or from a quarantined copy macOS hasn't moved (move it to Applications first). Releases up to 0.1.1 have no updater, so anyone on one of those needs to reinstall once with the `curl` command above.
+
+Kitaab doesn't use electron-updater, because its Mac half (Squirrel.Mac) only accepts updates signed with an Apple Developer ID and Kitaab is ad-hoc signed. See `src/main/updater.ts`.
+
 ## Development
 
 ```sh
@@ -119,9 +129,11 @@ The app is ad-hoc signed, which is enough to run it on the Mac that built it. It
 pnpm dmg          # builds dist/Kitaab-<version>-<arch>.dmg
 ```
 
-Pushing a tag like `v0.1.0` runs `.github/workflows/dmg.yml`. It builds the DMG with that version, writes `SHA256SUMS`, signs it with `scripts/sign-release.sh`, and attaches all three files to a GitHub release. You can also run the workflow by hand from the Actions tab, which uploads them as a workflow artifact.
+Pushing a tag like `v0.1.0` runs `.github/workflows/dmg.yml`. It builds the DMG with that version, writes `SHA256SUMS`, signs it with `scripts/sign-release.sh`, and attaches all three files to a GitHub release. The release notes open with a "What's new" list of commit subjects since the previous tag, which the app shows in its update card. Installed copies pick the release up within about 30 minutes. You can also run the workflow by hand from the Actions tab, which uploads the files as a workflow artifact instead.
 
-The release key's private half is the `RELEASE_SIGNING_KEY` repository secret, and tagged builds fail without it. If you ever replace the key, update `release-key.pub` and `PUBLIC_KEY` in `install.sh` in the same commit. Releases signed with the old key will no longer verify against the new one.
+To ship an update, push a tag higher than the last release; package.json stays as it is (`git tag v0.2.0 && git push origin v0.2.0`).
+
+The release key's private half is the `RELEASE_SIGNING_KEY` repository secret, and tagged builds fail without it. If you ever replace the key, update `release-key.pub`, `PUBLIC_KEY` in `install.sh` and `PUBLIC_KEY` in `src/main/updater.ts` in the same commit. Releases signed with the old key will no longer verify against the new one, and installed apps only trust the key they shipped with, so they need one release signed with the old key that carries the new one.
 
 To sign and notarize the app with Apple, so it opens on any Mac with no Gatekeeper prompt, add these repository secrets: `APPLE_CERTIFICATE_P12` (a base64-encoded Developer ID Application certificate), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Without them the DMG is ad-hoc signed, and people who download it have to allow it in System Settings → Privacy & Security the first time they open it.
 

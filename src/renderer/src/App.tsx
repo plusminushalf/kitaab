@@ -15,6 +15,7 @@ import { ConnectionView } from "@/components/connection-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
 import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
+import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
 
 export function App() {
   return (
@@ -34,6 +35,8 @@ function Shell() {
   const openSettings = () => store.set({ settings: "general" })
   const editing = useAppearance((s) => s.editing)
   const { toggleSidebar } = useSidebar()
+  // Subscribes to the updater from the root, so its toasts show whatever is on screen.
+  useUpdateState()
 
   useEffect(() => {
     void backend.connect()
@@ -78,6 +81,8 @@ function Shell() {
         switch (command) {
           case "settings":
             return openSettings()
+          case "check-updates":
+            return void checkForUpdatesLoudly()
           case "new-thread":
             return store.go({ kind: "thread", threadId: null })
           case "toggle-sidebar":

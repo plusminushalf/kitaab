@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { backend } from "@kitab/core/backend"
 import { useStore } from "@/lib/store"
+import { canCheck, checkForUpdatesLoudly, describeUpdate, runUpdateAction, updateAction, useUpdateState } from "@/lib/updates"
+import { relativeTime } from "@kitab/core/format"
 import type { Settings } from "../../../../shared/bridge"
 import { SettingRow, SettingsCard, SettingsGroup } from "./settings-page"
 
@@ -85,6 +87,33 @@ export function GeneralSection() {
           </Button>
         </div>
       </SettingsGroup>
+      <UpdatesGroup />
     </>
+  )
+}
+
+/** The running version, what the updater last found, and the one button that moves it along. */
+function UpdatesGroup() {
+  const u = useUpdateState()
+  if (!u) return null
+  const action = updateAction(u)
+  const checked = u.checkedAt && u.status !== "checking" ? ` Checked ${relativeTime(u.checkedAt)}.` : ""
+  return (
+    <SettingsGroup title="Updates">
+      <SettingsCard>
+        <SettingRow label={`Kitaab ${u.currentVersion}`} description={describeUpdate(u) + checked}>
+          {action === "download" && <Button onClick={() => runUpdateAction(u)}>Download {u.availableVersion}</Button>}
+          {action === "install" && <Button onClick={() => runUpdateAction(u)}>Restart to update</Button>}
+          {u.status === "downloading" && (
+            <Button disabled>Downloading {Math.floor(u.downloadPercent ?? 0)}%</Button>
+          )}
+          {action === "none" && u.status !== "downloading" && (
+            <Button variant="outline" disabled={!canCheck(u)} onClick={() => void checkForUpdatesLoudly()}>
+              {u.status === "checking" ? "Checking…" : "Check for updates"}
+            </Button>
+          )}
+        </SettingRow>
+      </SettingsCard>
+    </SettingsGroup>
   )
 }

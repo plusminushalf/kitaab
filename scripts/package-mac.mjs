@@ -35,6 +35,12 @@ set("CFBundleDisplayName", NAME)
 set("CFBundleIdentifier", BUNDLE_ID)
 set("CFBundleShortVersionString", pkg.version)
 set("CFBundleVersion", pkg.version)
+// Electron's app.isPackaged is just "the executable isn't called Electron". Left as
+// is, the shipped app thinks it runs from source: dev menus, the DevTools port, and
+// no updates. Renaming it also shows Kitaab, not Electron, in Activity Monitor.
+// (Electron still finds its helpers as "Electron Helper", so those keep their names.)
+execFileSync("mv", [join(app, "Contents/MacOS/Electron"), join(app, `Contents/MacOS/${NAME}`)])
+set("CFBundleExecutable", NAME)
 copyFileSync(join(root, "resources/icon.icns"), join(app, "Contents/Resources/electron.icns"))
 rmSync(join(app, "Contents/Resources/default_app.asar"), { force: true })
 
