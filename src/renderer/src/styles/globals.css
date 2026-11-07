@@ -233,7 +233,53 @@ body {
 .font-composer { font-family: var(--font-composer); }
 .text-prompt { font-size: var(--font-size-prompt, 15px); }
 .prose :where(pre, code) { font-size: var(--font-size-code, 13px); }
-html[data-word-wrap="on"] .prose pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+html[data-word-wrap="on"] .prose pre,
+html[data-word-wrap="on"] .code-block pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Fenced code, in replies and in your own messages. */
+.code-block pre {
+  overflow-x: auto;
+  border-radius: 0.375rem;
+  background: var(--code);
+  color: var(--code-foreground);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-code, 13px);
+  line-height: 1.6;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+/* Syntax colours (highlight.js classes). GitHub-like, one set per appearance, so they read
+   on any theme's code surface. */
+.code-block {
+  --syntax-keyword: #cf222e;
+  --syntax-string: #0a3069;
+  --syntax-number: #0550ae;
+  --syntax-comment: #6e7781;
+  --syntax-function: #8250df;
+  --syntax-type: #953800;
+  --syntax-variable: #0550ae;
+}
+:root.dark .code-block {
+  --syntax-keyword: #ff7b72;
+  --syntax-string: #a5d6ff;
+  --syntax-number: #79c0ff;
+  --syntax-comment: #8b949e;
+  --syntax-function: #d2a8ff;
+  --syntax-type: #ffa657;
+  --syntax-variable: #79c0ff;
+}
+.code-block :is(.hljs-keyword, .hljs-meta .hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-selector-tag) { color: var(--syntax-keyword); }
+.code-block :is(.hljs-string, .hljs-regexp, .hljs-template-variable, .hljs-meta .hljs-string) { color: var(--syntax-string); }
+.code-block :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet) { color: var(--syntax-number); }
+.code-block :is(.hljs-comment, .hljs-quote, .hljs-meta) { color: var(--syntax-comment); }
+.code-block :is(.hljs-title, .hljs-title.function_, .hljs-section) { color: var(--syntax-function); }
+.code-block :is(.hljs-type, .hljs-title.class_, .hljs-built_in) { color: var(--syntax-type); }
+.code-block :is(.hljs-variable, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-operator) { color: var(--syntax-variable); }
+.code-block .hljs-subst { color: inherit; }
+.code-block .hljs-emphasis { font-style: italic; }
+.code-block .hljs-strong { font-weight: 600; }
 
 /* Message prose follows the theme instead of Tailwind Typography's fixed grays. */
 .prose {

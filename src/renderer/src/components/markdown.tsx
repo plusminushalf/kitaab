@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Check, Copy, ImageOff } from "lucide-react"
@@ -7,6 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { isKitabLink, openKitabLink } from "@kitab/core/links"
 import { serverImageUrl, serverPath } from "@kitab/core/server-files"
+import { highlight } from "@/lib/highlight"
+import { cn } from "@/lib/utils"
 
 // Agent replies are markdown. Stock Tailwind typography, nothing custom.
 export function Markdown({ text }: { text: string }) {
@@ -39,7 +41,10 @@ export function Markdown({ text }: { text: string }) {
           img: ({ src, alt, node }) => (
             <ReplyImage src={typeof src === "string" ? src : undefined} alt={alt} written={node?.properties?.src} />
           ),
-          pre: ({ node: _node, ...props }) => <CodeBlock {...props} />,
+          pre: ({ node }) => {
+            const code = node?.children.find((c) => c.type === "element" && c.tagName === "code")
+            return <CodeBlock code={hastText(code).replace(/\n$/, "")} lang={fenceLang(code)} className="not-prose my-5" />
+          },
           // Wide tables scroll inside themselves instead of widening the page.
           table: (props) => (
             <div className="overflow-x-auto">
@@ -54,23 +59,41 @@ export function Markdown({ text }: { text: string }) {
   )
 }
 
-/** A fenced code block, with a button in its corner that copies the code. */
-function CodeBlock(props: ComponentProps<"pre">) {
-  const ref = useRef<HTMLPreElement>(null)
+type HastNode = { type: string; value?: string; children?: HastNode[]; properties?: Record<string, unknown> }
+
+/** The text inside a markdown (hast) node. */
+function hastText(node?: HastNode): string {
+  if (!node) return ""
+  if (node.type === "text") return node.value ?? ""
+  return node.children?.map(hastText).join("") ?? ""
+}
+
+/** The language a fence was tagged with (```ts → "ts"), from its code element's class. */
+function fenceLang(node?: HastNode): string | undefined {
+  const cls = node?.properties?.className
+  const list = Array.isArray(cls) ? cls : typeof cls === "string" ? cls.split(" ") : []
+  const tag = list.find((c): c is string => typeof c === "string" && c.startsWith("language-"))
+  return tag?.slice("language-".length).toLowerCase()
+}
+
+/** A fenced code block, syntax-highlighted, with a button in its corner that copies the code. */
+export function CodeBlock({ code, lang, className }: { code: string; lang?: string; className?: string }) {
   const [copied, setCopied] = useState(false)
+  const html = useMemo(() => highlight(code, lang), [code, lang])
   useEffect(() => {
     if (!copied) return
     const t = setTimeout(() => setCopied(false), 1500)
     return () => clearTimeout(t)
   }, [copied])
   const copy = () => {
-    const text = ref.current?.textContent?.replace(/\n$/, "") ?? ""
-    void navigator.clipboard.writeText(text).then(() => setCopied(true))
+    void navigator.clipboard.writeText(code).then(() => setCopied(true))
   }
   const label = copied ? "Copied" : "Copy"
   return (
-    <div className="group/code relative">
-      <pre ref={ref} {...props} />
+    <div className={cn("code-block group/code relative min-w-0", className)}>
+      <pre>
+        {html === null ? <code>{code}</code> : <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />}
+      </pre>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -79,7 +102,7 @@ function CodeBlock(props: ComponentProps<"pre">) {
               size="icon-xs"
               aria-label={label}
               onClick={copy}
-              className="not-prose absolute top-2 right-2 bg-code text-muted-foreground opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
+              className="absolute top-2 right-2 bg-code text-muted-foreground opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
               data-copied={copied}
             />
           }

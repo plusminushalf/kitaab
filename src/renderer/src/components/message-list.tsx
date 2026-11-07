@@ -3,7 +3,7 @@ import { FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucid
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { Attachment, Message, Personality } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
-import { Markdown } from "@/components/markdown"
+import { CodeBlock, Markdown } from "@/components/markdown"
 import { WorkLog } from "@/components/work-log"
 import { splitTurn } from "@kitab/core/turn"
 
@@ -109,13 +109,17 @@ function MessageRow({
         {m.attachments?.length ? <Attachments items={m.attachments} {...files} align="end" /> : null}
         {m.text && (
           <div className="selectable flex max-w-[85%] flex-col gap-2 rounded-2xl bg-message px-4 py-2 text-message-foreground wrap-anywhere whitespace-pre-wrap">
-            {quoteBlocks(m.text).map((b, i) =>
-              b.quote ? (
+            {userBlocks(m.text).map((b, i) =>
+              b.kind === "code" ? (
+                <CodeBlock key={i} code={b.text} lang={b.lang} className="rounded-md border border-border whitespace-normal" />
+              ) : b.kind === "quote" ? (
                 <blockquote key={i} className="border-l-2 border-current/30 pl-2.5 opacity-70">
-                  {b.text}
+                  <InlineCode text={b.text} />
                 </blockquote>
               ) : (
-                <div key={i}>{b.text}</div>
+                <div key={i}>
+                  <InlineCode text={b.text} />
+                </div>
               ),
             )}
           </div>
@@ -135,7 +139,54 @@ function MessageRow({
   )
 }
 
-/** Splits your message into its `> ` quoted passages (from citing) and the rest. */
+type UserBlock = { kind: "text" | "quote"; text: string } | { kind: "code"; text: string; lang?: string }
+
+/** Splits your message into ``` fenced code, `> ` quoted passages (from citing), and the rest. */
+function userBlocks(text: string): UserBlock[] {
+  const blocks: UserBlock[] = []
+  let prose: string[] = []
+  let fence: { marker: string; lang?: string; lines: string[] } | null = null
+  const flushProse = () => {
+    for (const b of quoteBlocks(prose.join("\n"))) blocks.push({ kind: b.quote ? "quote" : "text", text: b.text })
+    prose = []
+  }
+  for (const line of text.split("\n")) {
+    if (fence) {
+      if (line.trim().startsWith(fence.marker) && line.trim().replace(/[`~]/g, "") === "") {
+        blocks.push({ kind: "code", text: fence.lines.join("\n"), lang: fence.lang })
+        fence = null
+      } else fence.lines.push(line)
+      continue
+    }
+    // A backtick fence's info string can't hold backticks (so ```one line``` stays text).
+    const open = /^\s{0,3}(`{3,}|~{3,})\s*([\w+#.-]*)(.*)$/.exec(line)
+    if (open && !(open[1][0] === "`" && open[3].includes("`"))) {
+      flushProse()
+      fence = { marker: open[1], lang: open[2]?.toLowerCase() || undefined, lines: [] }
+    } else prose.push(line)
+  }
+  // An unclosed fence runs to the end, as in markdown.
+  if (fence) blocks.push({ kind: "code", text: fence.lines.join("\n"), lang: fence.lang })
+  flushProse()
+  return blocks.filter((b) => b.kind === "code" || b.text)
+}
+
+/** Text with its `inline code` spans set in mono. */
+function InlineCode({ text }: { text: string }) {
+  const parts = text.split(/(`[^`\n]+`)/)
+  if (parts.length === 1) return text
+  return parts.map((p, i) =>
+    p.length > 2 && p.startsWith("`") && p.endsWith("`") ? (
+      <code key={i} className="rounded bg-current/10 px-1 py-0.5 font-mono text-[0.9em]">
+        {p.slice(1, -1)}
+      </code>
+    ) : (
+      p
+    ),
+  )
+}
+
+/** Splits text into its `> ` quoted passages (from citing) and the rest. */
 function quoteBlocks(text: string): { quote: boolean; text: string }[] {
   const blocks: { quote: boolean; lines: string[] }[] = []
   for (const line of text.split("\n")) {
