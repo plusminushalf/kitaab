@@ -138,7 +138,14 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
             </div>
 
             <div className="mx-auto w-full max-w-chat px-6 pb-3">
-              {threadId && detail?.pending.map((q) => <QuestionCard key={q.id} threadId={threadId} question={q} />)}
+              {threadId && detail?.pending.length ? (
+                // Capped so a long command can't push the thread and the composer off screen.
+                <div className="max-h-[55vh] overflow-y-auto">
+                  {detail.pending.map((q) => (
+                    <QuestionCard key={q.id} threadId={threadId} question={q} />
+                  ))}
+                </div>
+              ) : null}
               {threadId && <QueuedMessages threadId={threadId} />}
               <Composer
                 placeholder={
@@ -306,7 +313,7 @@ function QuestionCard({ threadId, question }: { threadId: Id; question: PendingQ
         <CardHeader>
           <CardTitle className="selectable">{question.title}</CardTitle>
           {question.detail && (
-            <CardDescription className="selectable font-mono text-xs break-all whitespace-pre-wrap">
+            <CardDescription className="selectable max-h-60 overflow-y-auto font-mono text-xs break-all whitespace-pre-wrap">
               {question.detail}
             </CardDescription>
           )}
