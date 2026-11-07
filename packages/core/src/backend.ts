@@ -843,9 +843,10 @@ export const backend: Backend = {
       return threadIdFinal
     }
 
-    // A reply is running: hold the message until it ends, or stop it and send now.
+    // A reply is running: hold the message until it ends, or stop it and send now. A thread
+    // made just now is already marked "working" for this very message, so it never waits.
     let ended = true
-    if (replying(threadIdFinal)) {
+    if (threadId && replying(threadIdFinal)) {
       if (how === "queue") {
         enqueue(threadIdFinal, text, attachments)
         return threadIdFinal

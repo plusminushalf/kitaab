@@ -1,9 +1,14 @@
 import { ModelPicker } from "@/components/model-picker"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { backend } from "@kitab/core/backend"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { useStore, type SendMode } from "@/lib/store"
 import { SettingRow, SettingsCard, SettingsGroup } from "./settings-page"
+
+const SEND_MODES: { value: SendMode; label: string }[] = [
+  { value: "queue", label: "Queue" },
+  { value: "interrupt", label: "Interrupt" },
+]
 
 /** Defaults for new threads (T3 Code's Settings → Threads), and what sending does while a reply runs. */
 export function ThreadsSection() {
@@ -60,15 +65,18 @@ export function ThreadsSection() {
                 : "Interrupt: the reply stops and your message sends now. ⌘Enter queues it until the reply finishes."
             }
           >
-            <ToggleGroup
-              variant="outline"
-              size="sm"
-              value={[enterSends]}
-              onValueChange={(v: string[]) => v[0] && backend.setEnterSends(v[0] as SendMode)}
-            >
-              <ToggleGroupItem value="queue">Queue</ToggleGroupItem>
-              <ToggleGroupItem value="interrupt">Interrupt</ToggleGroupItem>
-            </ToggleGroup>
+            <Select items={SEND_MODES} value={enterSends} onValueChange={(v) => v && backend.setEnterSends(v as SendMode)}>
+              <SelectTrigger size="sm" className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SEND_MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </SettingRow>
         </SettingsCard>
       </SettingsGroup>
