@@ -123,10 +123,12 @@ export function PinnedThreadDetails({ threadId }: { threadId: Id }) {
   const known = useStore((s) => s.threads.some((t) => t.id === threadId) || s.done.some((t) => t.id === threadId))
   if (!known) return null
   return (
-    <aside className="flex w-[304px] shrink-0 flex-col overflow-y-auto pt-3 pr-4 pb-3">
+    // Floats over the thread's scroller; only the card takes the pointer, so wheeling
+    // anywhere else (including the scrollbar at the window edge) scrolls the thread.
+    <aside className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-[304px] flex-col overflow-y-auto pt-3 pr-4 pb-3">
       <div
         data-slot="popover-content"
-        className="flex flex-col rounded-2xl bg-popover p-1.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
+        className="pointer-events-auto flex flex-col rounded-2xl bg-popover p-1.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
       >
         <DetailsBody threadId={threadId} />
       </div>

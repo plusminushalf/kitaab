@@ -331,8 +331,29 @@ a[href], [role="link"] { cursor: pointer; }
 .app-drag { -webkit-app-region: drag; }
 .app-drag button, .app-drag a, .app-drag input, .app-no-drag { -webkit-app-region: no-drag; }
 
-/* No custom scrollbars: unstyled, Chromium draws macOS overlay scrollbars that
-   fade and follow System Settings → Appearance → Show scroll bars. */
+/* Slim scrollbars: Chromium's macOS overlay one grows a wide grey track on hover.
+   A transparent gutter with a thin pill thumb that only shows while the scroller
+   is hovered, and widens a little under the pointer. */
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: transparent;
+}
+:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  border-width: 2px;
+  background-color: color-mix(in oklab, var(--foreground) 32%, transparent);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in oklab, var(--foreground) 42%, transparent);
+}
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* Text being cited stays marked while you type the comment. */
 ::highlight(kitab-cite) {

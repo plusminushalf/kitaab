@@ -160,7 +160,7 @@ export function FindBar({
   return (
     <div
       role="search"
-      className="absolute top-2 right-4 z-20 flex items-center gap-0.5 rounded-xl border bg-popover p-1 text-popover-foreground shadow-md"
+      className="absolute top-2 right-[calc(var(--details-w,0px)+1rem)] z-20 flex items-center gap-0.5 rounded-xl border bg-popover p-1 text-popover-foreground shadow-md"
     >
       <input
         ref={input}

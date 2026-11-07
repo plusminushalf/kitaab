@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent, type RefObject } from "react"
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type RefObject } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CornerDownLeft, KeyRound, ListPlus, Lock, X } from "lucide-react"
@@ -35,6 +35,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const column = useRef<HTMLDivElement>(null)
   const roomForDetails = useRoomForDetails(column)
   const detailsPinned = useDetailsPinned()
+  const showPinned = !!threadId && roomForDetails && detailsPinned
   useSubagentPolling(threadId)
   const [finding, setFinding] = useState(false)
   // Bumped on every ⌘F, so pressing it again refocuses the open bar.
@@ -113,7 +114,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
             --details-w), so the scrollbar sits at the window edge, not beside the card. */}
         <div
           className="relative flex min-h-0 flex-1"
-          style={{ "--details-w": showPinned ? "304px" : "0px" } as React.CSSProperties}
+          style={{ "--details-w": showPinned ? "304px" : "0px" } as CSSProperties}
         >
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {finding && <FindBar root={scrollRoot} focusSignal={findFocus} onClose={() => setFinding(false)} />}
