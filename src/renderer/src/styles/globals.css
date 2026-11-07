@@ -292,3 +292,12 @@ a[href], [role="link"] { cursor: pointer; }
 ::highlight(kitab-cite) {
   background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
+
+/* ⌘F matches in a thread; the one you're on is stronger. */
+::highlight(kitab-find) {
+  background-color: color-mix(in oklab, oklch(0.88 0.17 95) 45%, transparent);
+}
+::highlight(kitab-find-current) {
+  background-color: oklch(0.8 0.16 70);
+  color: oklch(0.2 0 0);
+}

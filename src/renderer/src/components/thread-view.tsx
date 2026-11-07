@@ -9,6 +9,7 @@ import { ModelPicker } from "@/components/model-picker"
 import { CiteSelection, type Citation } from "@/components/cite-selection"
 import { Composer, fileToDraft, type Draft } from "@/components/composer"
 import { FilePanel } from "@/components/file-panel"
+import { FindBar } from "@/components/find-bar"
 import { MessageList } from "@/components/message-list"
 import { PageHeader } from "@/components/page-header"
 import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/components/thread-details"
@@ -35,6 +36,19 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const roomForDetails = useRoomForDetails(column)
   const detailsPinned = useDetailsPinned()
   useSubagentPolling(threadId)
+  const [finding, setFinding] = useState(false)
+  // Bumped on every ⌘F, so pressing it again refocuses the open bar.
+  const [findFocus, setFindFocus] = useState(0)
+
+  useEffect(
+    () =>
+      window.hermes.onMenu((command) => {
+        if (command !== "find" || store.get().settings) return
+        setFinding(true)
+        setFindFocus((n) => n + 1)
+      }),
+    [],
+  )
 
   // Wait for the connection: loading while it's down fails and would leave an empty thread behind.
   useEffect(() => {
@@ -96,7 +110,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         </PageHeader>
 
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            {finding && <FindBar root={scrollRoot} focusSignal={findFocus} onClose={() => setFinding(false)} />}
             <CiteSelection root={scrollRoot} onCite={(c) => setCitations((all) => [...all, c])} />
             <div ref={scrollRoot} data-scroll-root className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               {thread?.fromRun && (

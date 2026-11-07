@@ -47,7 +47,14 @@ export function installMenu(send: Send) {
         { role: "delete" },
         { role: "selectAll" },
         { type: "separator" },
-        { label: "Find…", accelerator: "Cmd+K", click: cmd("find") },
+        {
+          label: "Find",
+          submenu: [
+            { label: "Find in Thread…", accelerator: "Cmd+F", click: cmd("find") },
+            { label: "Find Next", accelerator: "Cmd+G", click: cmd("find-next") },
+            { label: "Find Previous", accelerator: "Cmd+Shift+G", click: cmd("find-previous") },
+          ],
+        },
         { type: "separator" },
         {
           label: "Speech",
