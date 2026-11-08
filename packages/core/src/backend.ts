@@ -238,7 +238,7 @@ async function applyModel(
   return true
 }
 
-/** Hermes stores threads started from Kitab (Mac or iPhone) as source "desktop". Sessions from
+/** Hermes stores threads started from Kitaab (Mac or iPhone) as source "desktop". Sessions from
  *  scripts, the CLI or chat platforms aren't threads, so the lists leave them out. */
 const THREAD_SOURCE = "desktop"
 
@@ -755,7 +755,7 @@ async function connectOnce() {
   readThreadMeta(profiles)
   readMyModel(profiles)
   void migrateLocal()
-  // Tells Hermes it's talking through Kitab, in every project (see kitab-context.ts).
+  // Tells Hermes it's talking through Kitaab, in every project (see kitab-context.ts).
   void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
   let saved: string | null = null
   try {
@@ -1104,7 +1104,7 @@ export const backend: Backend = {
         { id, name: (row?.display_name as string) || id, personalityIds: row ? castOf(row) : [] },
       ],
     }))
-    // Tells Hermes it's talking through Kitab in the new project too.
+    // Tells Hermes it's talking through Kitaab in the new project too.
     void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
     await backend.selectProject(id)
     return id
