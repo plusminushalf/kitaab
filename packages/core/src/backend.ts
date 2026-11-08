@@ -555,6 +555,20 @@ function sendNextQueued(threadId: Id) {
   })
 }
 
+// ---- routines --------------------------------------------------------------------
+
+// A routine with nothing to report answers with a marker that stops Hermes delivering it:
+// "[SILENT]" (or SILENT, NO_REPLY, NO REPLY) as the whole reply or its first or last line.
+const SILENCE = /^\[?\s*(silent|no[_ ]reply)\s*\]?$/i
+
+/** A run's last reply as its report, without Hermes's silence marker ("" when that was all). */
+export function withoutSilence(text: string): string {
+  const lines = text.trim().split("\n")
+  if (SILENCE.test(lines[0]?.trim() ?? "")) lines.shift()
+  if (SILENCE.test(lines.at(-1)?.trim() ?? "")) lines.pop()
+  return lines.join("\n").trim()
+}
+
 // ---- sessions --------------------------------------------------------------------
 
 const resuming = new Map<Id, Promise<string>>()
@@ -1311,7 +1325,7 @@ export const backend: Backend = {
     const said = res.messages
       .filter((m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim())
       .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
-    const report = said.at(-1)?.content ?? ""
+    const report = withoutSilence(said.at(-1)?.content ?? "")
     store.set((st) => ({
       runs: { ...st.runs, [routineId]: (st.runs[routineId] ?? []).map((r) => (r.id === runId ? { ...r, report } : r)) },
     }))
