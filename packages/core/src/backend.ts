@@ -1,5 +1,5 @@
 import { http, platform, toast } from "./platform"
-import { Gateway, type GatewayEvent, type ServerRequest } from "./gateway"
+import { Gateway, RpcError, type GatewayEvent, type ServerRequest } from "./gateway"
 import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, ToolCall } from "./model"
 import { store, type Backend, type ModelChoice, type SendMode } from "./store"
 import { humanSchedule } from "./schedule"
@@ -8,7 +8,7 @@ import { claimCreatedSkills, noteToolStart } from "./skills"
 import { setFileAccess } from "./server-files"
 import { previewText, splitUserText } from "./user-text"
 import { syncKitabContext } from "./kitab-context"
-import { migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
+import { forgetThreadMeta, migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
 import { inOrder, readProjectOrder, writeProjectOrder } from "./project-order"
@@ -962,6 +962,58 @@ function renameThread(from: Id, to: Id) {
   renamed.forEach((l) => l(from, to))
 }
 
+// ---- threads whose session is gone --------------------------------------------------
+
+const loadToastId = (threadId: Id) => `load:${threadId}`
+
+/** session.resume's "session not found". */
+const isSessionMissing = (e: unknown) =>
+  (e instanceof RpcError && e.code === 4007) || (e instanceof Error && /^session not found$/i.test(e.message))
+
+/**
+ * A thread Hermes has no session for: a routine run Hermes has since cleaned up, or a thread
+ * deleted elsewhere. Run threads are listed from their metadata, not from Hermes, so without
+ * this one would keep showing up empty. It leaves the lists and its metadata is dropped.
+ */
+function forgetMissingThread(threadId: Id, notify = true) {
+  const run = runOrigin(threadId)
+  // Only a run thread's metadata is what lists it. A plain thread's (its cast) is kept: if
+  // Hermes does still have it after all, the next refresh lists it again, cast and all.
+  if (run) void forgetThreadMeta(threadId).catch((e) => console.warn("[thread-meta]", e))
+  store.set((s) => {
+    const remaining = s.threads.filter((t) => t.id !== threadId)
+    const project = s.threads.find((t) => t.id === threadId)?.projectId ?? s.projectId
+    return {
+      threads: remaining,
+      done: s.done.filter((t) => t.id !== threadId),
+      details: { ...s.details, [threadId]: { messages: [], pending: [], loading: false, missing: true } },
+      runs: run
+        ? { ...s.runs, [run.routineId]: (s.runs[run.routineId] ?? []).map((r) => (r.id === threadId ? { ...r, threadId: undefined } : r)) }
+        : s.runs,
+      view:
+        s.view.kind === "thread" && s.view.threadId === threadId
+          ? { kind: "thread", threadId: neighbourOf(threadId, remaining.filter((t) => t.projectId === project)) }
+          : s.view,
+    }
+  })
+  if (!notify) return
+  toast.warning(
+    run
+      ? `“${run.title}” is gone: Hermes no longer has that routine run, so the thread was removed.`
+      : "That thread is gone: Hermes no longer has it (it may have been deleted on another device).",
+  )
+}
+
+// An error about opening a thread belongs to that thread: it goes when you move on.
+let shownThread: Id | null = null
+store.subscribe(() => {
+  const { view } = store.get()
+  const now = view.kind === "thread" ? view.threadId : null
+  if (now === shownThread) return
+  if (shownThread) toast.dismiss(loadToastId(shownThread))
+  shownThread = now
+})
+
 /** Removes a thread that only exists here (never made, or made but nothing in it). */
 function dropUnsavedThread(id: Id) {
   unlisted.delete(id)
@@ -1089,6 +1141,7 @@ async function deliver(o: Outgoing): Promise<Id> {
 /** It didn't go: it stays in the thread, marked, and the thread waits for you to retry or take it back. */
 function failed(o: Outgoing, e: unknown) {
   const id = became.get(o.threadId) ?? o.threadId
+  if (!isLocalThread(id) && isSessionMissing(e)) return forgetMissingThread(id)
   const why = e instanceof Error ? e.message : String(e)
   patchThread(id, { status: "idle" })
   setDelivery(id, o.messageId, "failed", why)
@@ -1170,7 +1223,8 @@ export const backend: Backend = {
       void backend.loadSubagents(threadId)
     } catch (e) {
       store.updateDetail(threadId, (d) => ({ ...d, loading: false }))
-      toast.error(e instanceof Error ? e.message : String(e))
+      if (isSessionMissing(e)) return forgetMissingThread(threadId)
+      toast.error(`Couldn't open this thread: ${e instanceof Error ? e.message : String(e)}`, { id: loadToastId(threadId) })
     }
   },
 
@@ -1371,7 +1425,13 @@ export const backend: Backend = {
         : [{ id: runId, projectId: p, title, updatedAt: Date.now(), cast: [], status: "idle", fromRun: { routineId, runId } }, ...s.threads],
       runs: { ...s.runs, [routineId]: (s.runs[routineId] ?? []).map((r) => (r.id === runId ? { ...r, threadId: runId } : r)) },
     }))
-    await backend.send(runId, text, [])
+    try {
+      await backend.send(runId, text, [])
+    } catch (e) {
+      if (!isSessionMissing(e)) throw e
+      forgetMissingThread(runId, false)
+      throw new Error("Hermes no longer has this run, so there's nothing to reply to.")
+    }
     return runId
   },
 

@@ -37,6 +37,10 @@ export default function ThreadScreen() {
   useEffect(() => {
     if (id && connected && (!detail || detail.stale)) void backend.loadThread(id)
   }, [id, connected, detail])
+  // Hermes no longer has it (the core says so and takes it off the lists).
+  useEffect(() => {
+    if (detail?.missing && router.canGoBack()) router.back()
+  }, [detail?.missing])
 
   const projectCast = useMemo(() => {
     const ids = projects.find((p) => p.id === (thread?.projectId ?? projectId))?.personalityIds ?? []

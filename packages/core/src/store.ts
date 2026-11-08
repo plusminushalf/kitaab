@@ -12,6 +12,8 @@ export type ThreadDetail = {
   loading: boolean
   /** Left over from a dropped connection, or shown from this device's cache: still shown, but loaded again. */
   stale?: boolean
+  /** Hermes has no session for it (deleted, or a routine run that was cleaned up): it was taken off the lists. */
+  missing?: boolean
 }
 
 export type ModelChoice = { model: string; provider: string; effort?: string; fast?: boolean }

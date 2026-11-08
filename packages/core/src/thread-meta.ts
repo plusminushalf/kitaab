@@ -87,6 +87,15 @@ export async function saveThreadMeta(projectId: Id, threadId: Id, patch: Partial
   if (!r?.applied?.ui_meta) throw new Error("Hermes didn't save the thread's details")
 }
 
+/** Drops a thread's metadata here and on the server (a thread whose session is gone). */
+export async function forgetThreadMeta(threadId: Id) {
+  const v = metas.get(threadId)
+  if (!v) return
+  metas.delete(threadId)
+  // ui_meta merges key by key; null removes the key.
+  await gw.call("profiles.configure", { name: v.projectId, ui_meta: { [PREFIX + threadId]: null } })
+}
+
 // ---- one-time move of what older versions kept on this Mac ----------------------------
 
 const LOCAL_THREADS = "kitab.threadPersonalities"
