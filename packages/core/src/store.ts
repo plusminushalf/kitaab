@@ -10,7 +10,7 @@ export type ThreadDetail = {
   messages: Message[]
   pending: PendingQuestion[]
   loading: boolean
-  /** Left over from a dropped connection: still shown, but reloaded once we're back. */
+  /** Left over from a dropped connection, or shown from this device's cache: still shown, but loaded again. */
   stale?: boolean
 }
 

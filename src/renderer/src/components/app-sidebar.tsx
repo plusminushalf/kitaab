@@ -188,7 +188,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                               {relativeTime(t.updatedAt)}
                             </span>
                           ) : (
-                            <StatusPill status={status} />
+                            <StatusPill status={status} stopping={t.stopping} />
                           )}
                         </span>
                       </SidebarMenuButton>
@@ -386,7 +386,7 @@ function ThreadCard({ thread, projectName }: { thread: Thread; projectName?: str
         <div className="flex items-center gap-2">
           <Clock className="size-3.5 shrink-0" />
           <span className="truncate">Updated {relativeTime(thread.updatedAt)}</span>
-          {status !== "idle" && <StatusPill status={status} className="ml-auto" />}
+          {status !== "idle" && <StatusPill status={status} stopping={thread.stopping} className="ml-auto" />}
         </div>
       </div>
       {thread.preview && (

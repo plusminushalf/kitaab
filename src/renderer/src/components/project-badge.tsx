@@ -43,7 +43,7 @@ export function aggregateStatus(threads: Thread[]): Status {
 }
 
 /** The small status label on the right of sidebar rows. Idle threads show nothing. */
-export function StatusPill({ status, className }: { status: Status; className?: string }) {
+export function StatusPill({ status, stopping, className }: { status: Status; stopping?: boolean; className?: string }) {
   if (status === "idle") return null
   return (
     <span
@@ -58,7 +58,7 @@ export function StatusPill({ status, className }: { status: Status; className?: 
       {status === "working" && <Spinner className="size-3.5" />}
       {status === "needs-you" && <span className="size-1.5 rounded-full bg-warning" />}
       {status === "done" && <CircleCheck className="size-3.5" />}
-      {status === "working" ? "Working" : status === "needs-you" ? "Needs you" : "Done"}
+      {status === "working" ? (stopping ? "Stopping" : "Working") : status === "needs-you" ? "Needs you" : "Done"}
     </span>
   )
 }

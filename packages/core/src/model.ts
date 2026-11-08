@@ -51,6 +51,8 @@ export type Thread = {
   /** Set when the thread grew out of a routine run. */
   fromRun?: { routineId: Id; runId: Id }
   status: "idle" | "working" | "needs-you"
+  /** You pressed Stop and the reply hasn't ended yet. */
+  stopping?: boolean
   preview?: string
 }
 

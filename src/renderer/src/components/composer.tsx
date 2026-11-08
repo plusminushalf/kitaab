@@ -6,6 +6,7 @@ import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import type { Attachment } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
+import { Spinner } from "@/components/ui/spinner"
 import { withCitations, type Citation } from "@/components/cite-selection"
 
 export type Draft = { file: File; attachment: Attachment }
@@ -75,6 +76,7 @@ export function Composer({
   setDrafts,
   onSend,
   onStop,
+  stopRequested,
   autoFocus,
   extras,
   mentionables = [],
@@ -95,6 +97,8 @@ export function Composer({
   /** Rejects when the message didn't go; the composer then puts it back. */
   onSend: (text: string, drafts: Draft[], how: SendMode) => Promise<unknown>
   onStop?: () => void
+  /** Stop was pressed and the reply hasn't ended yet. */
+  stopRequested?: boolean
   autoFocus?: boolean
   /** Controls shown in the bottom bar before the send button (e.g. the model picker). */
   extras?: React.ReactNode
@@ -228,7 +232,7 @@ export function Composer({
     handle.addEventListener("pointerup", up)
   }
 
-  const stopping = busy && onStop && !canSend
+  const showStop = busy && onStop && !canSend
 
   return (
     <div className="relative flex flex-col items-center gap-1.5">
@@ -363,16 +367,17 @@ export function Composer({
           />
           <div className="ml-auto flex items-center gap-2">
             {extras}
-            {stopping ? (
+            {showStop ? (
               <Button
                 size="icon-lg"
                 variant="destructive"
-                className="rounded-full bg-destructive text-white shadow-sm hover:bg-destructive/90"
-                aria-label="Stop"
-                title="Stop"
+                className="rounded-full bg-destructive text-white shadow-sm hover:bg-destructive/90 disabled:opacity-70"
+                aria-label={stopRequested ? "Stopping…" : "Stop"}
+                title={stopRequested ? "Stopping…" : "Stop"}
+                disabled={stopRequested}
                 onClick={onStop}
               >
-                <span className="size-3 rounded-[3px] bg-current" />
+                {stopRequested ? <Spinner className="size-4.5" /> : <span className="size-3 rounded-[3px] bg-current" />}
               </Button>
             ) : (
               <Button

@@ -14,6 +14,7 @@ import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./defa
 import { inOrder, readProjectOrder, writeProjectOrder } from "./project-order"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
+import { readCachedTranscript, writeCachedTranscript } from "./transcript-cache"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Project
@@ -45,6 +46,8 @@ function withFirst(list: Thread[], t: Thread): Thread[] {
 const settling = new Map<Id, boolean>()
 
 function patchThread(id: Id, patch: Partial<Thread>) {
+  // A reply that has ended has nothing left to stop.
+  if (patch.status === "idle") patch = { ...patch, stopping: undefined }
   store.set((s) => ({ threads: s.threads.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
 }
 
@@ -296,7 +299,7 @@ async function loadThreads(p: string) {
       ...s.threads.filter((t) => t.projectId === p && (isLocalThread(t.id) || unlisted.has(t.id)) && !fresh.some((f) => f.id === t.id)),
       ...fresh.map((t) => {
         const known = s.threads.find((k) => k.id === t.id)
-        return known && known.status !== "idle" ? { ...t, status: known.status } : t
+        return known && known.status !== "idle" ? { ...t, status: known.status, stopping: known.stopping } : t
       }),
     ],
   }))
@@ -404,6 +407,7 @@ function onEvent(e: GatewayEvent) {
       )
       if (p.status === "error" && p.error) toast.error(String(p.error))
       patchThread(threadId, { status: "idle", updatedAt: Date.now() })
+      cacheSoon(threadId)
       sendNextQueued(threadId)
       platform().attention()
       void claimCreatedSkills(
@@ -584,6 +588,7 @@ async function resume(threadId: Id): Promise<string> {
   }
   // What you sent that hasn't landed (or didn't) isn't in the transcript yet: keep it below.
   store.updateDetail(threadId, (d) => ({ ...d, messages: [...messages, ...d.messages.filter((m) => m.delivery)], loading: false, stale: false }))
+  writeCachedTranscript(threadId, messages)
   if (r.running) patchThread(threadId, { status: "working" })
   for (const req of r.open_requests ?? []) showRequest(threadId, req)
   return r.session_id
@@ -603,6 +608,46 @@ async function attach(runtimeId: string, attachments: Attachment[]) {
       toast.warning(`${a.name}: only images and PDFs can be sent for now`)
     }
   }
+}
+
+// ---- opening threads --------------------------------------------------------------
+
+/** How long Stop may take to land before the thread stops saying "Stopping…". */
+const STOP_PATIENCE_MS = 20_000
+const stopTimers = new Map<Id, ReturnType<typeof setTimeout>>()
+
+/**
+ * A thread with nothing loaded yet shows what this device last saw of it while the live
+ * session loads. Marked stale, so the view still loads it (and replaces this).
+ */
+function showCached(threadId: Id) {
+  if (store.get().details[threadId]?.messages.length || isLocalThread(threadId)) return
+  const cached = readCachedTranscript(threadId)
+  if (cached) store.updateDetail(threadId, (d) => ({ ...d, messages: cached, stale: !d.loading }))
+}
+
+// Opening a thread fills it from the cache in the same update, before the view draws, so it
+// never flashes empty first. (The view then loads it for real.)
+let shownView: unknown
+store.subscribe(() => {
+  const { view } = store.get()
+  if (view === shownView) return
+  shownView = view
+  if (view.kind === "thread" && view.threadId) showCached(view.threadId)
+})
+
+const cacheTimers = new Map<Id, ReturnType<typeof setTimeout>>()
+/** Saves a thread's transcript once a turn has ended (soon, not on every streamed word). */
+function cacheSoon(threadId: Id) {
+  clearTimeout(cacheTimers.get(threadId))
+  cacheTimers.set(
+    threadId,
+    setTimeout(() => {
+      cacheTimers.delete(threadId)
+      const messages = store.get().details[threadId]?.messages
+      if (messages) writeCachedTranscript(threadId, messages)
+    }, 1000),
+  )
 }
 
 // ---- connection ------------------------------------------------------------------
@@ -630,7 +675,7 @@ gw.onClose = (reason) => {
     return {
       connection: { state: "error", message: `Disconnected: ${reason}` },
       // No live events reach us now, so nothing would ever clear "working".
-      threads: s.threads.map((t) => (t.status === "idle" ? t : { ...t, status: "idle" })),
+      threads: s.threads.map((t) => (t.status === "idle" ? t : { ...t, status: "idle", stopping: undefined })),
       // Keep what's on screen; resuming replaces it. Open questions died with the socket.
       details: Object.fromEntries(
         Object.entries(s.details).map(([id, d]) => [id, { ...d, pending: [], loading: false, stale: true }]),
@@ -957,6 +1002,7 @@ async function deliver(o: Outgoing): Promise<Id> {
   let ended = true
   if (o.interrupt && replying(id)) {
     stopping.add(id)
+    patchThread(id, { stopping: true })
     try {
       await gw.call("session.interrupt", { session_id: runtimeId })
       ended = await untilIdle(id, 10_000)
@@ -985,8 +1031,12 @@ function failed(o: Outgoing, e: unknown) {
   setDelivery(id, o.messageId, "failed", why)
   // What's queued behind it waits too.
   setPaused(id, true)
-  toast.error(isLocalThread(id) ? `Couldn't start the thread: ${why}` : `Couldn't send your message: ${why}`)
+  toast.error(isLocalThread(id) ? `Couldn't start the thread: ${why}` : `Couldn't send your message: ${why}`, {
+    id: unsentToastId(o.messageId),
+  })
 }
+
+const unsentToastId = (messageId: Id) => `unsent:${messageId}`
 
 const hasFailed = (threadId: Id) => store.get().details[threadId]?.messages.some((m) => m.delivery === "failed") ?? false
 
@@ -1048,6 +1098,7 @@ export const backend: Backend = {
   async loadThread(threadId) {
     // Not on the server yet: everything there is to show is already here.
     if (isLocalThread(threadId)) return store.updateDetail(threadId, (d) => ({ ...d, loading: false, stale: false }))
+    showCached(threadId)
     // Clearing stale first keeps a view that reloads stale details from asking twice.
     store.updateDetail(threadId, (d) => ({ ...d, loading: true, stale: false }))
     try {
@@ -1111,6 +1162,8 @@ export const backend: Backend = {
     setDelivery(threadId, messageId, "sending")
     if (!interrupt) patchThread(threadId, { status: "working", updatedAt: Date.now() })
     const o: Outgoing = { threadId, messageId, text: m.text, attachments: m.attachments ?? [], interrupt }
+    // The notice about it failing is old news now.
+    toast.dismiss(unsentToastId(messageId))
     deliver(o).catch((e) => failed(o, e))
   },
 
@@ -1118,6 +1171,7 @@ export const backend: Backend = {
     const messages = store.get().details[threadId]?.messages ?? []
     const m = messages.find((x) => x.id === messageId && x.delivery === "failed")
     if (!m) return null
+    toast.dismiss(unsentToastId(messageId))
     // A thread with nothing else in it was never really started: it goes too.
     if ((isLocalThread(threadId) || unlisted.has(threadId)) && messages.length === 1) dropUnsavedThread(threadId)
     else store.updateDetail(threadId, (d) => ({ ...d, messages: d.messages.filter((x) => x.id !== messageId) }))
@@ -1159,7 +1213,23 @@ export const backend: Backend = {
     // Stop means stop: what's queued waits until you send or remove it.
     setPaused(threadId, true)
     const runtimeId = runtimeOf.get(threadId)
-    if (runtimeId) await gw.call("session.interrupt", { session_id: runtimeId })
+    if (!runtimeId) return
+    // Says so at once; the reply ending (message.complete) clears it.
+    if (replying(threadId)) {
+      patchThread(threadId, { stopping: true })
+      clearTimeout(stopTimers.get(threadId))
+      stopTimers.set(
+        threadId,
+        // A stop that never lands mustn't say "Stopping…" forever.
+        setTimeout(() => patchThread(threadId, { stopping: undefined }), STOP_PATIENCE_MS),
+      )
+    }
+    try {
+      await gw.call("session.interrupt", { session_id: runtimeId })
+    } catch (e) {
+      patchThread(threadId, { stopping: undefined })
+      toast.error(`Couldn't stop it: ${e instanceof Error ? e.message : e}`)
+    }
   },
 
   async sendQueuedNow(threadId, queuedId) {
@@ -1301,12 +1371,24 @@ export const backend: Backend = {
       store.set((s) => ({ threadModels: { ...s.threadModels, [threadId]: choice } }))
       return
     }
-    const runtimeId = await ensureRuntime(threadId)
+    // The picker shows it at once; it goes back if Hermes doesn't switch (or you decline the cost).
+    const before = store.get().threadModels[threadId]
+    const sameModel = before?.model === choice.model && before?.provider === choice.provider
+    store.set((s) => ({ threadModels: { ...s.threadModels, [threadId]: choice } }))
+    const undo = () =>
+      store.set((s) => {
+        // You've picked again since: that pick stands.
+        if (s.threadModels[threadId] !== choice) return {}
+        const threadModels = { ...s.threadModels }
+        if (before) threadModels[threadId] = before
+        else delete threadModels[threadId]
+        return { threadModels }
+      })
     try {
-      if (await applyModel(runtimeId, choice)) {
-        rememberModel(threadId, { model: choice.model, provider: choice.provider, reasoning_effort: choice.effort, fast: choice.fast })
-      }
+      const runtimeId = await ensureRuntime(threadId)
+      if (!(await applyModel(runtimeId, choice, sameModel))) undo()
     } catch (e) {
+      undo()
       toast.error(`Couldn't switch model: ${e instanceof Error ? e.message : e}`)
     }
   },

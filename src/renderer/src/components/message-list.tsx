@@ -13,9 +13,12 @@ export function MessageList({
   personalities,
   onOpenFile,
   openFile,
+  stopping,
 }: {
   messages: Message[]
   personalities: Personality[]
+  /** Stop was pressed: the running reply says it's stopping. */
+  stopping?: boolean
   /** Opens a non-media attachment in the side panel. */
   onOpenFile: (a: Attachment) => void
   openFile?: Attachment | null
@@ -75,6 +78,7 @@ export function MessageList({
           onView={setViewing}
           onOpenFile={onOpenFile}
           openFile={openFile}
+          stopping={stopping}
         />
       ))}
       <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
@@ -96,9 +100,11 @@ function MessageRow({
   onView,
   onOpenFile,
   openFile,
+  stopping,
 }: {
   message: Message
   author?: string
+  stopping?: boolean
   onView: (a: Attachment) => void
   onOpenFile: (a: Attachment) => void
   openFile?: Attachment | null
@@ -134,7 +140,7 @@ function MessageRow({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {author && <div className="text-xs font-medium text-muted-foreground">{author}</div>}
-      <WorkLog message={m} work={work} />
+      <WorkLog message={m} work={work} stopping={stopping} />
       {m.attachments?.length ? <Attachments items={m.attachments} {...files} /> : null}
       {answer ? <Markdown text={answer} /> : null}
     </div>
@@ -243,16 +249,19 @@ function Attachments({ items, align = "start", ...handlers }: FileHandlers & { i
 }
 
 function AttachmentView({ a, onView, onOpenFile, openFile }: FileHandlers & { a: Attachment }) {
-  const [failed, setFailed] = useState(false)
+  // Per link: a thread shown from the cache may hold a stale one, and loading it brings a fresh one.
+  const [failedUrl, setFailedUrl] = useState<string>()
+  const failed = failedUrl !== undefined && failedUrl === a.url
+  const setFailed = () => setFailedUrl(a.url)
   if (a.kind === "image" && a.url && !failed) {
     return (
       <button onClick={() => onView(a)} className="overflow-hidden rounded-lg border" title={a.name}>
-        <img src={a.url} alt={a.name} onError={() => setFailed(true)} className="max-h-64 max-w-80 object-cover" />
+        <img src={a.url} alt={a.name} onError={setFailed} className="max-h-64 max-w-80 object-cover" />
       </button>
     )
   }
   if (a.kind === "video" && a.url && !failed) {
-    return <video src={a.url} controls onError={() => setFailed(true)} className="max-h-64 max-w-96 rounded-lg border" />
+    return <video src={a.url} controls onError={setFailed} className="max-h-64 max-w-96 rounded-lg border" />
   }
   return <FileChip a={a} onOpen={onOpenFile} active={Boolean(openFile) && (openFile!.path ?? openFile!.url) === (a.path ?? a.url)} />
 }

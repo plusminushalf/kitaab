@@ -77,7 +77,7 @@ function duration(ms: number): string {
  * runs it is shown in full, with "Working…" as its last line, where the next step lands.
  * Once it ends it folds under a "Worked for …" line above the answer.
  */
-export function WorkLog({ message: m, work }: { message: Message; work: Part[] }) {
+export function WorkLog({ message: m, work, stopping }: { message: Message; work: Part[]; stopping?: boolean }) {
   const [open, setOpen] = useState(false)
 
   if (m.streaming) {
@@ -86,7 +86,7 @@ export function WorkLog({ message: m, work }: { message: Message; work: Part[] }
         <Steps work={work} />
         <div className="flex items-center gap-1.5 py-1">
           <Spinner className="size-3.5" />
-          <span>Working…</span>
+          <span>{stopping ? "Stopping…" : "Working…"}</span>
         </div>
       </div>
     )

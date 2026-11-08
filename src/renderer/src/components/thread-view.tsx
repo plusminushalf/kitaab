@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { CircleAlert, CornerDownLeft, KeyRound, ListPlus, Lock, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { ModelPicker } from "@/components/model-picker"
 import { CiteSelection, type Citation } from "@/components/cite-selection"
@@ -110,6 +111,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const answering = detail?.pending.some((q) => q.kind === "clarify")
   const busy = thread?.status === "working" || (thread?.status === "needs-you" && !answering)
   const enterSends = useStore((s) => s.enterSends)
+  // Being loaded: from scratch, or behind what this device last saw of it (see showCached).
+  const loading = !!threadId && !isLocalThread(threadId) && (!detail || detail.loading || !!detail.stale)
 
   return (
     <div className="flex h-full min-h-0">
@@ -128,6 +131,9 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         onDrop={onDrop}
       >
         <PageHeader title={thread?.title ?? "New thread"} subtitle={project?.name}>
+          {loading && detail?.messages.length ? (
+            <Spinner className="size-3.5 text-muted-foreground" aria-label="Bringing it up to date" />
+          ) : null}
           {threadId && <ThreadDetails threadId={threadId} inline={roomForDetails} />}
         </PageHeader>
 
@@ -160,19 +166,17 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                   personalities={personalities}
                   onOpenFile={setOpenFile}
                   openFile={openFile}
+                  stopping={thread?.stopping}
                 />
+              ) : threadId && (loading || !connected) ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <Spinner className="size-5" aria-label={connected ? "Loading" : "Reconnecting"} />
+                  {!connected && <span>Reconnecting…</span>}
+                </div>
               ) : (
                 <Empty className="h-full">
                   <EmptyHeader>
-                    <EmptyTitle>
-                      {threadId
-                        ? !connected
-                          ? "Reconnecting…"
-                          : detail?.loading || !detail || detail.stale
-                            ? "Loading…"
-                            : "Nothing here yet"
-                        : "Start a thread"}
-                    </EmptyTitle>
+                    <EmptyTitle>{threadId ? "Nothing here yet" : "Start a thread"}</EmptyTitle>
                     <EmptyDescription>Drop images, video or files anywhere to attach them.</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -221,6 +225,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 onTextChange={(text) => writeDraft(key, { text })}
                 onSend={send}
                 onStop={threadId ? () => void backend.interrupt(threadId) : undefined}
+                stopRequested={thread?.stopping}
                 autoFocus
                 extras={<ModelPicker threadId={threadId} />}
               />
