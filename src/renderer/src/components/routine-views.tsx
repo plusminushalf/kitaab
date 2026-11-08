@@ -425,9 +425,12 @@ function RunRow({ run, routineName }: { run: Run; routineName?: string }) {
           <span className="text-sm font-medium tabular-nums">{dateTime(run.startedAt)}</span>
           <span className="text-xs text-muted-foreground">{relativeTime(run.startedAt)}</span>
         </div>
-        <div className={cn("truncate text-xs", summary ? "text-muted-foreground" : "text-muted-foreground/60")}>
-          {run.status === "running" ? "Running…" : summary || "No report"}
-        </div>
+        {/* Nothing until the report has loaded: "No report" only once we know there isn't one. */}
+        {(run.status === "running" || summary || run.report === "") && (
+          <div className={cn("truncate text-xs", summary ? "text-muted-foreground" : "text-muted-foreground/60")}>
+            {run.status === "running" ? "Running…" : summary || "No report"}
+          </div>
+        )}
       </div>
       {run.threadId && (
         <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
