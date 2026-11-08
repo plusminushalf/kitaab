@@ -20,6 +20,19 @@ export function relativeTime(ms: number | undefined): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
+/**
+ * When a routine runs next. Once that time has passed the scheduler picks it up on
+ * its next tick, so it reads "Due now" rather than "in the past"; well past that, it
+ * has stalled and reads "Overdue". `prefix` leads a future time ("Next in 5 min");
+ * pass "" where a label already says what the time is.
+ */
+export function nextRun(ms: number, prefix = "Next"): string {
+  const late = Date.now() - ms
+  if (late >= 10 * 60_000) return "Overdue"
+  if (late > -60_000) return "Due now"
+  return prefix ? `${prefix} ${relativeTime(ms)}` : relativeTime(ms)
+}
+
 export function dateTime(ms: number | undefined): string {
   if (!ms) return ""
   return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })

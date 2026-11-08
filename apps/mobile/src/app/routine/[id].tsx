@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { router, Stack, useLocalSearchParams } from "expo-router"
 import { backend } from "@kitab/core/backend"
-import { dateTime, relativeTime } from "@kitab/core/format"
+import { dateTime, nextRun } from "@kitab/core/format"
 import { modelName } from "@kitab/core/model-names"
 import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
@@ -67,7 +67,7 @@ export default function RoutineScreen() {
             ) : null}
             <Fact label="When" value={routine.schedule || "—"} />
             {who ? <Fact label="Who" value={who} /> : null}
-            <Fact label="Next run" value={routine.enabled && routine.nextRunAt ? `${relativeTime(routine.nextRunAt)} · ${dateTime(routine.nextRunAt)}` : "—"} />
+            <Fact label="Next run" value={routine.enabled && routine.nextRunAt ? `${nextRun(routine.nextRunAt, "")} · ${dateTime(routine.nextRunAt)}` : "—"} />
             {routine.lastRunAt ? <Fact label="Last run" value={dateTime(routine.lastRunAt)} /> : null}
             {routine.runCount !== undefined ? <Fact label="Runs" value={String(routine.runCount)} /> : null}
             {routine.skills?.length ? <Fact label="Skills" value={routine.skills.join(", ")} /> : null}

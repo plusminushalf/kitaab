@@ -8,7 +8,7 @@ import { Composer, type Draft } from "@/components/composer"
 import { PageHeader } from "@/components/page-header"
 import { Markdown } from "@/components/markdown"
 import { backend } from "@kitab/core/backend"
-import { dateTime, relativeTime } from "@kitab/core/format"
+import { dateTime, nextRun, relativeTime } from "@kitab/core/format"
 import type { Id, Routine, Run } from "@kitab/core/model"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -148,7 +148,11 @@ function NextLine({ routine: r, state }: { routine: Routine; state: RoutineState
       </span>
     )
   if (!r.enabled) return <span className="text-muted-foreground">Paused</span>
-  return r.nextRunAt ? <span>Next {relativeTime(r.nextRunAt)}</span> : <span className="text-muted-foreground">Not scheduled</span>
+  return r.nextRunAt ? (
+    <span title={dateTime(r.nextRunAt)}>{nextRun(r.nextRunAt)}</span>
+  ) : (
+    <span className="text-muted-foreground">Not scheduled</span>
+  )
 }
 
 function Breadcrumb({ items }: { items: { label: ReactNode; onClick?: () => void }[] }) {
@@ -223,7 +227,7 @@ export function RoutineView({ routineId }: { routineId: Id }) {
                   {state === "running" ? "Running" : state === "paused" ? "Paused" : state === "failed" ? "Failing" : "Active"}
                 </Fact>
                 <Fact label="Next run" title={dateTime(routine.nextRunAt)}>
-                  {routine.enabled && routine.nextRunAt ? relativeTime(routine.nextRunAt) : "—"}
+                  {routine.enabled && routine.nextRunAt ? nextRun(routine.nextRunAt, "") : "—"}
                 </Fact>
                 <Fact label="Last run" title={dateTime(routine.lastRunAt)}>
                   {routine.lastRunAt ? relativeTime(routine.lastRunAt) : "Never"}

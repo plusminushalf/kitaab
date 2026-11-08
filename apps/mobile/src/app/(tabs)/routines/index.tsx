@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from "react-native"
 import { router, Stack } from "expo-router"
 import { backend } from "@kitab/core/backend"
-import { relativeTime } from "@kitab/core/format"
+import { nextRun, relativeTime } from "@kitab/core/format"
 import type { Routine } from "@kitab/core/model"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
@@ -75,7 +75,7 @@ export default function Routines() {
                   ) : null}
                 </View>
                 <Text style={{ color: c.textMuted, fontSize: 13 }}>
-                  {state === "running" ? "Running" : r.enabled && r.nextRunAt ? `Next ${relativeTime(r.nextRunAt)}` : r.lastRunAt ? relativeTime(r.lastRunAt) : ""}
+                  {state === "running" ? "Running" : r.enabled && r.nextRunAt ? nextRun(r.nextRunAt) : r.lastRunAt ? relativeTime(r.lastRunAt) : ""}
                 </Text>
               </View>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginLeft: 46 }} />
