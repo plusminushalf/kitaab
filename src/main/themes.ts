@@ -1,7 +1,7 @@
 // Theme helpers for Settings → Appearance: Open VSX search and install, theme file
 // export, and the list of installed font families.
 
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, systemPreferences } from "electron"
 import { execFile } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -126,11 +126,26 @@ JSON.stringify(fams.filter(function (f) { return f.charAt(0) !== "."; }).map(fun
   return fontCache!
 }
 
+/**
+ * Whether macOS itself is in Dark mode. Not nativeTheme.shouldUseDarkColors: the
+ * renderer pins themeSource to the mode it shows, and that pins shouldUseDarkColors
+ * and the page's prefers-color-scheme with it.
+ */
+function osDark() {
+  return systemPreferences.getUserDefault("AppleInterfaceStyle", "string") === "Dark"
+}
+
 export function installThemeIpc() {
-  ipcMain.on("appearance:scheme", (_e, scheme: "system" | "light" | "dark") => {
-    if (scheme === "system" || scheme === "light" || scheme === "dark") {
-      nativeTheme.themeSource = scheme
-    }
+  // The renderer sends the mode it actually shows, so the window's vibrancy, traffic
+  // lights and menus always match the page drawn over them.
+  ipcMain.on("appearance:scheme", (_e, scheme: "light" | "dark") => {
+    if (scheme === "light" || scheme === "dark") nativeTheme.themeSource = scheme
+  })
+  ipcMain.handle("appearance:systemDark", () => osDark())
+  // So the System setting keeps following macOS, including Auto switching at dusk.
+  systemPreferences.subscribeNotification("AppleInterfaceThemeChangedNotification", () => {
+    const dark = osDark()
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send("appearance:systemDark", dark)
   })
   ipcMain.handle("themes:search", (_e, query: string, sort: ThemeSearchSort) => search(String(query ?? ""), sort))
   ipcMain.handle("themes:install", (_e, namespace: string, name: string) => install(namespace, name))

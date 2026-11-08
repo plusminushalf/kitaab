@@ -232,14 +232,24 @@ function apply() {
   root.dataset.fontSmoothing = settings.fontSmoothing ? "on" : "off"
   root.dataset.wordWrap = settings.wordWrap ? "on" : "off"
 
-  // The window's vibrancy and traffic lights follow the scheme the app shows.
-  const scheme = settings.scheme === "system" ? "system" : mode
-  if (scheme !== lastScheme) {
-    lastScheme = scheme
-    window.hermes?.appearance?.setScheme(scheme as ColorScheme)
+  // The window's vibrancy and traffic lights follow the mode the app shows. Never
+  // "system": the sidebar is see-through, so a window following macOS under a page
+  // that resolved the other way (an emulated prefers-color-scheme, say) leaves dark
+  // text on dark glass.
+  if (mode !== lastScheme) {
+    lastScheme = mode
+    window.hermes?.appearance?.setScheme(mode)
   }
 }
 
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => set({ systemDark: e.matches }))
+// Pinning the window's scheme pins prefers-color-scheme too, so in the app the System
+// setting follows macOS through main. matchMedia is only for running without it.
+const bridge = window.hermes?.appearance
+if (bridge?.onSystemDark) {
+  bridge.onSystemDark((dark) => dark !== state.systemDark && set({ systemDark: dark }))
+  void bridge.systemDark().then((dark) => dark !== state.systemDark && set({ systemDark: dark }))
+} else {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => set({ systemDark: e.matches }))
+}
 
 apply()

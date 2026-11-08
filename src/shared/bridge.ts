@@ -135,7 +135,11 @@ export type HermesBridge = {
   }
   appearance: {
     /** Tells macOS which appearance the window uses (vibrancy, traffic lights, menus). */
-    setScheme(scheme: "system" | "light" | "dark"): void
+    setScheme(scheme: "light" | "dark"): void
+    /** Whether macOS is in Dark mode, whatever the window was told to use. */
+    systemDark(): Promise<boolean>
+    /** Called when macOS switches between Light and Dark. */
+    onSystemDark(cb: (dark: boolean) => void): () => void
   }
   themes: {
     search(query: string, sort: ThemeSearchSort): Promise<ThemeExtension[]>

@@ -59,6 +59,12 @@ const api: HermesBridge = {
   },
   appearance: {
     setScheme: (scheme) => ipcRenderer.send("appearance:scheme", scheme),
+    systemDark: (): Promise<boolean> => ipcRenderer.invoke("appearance:systemDark"),
+    onSystemDark: (cb: (dark: boolean) => void) => {
+      const h = (_: unknown, v: boolean) => cb(v)
+      ipcRenderer.on("appearance:systemDark", h)
+      return () => void ipcRenderer.off("appearance:systemDark", h)
+    },
   },
   themes: {
     search: (query: string, sort: ThemeSearchSort) => ipcRenderer.invoke("themes:search", query, sort),
