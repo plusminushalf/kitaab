@@ -97,6 +97,19 @@ export interface Backend {
    * "interrupt" stops it and sends now.
    */
   send(threadId: Id | null, text: string, attachments: Attachment[], how?: SendMode): Promise<Id>
+  /**
+   * Like send, but doesn't wait for the server: the message (and a new thread, under a local id
+   * until Hermes names it) shows right away. Returns the thread id to show now. If it doesn't
+   * go, the message stays in the thread marked failed, to retry or take back.
+   */
+  post(threadId: Id | null, text: string, attachments: Attachment[], how?: SendMode): Id
+  /** Sends a message that failed again, where it sits. */
+  retry(threadId: Id, messageId: Id): void
+  /**
+   * Takes a failed message back out of the thread (a thread that never got made goes with it),
+   * handing back what it said so it can be edited.
+   */
+  unsend(threadId: Id, messageId: Id): { text: string; attachments: Attachment[] } | null
   /** Stops the running reply. Messages queued behind it wait until you send or remove them. */
   interrupt(threadId: Id): Promise<void>
   /** Sends a queued message now, stopping the running reply if there is one. */
@@ -187,6 +200,11 @@ export const store = {
     backStack.push(state.view)
     store.set({ view })
     return true
+  },
+  /** A thread made here got its real id: the back and forward stacks follow it there. */
+  retargetHistory(from: Id, to: Id) {
+    const fix = (v: View): View => (v.kind === "thread" && v.threadId === from ? { ...v, threadId: to } : v)
+    for (const stack of [backStack, forwardStack]) stack.forEach((v, i) => (stack[i] = fix(v)))
   },
   canGoBack: () => backStack.length > 0,
   canGoForward: () => forwardStack.length > 0,

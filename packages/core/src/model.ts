@@ -90,6 +90,12 @@ export type Message = {
   /** For an assistant turn: when the work started (the user's message) and ended. */
   startedAt?: number
   endedAt?: number
+  /**
+   * A message you sent that the server hasn't taken yet: shown at once, marked "sending" until
+   * it lands, "failed" (with why) if it didn't. Left unset once it's in.
+   */
+  delivery?: "sending" | "failed"
+  deliveryError?: string
 }
 
 /** A helper agent a thread handed part of its work to (Hermes delegate_task). */

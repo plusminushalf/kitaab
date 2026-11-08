@@ -20,6 +20,11 @@ export function fileToDraft(file: File): Draft {
   return { file, attachment: { kind, name: file.name, size: file.size, url: URL.createObjectURL(file) } }
 }
 
+/** An attachment back in the composer (a message that didn't send, taken back to edit). */
+export function attachmentToDraft(attachment: Attachment): Draft {
+  return { file: new File([], attachment.name), attachment }
+}
+
 const isImage = (d: Draft) => d.attachment.kind === "image"
 
 /**
@@ -64,6 +69,7 @@ function mentionAt(text: string, caret: number): Omit<MentionState, "index"> | n
 export function Composer({
   placeholder,
   busy,
+  blocked,
   enterSends = "queue",
   drafts,
   setDrafts,
@@ -80,6 +86,8 @@ export function Composer({
   placeholder: string
   /** A reply is running: sending queues behind it or interrupts it. */
   busy?: boolean
+  /** Sending is held (a message that didn't go is waiting to be retried or taken back). */
+  blocked?: boolean
   /** What Enter (and the send button) does while busy; ⌘Enter does the other. */
   enterSends?: SendMode
   drafts: Draft[]
@@ -172,7 +180,7 @@ export function Composer({
   }, [citations.length])
 
   // While a reply runs, Enter does `enterSends` and ⌘Enter the other.
-  const canSend = text.trim().length > 0 || drafts.length > 0 || citations.length > 0
+  const canSend = !blocked && (text.trim().length > 0 || drafts.length > 0 || citations.length > 0)
   const otherMode: SendMode = enterSends === "queue" ? "interrupt" : "queue"
   const send = async (how: SendMode = enterSends) => {
     if (!canSend) return

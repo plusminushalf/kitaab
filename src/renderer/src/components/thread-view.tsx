@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type RefObject } from "react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { CornerDownLeft, KeyRound, ListPlus, Lock, X } from "lucide-react"
+import { CircleAlert, CornerDownLeft, KeyRound, ListPlus, Lock, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { ModelPicker } from "@/components/model-picker"
 import { CiteSelection, type Citation } from "@/components/cite-selection"
-import { Composer, fileToDraft, type Draft } from "@/components/composer"
+import { attachmentToDraft, Composer, fileToDraft, type Draft } from "@/components/composer"
 import { FilePanel } from "@/components/file-panel"
 import { FindBar } from "@/components/find-bar"
 import { MessageList } from "@/components/message-list"
 import { PageHeader } from "@/components/page-header"
 import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/components/thread-details"
 import { useSubagentPolling } from "@/components/thread-agents"
-import { backend } from "@kitab/core/backend"
+import { backend, isLocalThread, viewIdentity } from "@kitab/core/backend"
 import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
 import { store, useStore, type SendMode } from "@/lib/store"
 import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
@@ -43,6 +42,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const [finding, setFinding] = useState(false)
   // Bumped on every ⌘F, so pressing it again refocuses the open bar.
   const [findFocus, setFindFocus] = useState(0)
+  // Bumped to remount the composer with text put back into its saved draft.
+  const [composerEpoch, setComposerEpoch] = useState(0)
+  // A message that didn't send holds the thread until it's retried or taken back to edit.
+  const unsent = detail?.messages.find((m) => m.delivery === "failed")
 
   useEffect(
     () =>
@@ -68,20 +71,38 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     if (files.length) setDrafts((d) => [...d, ...files.map(fileToDraft)])
   }
 
-  // Throws on failure so the composer keeps what you wrote.
+  // Shows at once and goes in the background; if it doesn't go, it stays in the thread marked
+  // failed (see UnsentNotice). A new thread opens right away under a local id.
   const send = async (text: string, sent: Draft[], how: SendMode) => {
-    try {
-      const id = await backend.send(
-        threadId,
-        text,
-        sent.map((d) => d.attachment),
-        how,
-      )
-      if (id !== threadId) store.go({ kind: "thread", threadId: id })
-    } catch (err) {
-      toast.error(String(err instanceof Error ? err.message : err))
-      throw err
+    // Cleared here, not left to the composer: a new thread opens in this same update, so this
+    // view is gone before the composer could save its emptied box, and the text would come back.
+    writeDraft(key, { text: "", drafts: [], citations: [] })
+    const id = backend.post(
+      threadId,
+      text,
+      sent.map((d) => d.attachment),
+      how,
+    )
+    if (id !== threadId) store.go({ kind: "thread", threadId: id })
+  }
+
+  // Takes the failed message back into the composer, ahead of anything typed since.
+  const editUnsent = () => {
+    if (!threadId || !unsent) return
+    const back = backend.unsend(threadId, unsent.id)
+    if (!back) return
+    const restored = back.attachments.map(attachmentToDraft)
+    // A thread that never got made went with it: edit it as a new thread again.
+    if (!store.get().threads.some((t) => t.id === threadId)) {
+      const target = draftKey(null, projectId)
+      const prev = readDraft(target)
+      writeDraft(target, { text: joinText(back.text, prev.text), drafts: [...restored, ...prev.drafts] })
+      store.go({ kind: "thread", threadId: null })
+      return
     }
+    writeDraft(key, { text: joinText(back.text, readDraft(key).text) })
+    setDrafts((d) => [...restored, ...d])
+    setComposerEpoch((n) => n + 1)
   }
 
   const project = useStore((s) => s.projects.find((p) => p.id === (thread?.projectId ?? s.projectId)))
@@ -134,7 +155,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
               )}
               {threadId && detail?.messages.length ? (
                 <MessageList
-                  key={threadId}
+                  key={viewIdentity(threadId)}
                   messages={detail.messages}
                   personalities={personalities}
                   onOpenFile={setOpenFile}
@@ -169,7 +190,16 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 </div>
               ) : null}
               {threadId && <QueuedMessages threadId={threadId} />}
+              {threadId && unsent && (
+                <UnsentNotice
+                  starting={isLocalThread(threadId)}
+                  error={unsent.deliveryError}
+                  onRetry={() => backend.retry(threadId, unsent.id)}
+                  onEdit={editUnsent}
+                />
+              )}
               <Composer
+                key={composerEpoch}
                 placeholder={
                   host
                     ? `Reply to ${host.name}…`
@@ -181,6 +211,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 }
                 mentionables={mentionables}
                 busy={busy}
+                blocked={!!unsent}
                 enterSends={enterSends}
                 drafts={drafts}
                 setDrafts={setDrafts}
@@ -280,6 +311,40 @@ function SidePanel({ file, onClose }: { file: Attachment; onClose: () => void })
       />
       <FilePanel file={file} onClose={onClose} />
     </aside>
+  )
+}
+
+const joinText = (a: string, b: string) => (b.trim() ? `${a.trimEnd()}\n\n${b}` : a)
+
+/** A message that didn't go. Until it's retried or taken back, nothing else can be sent here. */
+function UnsentNotice({
+  starting,
+  error,
+  onRetry,
+  onEdit,
+}: {
+  /** The thread itself hasn't been made yet. */
+  starting: boolean
+  error?: string
+  onRetry: () => void
+  onEdit: () => void
+}) {
+  return (
+    <div role="alert" className="mb-2 flex items-center gap-2.5 rounded-xl border border-destructive/40 bg-destructive/5 py-1.5 pr-1.5 pl-3 text-sm">
+      <CircleAlert className="size-4 shrink-0 text-destructive" />
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">{starting ? "Couldn’t start this thread" : "Your message didn’t send"}</div>
+        <div className="truncate text-xs text-muted-foreground" title={error}>
+          {error ? `${error}. ` : ""}Retry it, or edit it to send again.
+        </div>
+      </div>
+      <Button size="sm" variant="ghost" onClick={onEdit} title="Take it back into the box below to change it">
+        Edit
+      </Button>
+      <Button size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
   )
 }
 

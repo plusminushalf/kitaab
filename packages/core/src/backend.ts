@@ -1,7 +1,7 @@
 import { http, platform, toast } from "./platform"
 import { Gateway, type GatewayEvent, type ServerRequest } from "./gateway"
 import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, ToolCall } from "./model"
-import { store, type Backend } from "./store"
+import { store, type Backend, type ModelChoice, type SendMode } from "./store"
 import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
 import { claimCreatedSkills, noteToolStart } from "./skills"
@@ -286,10 +286,14 @@ async function loadThreads(p: string) {
   ]
   // A refresh that lands before an archive call does would bring a just-done thread back.
   const fresh = threads.filter((t, i) => settling.get(t.id) !== true && threads.findIndex((x) => x.id === t.id) === i)
+  for (const t of fresh) unlisted.delete(t.id)
   store.set((s) => ({
     // Keep live status for threads we're already tracking.
     threads: [
       ...s.threads.filter((t) => t.projectId !== p && !fresh.some((f) => f.id === t.id)),
+      // Threads made here that the server doesn't list yet (it lists a thread once a message
+      // is saved): dropping them would make a thread you just started blink out of the list.
+      ...s.threads.filter((t) => t.projectId === p && (isLocalThread(t.id) || unlisted.has(t.id)) && !fresh.some((f) => f.id === t.id)),
       ...fresh.map((t) => {
         const known = s.threads.find((k) => k.id === t.id)
         return known && known.status !== "idle" ? { ...t, status: known.status } : t
@@ -578,7 +582,8 @@ async function resume(threadId: Id): Promise<string> {
   if (r.running && r.inflight?.assistant) {
     messages.push({ id: "inflight", role: "assistant", text: r.inflight.assistant, createdAt: Date.now(), streaming: true })
   }
-  store.updateDetail(threadId, (d) => ({ ...d, messages, loading: false, stale: false }))
+  // What you sent that hasn't landed (or didn't) isn't in the transcript yet: keep it below.
+  store.updateDetail(threadId, (d) => ({ ...d, messages: [...messages, ...d.messages.filter((m) => m.delivery)], loading: false, stale: false }))
   if (r.running) patchThread(threadId, { status: "working" })
   for (const req of r.open_requests ?? []) showRequest(threadId, req)
   return r.session_id
@@ -620,7 +625,7 @@ gw.onClose = (reason) => {
   resuming.clear()
   openRequests.clear()
   forgetSessions()
-  for (const t of store.get().threads) if (t.status !== "idle") liveBeforeDrop.add(t.id)
+  for (const t of store.get().threads) if (t.status !== "idle" && !isLocalThread(t.id)) liveBeforeDrop.add(t.id)
   store.set((s) => {
     return {
       connection: { state: "error", message: `Disconnected: ${reason}` },
@@ -780,6 +785,211 @@ export function clearUndoableDone() {
   recentlyDone.length = 0
 }
 
+// ---- sending ------------------------------------------------------------------------
+// What you send shows at once: the message, and for a new thread the thread itself, before
+// Hermes has either. A new thread lives under a local id until session.create names it; then
+// everything kept under the local id moves to the stored one. If something doesn't go, it
+// stays where it is, marked failed, until you retry it or take it back.
+
+const LOCAL = "local-"
+
+/** A thread started here that Hermes hasn't made yet. */
+export const isLocalThread = (id: Id | null | undefined): boolean => !!id?.startsWith(LOCAL)
+
+/** Threads made here that the server doesn't list yet (it lists them once a message is saved). */
+const unlisted = new Set<Id>()
+/** Local id → stored id, and back, for threads made here. */
+const became = new Map<Id, Id>()
+const madeAs = new Map<Id, Id>()
+/** A local thread's session.create in flight, so a retry can't make a second one. */
+const creating = new Map<Id, Promise<Id>>()
+const renamed = new Set<(from: Id, to: Id) => void>()
+
+/** The id a thread was first shown under. Keying a view by it keeps the view put when a new thread gets its real id. */
+export function viewIdentity(id: Id): Id {
+  return madeAs.get(id) ?? id
+}
+
+/** Calls `l` when a thread started here gets its real id. */
+export function onThreadRenamed(l: (from: Id, to: Id) => void): () => void {
+  renamed.add(l)
+  return () => void renamed.delete(l)
+}
+
+let sendSeq = 0
+const newLocalId = () => `${LOCAL}${Date.now().toString(36)}-${(sendSeq++).toString(36)}`
+const titleFor = (text: string, attachments: Attachment[]) => text.split("\n")[0].slice(0, 80) || attachments[0]?.name || "New thread"
+const projectOfThread = (threadId: Id) =>
+  runOrigin(threadId)?.projectId ?? store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile()
+
+function rekey<T>(rec: Record<Id, T>, from: Id, to: Id): Record<Id, T> {
+  if (!(from in rec)) return rec
+  const { [from]: v, ...rest } = rec
+  return { ...rest, [to]: v }
+}
+
+function omit<T>(rec: Record<Id, T>, id: Id): Record<Id, T> {
+  if (!(id in rec)) return rec
+  const { [id]: _, ...rest } = rec
+  return rest
+}
+
+/** Moves everything kept under a local thread id to the id Hermes gave it. */
+function renameThread(from: Id, to: Id) {
+  became.set(from, to)
+  madeAs.set(to, from)
+  store.set((s) => ({
+    // A refresh may already list it under the new id: the copy we've been showing wins.
+    threads: s.threads.some((t) => t.id === from)
+      ? s.threads.filter((t) => t.id !== to).map((t) => (t.id === from ? { ...t, id: to } : t))
+      : s.threads,
+    details: rekey(s.details, from, to),
+    threadModels: rekey(s.threadModels, from, to),
+    queued: rekey(s.queued, from, to),
+    subagents: rekey(s.subagents, from, to),
+    view: s.view.kind === "thread" && s.view.threadId === from ? { ...s.view, threadId: to } : s.view,
+  }))
+  store.retargetHistory(from, to)
+  for (const [p, id] of lastThread) if (id === from) lastThread.set(p, to)
+  renamed.forEach((l) => l(from, to))
+}
+
+/** Removes a thread that only exists here (never made, or made but nothing in it). */
+function dropUnsavedThread(id: Id) {
+  unlisted.delete(id)
+  store.set((s) => ({
+    threads: s.threads.filter((t) => t.id !== id),
+    details: omit(s.details, id),
+    threadModels: omit(s.threadModels, id),
+    queued: omit(s.queued, id),
+    view: s.view.kind === "thread" && s.view.threadId === id ? { kind: "thread", threadId: null } : s.view,
+  }))
+}
+
+/** Makes a Hermes session for a new thread. */
+async function startSession(projectId: Id): Promise<{ id: Id; runtimeId: string; info: any }> {
+  const r = await gw.call<any>("session.create", { profile: projectId })
+  const id = r.stored_session_id as string
+  runtimeOf.set(id, r.session_id)
+  storedOf.set(r.session_id, id)
+  noteSession(r.session_id, r.info)
+  unlisted.add(id)
+  return { id, runtimeId: r.session_id, info: r.info }
+}
+
+/** Puts a new session on the model its thread was started with, if one was picked. */
+async function applyStartModel(id: Id, runtimeId: string, info: any, pick: ModelChoice | null) {
+  if (pick) {
+    const same = info?.model === pick.model && (info?.provider ?? "") === pick.provider
+    const applied = await applyModel(runtimeId, pick, same).catch((e) => {
+      toast.error(`Model: ${e.message ?? e}`)
+      return false
+    })
+    if (applied) return rememberModel(id, { model: pick.model, provider: pick.provider, reasoning_effort: pick.effort, fast: pick.fast })
+  }
+  rememberModel(id, info)
+}
+
+/** Makes the Hermes session for a thread started here and moves it to its stored id. */
+function createThread(localId: Id): Promise<Id> {
+  let flight = creating.get(localId)
+  if (!flight) {
+    flight = (async () => {
+      const projectId = store.get().threads.find((t) => t.id === localId)?.projectId ?? profile()
+      const s = await startSession(projectId)
+      renameThread(localId, s.id)
+      // Picked in the composer, or changed while it was being made (see setModel).
+      const pick = store.get().threadModels[s.id] ?? null
+      await applyStartModel(s.id, s.runtimeId, s.info, pick)
+      return s.id
+    })()
+    creating.set(localId, flight)
+    const done = () => creating.delete(localId)
+    flight.then(done, done)
+  }
+  return flight
+}
+
+/** A message already showing in a thread, on its way to Hermes. */
+type Outgoing = { threadId: Id; messageId: Id; text: string; attachments: Attachment[]; interrupt: boolean }
+
+function setDelivery(threadId: Id, messageId: Id, delivery?: Message["delivery"], error?: string) {
+  if (!store.get().details[threadId]) return
+  store.updateDetail(threadId, (d) => ({
+    ...d,
+    messages: d.messages.map((m) => (m.id === messageId ? { ...m, delivery, deliveryError: error } : m)),
+  }))
+}
+
+/**
+ * Shows a message in the thread right away and works out what sending does: answers an open
+ * question, waits in the queue behind a running reply, or goes now (the Outgoing returned).
+ */
+function begin(threadId: Id, text: string, attachments: Attachment[], how: SendMode, fresh: boolean): Outgoing | null {
+  // An open clarify question is answered by the next message (a custom answer when it has choices).
+  const openClarify = store.get().details[threadId]?.pending.find((x) => x.kind === "clarify")
+  if (openClarify && text) {
+    void backend.answer(threadId, openClarify, text)
+    return null
+  }
+  // A reply is running: hold the message until it ends, or stop it and send now. A thread
+  // made just now is already marked "working" for this very message, so it never waits.
+  const interrupt = !fresh && replying(threadId)
+  if (interrupt && how === "queue") {
+    enqueue(threadId, text, attachments)
+    return null
+  }
+  const messageId = `u-${Date.now()}-${(sendSeq++).toString(36)}`
+  store.updateDetail(threadId, (d) => ({
+    ...d,
+    ...(fresh ? { loading: false } : {}),
+    messages: [...d.messages, { id: messageId, role: "user", text, attachments, createdAt: Date.now(), delivery: "sending" }],
+  }))
+  // Interrupting: the running reply stays "working" until it has stopped (deliver waits for that).
+  patchThread(threadId, interrupt ? { updatedAt: Date.now() } : { status: "working", updatedAt: Date.now() })
+  return { threadId, messageId, text, attachments, interrupt }
+}
+
+/** Gets a message that's already showing to Hermes. Resolves to the thread's id (its stored one, for a thread started here). */
+async function deliver(o: Outgoing): Promise<Id> {
+  const id = isLocalThread(o.threadId) ? await createThread(o.threadId) : o.threadId
+  const runtimeId = await ensureRuntime(id)
+  let ended = true
+  if (o.interrupt && replying(id)) {
+    stopping.add(id)
+    try {
+      await gw.call("session.interrupt", { session_id: runtimeId })
+      ended = await untilIdle(id, 10_000)
+    } finally {
+      stopping.delete(id)
+    }
+  }
+  // Sending again picks the queue back up after a Stop.
+  setPaused(id, false)
+  patchThread(id, { status: "working", updatedAt: Date.now() })
+  // Who answers: the @mentioned personality, else the thread's host.
+  const cast = await prepareTurn(id, runtimeId, projectOfThread(id), o.text)
+  patchThread(id, { cast })
+  await attach(runtimeId, o.attachments)
+  // A reply that wouldn't stop: Hermes runs this right after it, rather than steering it.
+  await gw.call("prompt.submit", { session_id: runtimeId, text: o.text, ...(ended ? {} : { queued: true }) })
+  setDelivery(id, o.messageId, undefined)
+  return id
+}
+
+/** It didn't go: it stays in the thread, marked, and the thread waits for you to retry or take it back. */
+function failed(o: Outgoing, e: unknown) {
+  const id = became.get(o.threadId) ?? o.threadId
+  const why = e instanceof Error ? e.message : String(e)
+  patchThread(id, { status: "idle" })
+  setDelivery(id, o.messageId, "failed", why)
+  // What's queued behind it waits too.
+  setPaused(id, true)
+  toast.error(isLocalThread(id) ? `Couldn't start the thread: ${why}` : `Couldn't send your message: ${why}`)
+}
+
+const hasFailed = (threadId: Id) => store.get().details[threadId]?.messages.some((m) => m.delivery === "failed") ?? false
+
 export const backend: Backend = {
   // Single-flight: overlapping calls (StrictMode, menu, reconnect) share one attempt.
   connect() {
@@ -836,6 +1046,8 @@ export const backend: Backend = {
   },
 
   async loadThread(threadId) {
+    // Not on the server yet: everything there is to show is already here.
+    if (isLocalThread(threadId)) return store.updateDetail(threadId, (d) => ({ ...d, loading: false, stale: false }))
     // Clearing stale first keeps a view that reloads stale details from asking twice.
     store.updateDetail(threadId, (d) => ({ ...d, loading: true, stale: false }))
     try {
@@ -850,84 +1062,66 @@ export const backend: Backend = {
 
   async send(threadId, text, attachments, how = "queue") {
     let id = threadId
-    let runtimeId: string
     if (!id) {
-      const r = await gw.call<any>("session.create", { profile: profile() })
-      id = r.stored_session_id as string
-      runtimeId = r.session_id
-      runtimeOf.set(id, runtimeId)
-      storedOf.set(runtimeId, id)
-      rememberModel(id, r.info)
-      noteSession(runtimeId, r.info)
-      // The composer's pick for this thread, else your default from Settings.
+      // The iPhone shows its own copy of the message until the thread exists, so it waits for Hermes.
       const pick = store.get().draftModel ?? usableMyModel()
-      if (pick) {
-        const started = store.get().threadModels[id]
-        const same = started?.model === pick.model && started?.provider === pick.provider
-        const applied = await applyModel(runtimeId, pick, same).catch((e) => {
-          toast.error(`Model: ${e.message ?? e}`)
-          return false
-        })
-        if (applied) rememberModel(id, { model: pick.model, provider: pick.provider, reasoning_effort: pick.effort, fast: pick.fast })
-      }
-      const title = text.split("\n")[0].slice(0, 80) || attachments[0]?.name || "New thread"
-      store.set((s) => ({
-        threads: withFirst(s.threads, { id: id!, projectId: profile(), title, updatedAt: Date.now(), cast: [], status: "working" }),
+      const s = await startSession(profile())
+      id = s.id
+      await applyStartModel(s.id, s.runtimeId, s.info, pick)
+      store.set((st) => ({
+        threads: withFirst(st.threads, { id: s.id, projectId: profile(), title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
       }))
-      store.updateDetail(id, (d) => ({ ...d, loading: false }))
-    } else {
-      runtimeId = await ensureRuntime(id)
     }
-    const threadIdFinal = id
-
-    // An open clarify question is answered by the next message (a custom answer when it has choices).
-    const openClarify = store.get().details[threadIdFinal]?.pending.find((x) => x.kind === "clarify")
-    if (openClarify && text) {
-      await backend.answer(threadIdFinal, openClarify, text)
-      return threadIdFinal
-    }
-
-    // A reply is running: hold the message until it ends, or stop it and send now. A thread
-    // made just now is already marked "working" for this very message, so it never waits.
-    let ended = true
-    if (threadId && replying(threadIdFinal)) {
-      if (how === "queue") {
-        enqueue(threadIdFinal, text, attachments)
-        return threadIdFinal
-      }
-      stopping.add(threadIdFinal)
-      try {
-        await gw.call("session.interrupt", { session_id: runtimeId })
-        ended = await untilIdle(threadIdFinal, 10_000)
-      } finally {
-        stopping.delete(threadIdFinal)
-      }
-    }
-    // Sending again picks the queue back up after a Stop.
-    setPaused(threadIdFinal, false)
-
-    const optimisticId = `u-${Date.now()}`
-    store.updateDetail(threadIdFinal, (d) => ({
-      ...d,
-      messages: [...d.messages, { id: optimisticId, role: "user", text, attachments, createdAt: Date.now() }],
-    }))
-    patchThread(threadIdFinal, { status: "working", updatedAt: Date.now() })
+    const o = begin(id, text, attachments, how, !threadId)
+    if (!o) return id
     try {
-      // Who answers: the @mentioned personality, else the thread's host.
-      const projectId =
-        runOrigin(threadIdFinal)?.projectId ?? store.get().threads.find((t) => t.id === threadIdFinal)?.projectId ?? profile()
-      const cast = await prepareTurn(threadIdFinal, runtimeId, projectId, text)
-      patchThread(threadIdFinal, { cast })
-      await attach(runtimeId, attachments)
-      // A reply that wouldn't stop: Hermes runs this right after it, rather than steering it.
-      await gw.call("prompt.submit", { session_id: runtimeId, text, ...(ended ? {} : { queued: true }) })
+      return await deliver(o)
     } catch (e) {
-      patchThread(threadIdFinal, { status: "idle" })
-      // The composer puts the text back; showing it in the thread too would look sent.
-      store.updateDetail(threadIdFinal, (d) => ({ ...d, messages: d.messages.filter((m) => m.id !== optimisticId) }))
+      patchThread(id, { status: "idle" })
+      // The composer (or the queue) puts the text back; leaving it in the thread too would look sent.
+      store.updateDetail(id, (d) => ({ ...d, messages: d.messages.filter((m) => m.id !== o.messageId) }))
       throw e
     }
-    return threadIdFinal
+  },
+
+  post(threadId, text, attachments, how = "queue") {
+    if (threadId) {
+      // A message that didn't go holds the thread until you retry or take it back.
+      if (hasFailed(threadId)) return threadId
+      const o = begin(threadId, text, attachments, how, false)
+      if (o) deliver(o).catch((e) => failed(o, e))
+      return threadId
+    }
+    const id = newLocalId()
+    // The composer's pick for this thread, else your default from Settings.
+    const pick = store.get().draftModel ?? usableMyModel()
+    store.set((s) => ({
+      threads: withFirst(s.threads, { id, projectId: profile(), title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
+      threadModels: pick ? { ...s.threadModels, [id]: pick } : s.threadModels,
+    }))
+    const o = begin(id, text, attachments, how, true)!
+    deliver(o).catch((e) => failed(o, e))
+    return id
+  },
+
+  retry(threadId, messageId) {
+    const m = store.get().details[threadId]?.messages.find((x) => x.id === messageId && x.delivery === "failed")
+    if (!m) return
+    const interrupt = replying(threadId)
+    setDelivery(threadId, messageId, "sending")
+    if (!interrupt) patchThread(threadId, { status: "working", updatedAt: Date.now() })
+    const o: Outgoing = { threadId, messageId, text: m.text, attachments: m.attachments ?? [], interrupt }
+    deliver(o).catch((e) => failed(o, e))
+  },
+
+  unsend(threadId, messageId) {
+    const messages = store.get().details[threadId]?.messages ?? []
+    const m = messages.find((x) => x.id === messageId && x.delivery === "failed")
+    if (!m) return null
+    // A thread with nothing else in it was never really started: it goes too.
+    if ((isLocalThread(threadId) || unlisted.has(threadId)) && messages.length === 1) dropUnsavedThread(threadId)
+    else store.updateDetail(threadId, (d) => ({ ...d, messages: d.messages.filter((x) => x.id !== messageId) }))
+    return { text: m.text, attachments: m.attachments ?? [] }
   },
 
   async setMyModel(choice) {
@@ -1049,6 +1243,8 @@ export const backend: Backend = {
   },
 
   async setDone(threadId, done) {
+    // A thread that never got made has nothing to archive: it just goes.
+    if (isLocalThread(threadId)) return dropUnsavedThread(threadId)
     const st = store.get()
     const thread = (done ? st.threads : st.done).find((t) => t.id === threadId)
     const p = thread?.projectId ?? runOrigin(threadId)?.projectId ?? profile()
@@ -1098,6 +1294,11 @@ export const backend: Backend = {
   async setModel(threadId, choice) {
     if (!threadId) {
       store.set({ draftModel: choice })
+      return
+    }
+    // Still being made: it starts on this model (see createThread).
+    if (isLocalThread(threadId)) {
+      store.set((s) => ({ threadModels: { ...s.threadModels, [threadId]: choice } }))
       return
     }
     const runtimeId = await ensureRuntime(threadId)

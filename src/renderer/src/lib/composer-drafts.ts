@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import { onThreadRenamed } from "@kitab/core/backend"
 import type { Draft } from "@/components/composer"
 import type { Citation } from "@/components/cite-selection"
 
@@ -45,6 +46,15 @@ export function writeDraft(key: string, patch: Partial<ComposerDraft>) {
   if (patch.text !== undefined && patch.text !== prev.text) persist()
   if (had !== hasContent(next)) listeners.forEach((l) => l())
 }
+
+// A thread started here gets its real id once Hermes has made it: what you typed meanwhile follows.
+onThreadRenamed((from, to) => {
+  const d = saved.get(from)
+  if (!d) return
+  saved.delete(from)
+  saved.set(to, d)
+  persist()
+})
 
 const subscribe = (l: () => void) => {
   listeners.add(l)

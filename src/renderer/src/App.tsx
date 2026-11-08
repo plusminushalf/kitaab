@@ -13,7 +13,7 @@ import { appearance, useAppearance } from "@/lib/appearance/store"
 import { ThreadView } from "@/components/thread-view"
 import { ConnectionView } from "@/components/connection-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
-import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@kitab/core/backend"
+import { backend, clearUndoableDone, hasUndoableDone, undoLastDone, viewIdentity } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { draftKey } from "@/lib/composer-drafts"
 import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
@@ -120,7 +120,10 @@ function Shell() {
       {/* The content pane is opaque; only the sidebar shows the window's vibrancy. */}
       <SidebarInset className="min-h-0 overflow-hidden bg-background">
         {blocked && <ConnectionView onOpenSettings={() => openSettings()} />}
-        {!blocked && view.kind === "thread" && <ThreadView key={draftKey(view.threadId, projectId)} threadId={view.threadId} />}
+        {/* Keyed by the id the thread was first shown under, so a new thread getting its real id doesn't remount it. */}
+        {!blocked && view.kind === "thread" && (
+          <ThreadView key={draftKey(view.threadId && viewIdentity(view.threadId), projectId)} threadId={view.threadId} />
+        )}
         {!blocked && view.kind === "routines" && <RoutinesView />}
         {!blocked && view.kind === "runs" && <AllRunsView />}
         {!blocked && view.kind === "routine" && <RoutineView routineId={view.routineId} />}

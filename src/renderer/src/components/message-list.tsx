@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
+import { CircleAlert, FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ZoomableImage } from "@/components/zoomable-image"
 import type { Attachment, Message, Personality } from "@kitab/core/model"
@@ -125,6 +125,7 @@ function MessageRow({
             )}
           </div>
         )}
+        <DeliveryNote message={m} />
       </div>
     )
   }
@@ -138,6 +139,29 @@ function MessageRow({
       {answer ? <Markdown text={answer} /> : null}
     </div>
   )
+}
+
+/** How long a message can take to land before it says it's still sending. Most land well before. */
+const SLOW_SEND_MS = 1200
+
+/** Under a message you sent: "Sending…" when it's slow to land, "Not sent" when it didn't. */
+function DeliveryNote({ message: m }: { message: Message }) {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (m.delivery !== "sending") return setSlow(false)
+    const timer = setTimeout(() => setSlow(true), SLOW_SEND_MS)
+    return () => clearTimeout(timer)
+  }, [m.delivery])
+  if (m.delivery === "failed") {
+    return (
+      <div className="-mt-1 flex items-center gap-1 text-xs text-destructive" title={m.deliveryError}>
+        <CircleAlert className="size-3" />
+        Not sent
+      </div>
+    )
+  }
+  if (m.delivery === "sending" && slow) return <div className="-mt-1 text-xs text-muted-foreground">Sending…</div>
+  return null
 }
 
 type UserBlock = { kind: "text" | "quote"; text: string } | { kind: "code"; text: string; lang?: string }
