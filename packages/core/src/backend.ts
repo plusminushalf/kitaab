@@ -855,7 +855,9 @@ export function clearUndoableDone() {
 // everything kept under the local id moves to the stored one. If something doesn't go, it
 // stays where it is, marked failed, until you retry it or take it back.
 
-const LOCAL = "local-"
+// Never a prefix Hermes uses itself: it names sessions "local-<hex>" (routine runs among
+// them), and a stored session taken for a local one is never loaded and never sent to.
+const LOCAL = "kitaab-draft-"
 
 /** A thread started here that Hermes hasn't made yet. */
 export const isLocalThread = (id: Id | null | undefined): boolean => !!id?.startsWith(LOCAL)
