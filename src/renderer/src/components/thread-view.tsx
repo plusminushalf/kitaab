@@ -17,6 +17,7 @@ import { useSubagentPolling } from "@/components/thread-agents"
 import { backend } from "@kitab/core/backend"
 import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
 import { store, useStore, type SendMode } from "@/lib/store"
+import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
 
 export function ThreadView({ threadId }: { threadId: Id | null }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId))
@@ -26,8 +27,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const castIds = useStore((s) => s.projects.find((p) => p.id === projectId)?.personalityIds)
   const mentionables = useMemo(() => personalities.filter((p) => castIds?.includes(p.id)), [personalities, castIds])
   const host = thread?.cast.length ? personalities.find((p) => p.id === thread.cast[0]) : undefined
-  const [drafts, setDrafts] = useState<Draft[]>([])
-  const [citations, setCitations] = useState<Citation[]>([])
+  // Mounted per thread (App keys it), so the key is fixed for this view's life.
+  const key = draftKey(threadId, projectId)
+  const [drafts, setDrafts] = useState<Draft[]>(() => readDraft(key).drafts)
+  const [citations, setCitations] = useState<Citation[]>(() => readDraft(key).citations)
   const scrollRoot = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState(false)
   const [openFile, setOpenFile] = useState<Attachment | null>(null)
@@ -56,10 +59,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     if (threadId && connected && (!detail || detail.stale)) void backend.loadThread(threadId)
   }, [threadId, connected, detail])
 
-  useEffect(() => {
-    setDrafts([])
-    setCitations([])
-  }, [threadId])
+  useEffect(() => writeDraft(key, { drafts, citations }), [key, drafts, citations])
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
@@ -186,6 +186,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                 setDrafts={setDrafts}
                 citations={citations}
                 setCitations={setCitations}
+                initialText={readDraft(key).text}
+                onTextChange={(text) => writeDraft(key, { text })}
                 onSend={send}
                 onStop={threadId ? () => void backend.interrupt(threadId) : undefined}
                 autoFocus

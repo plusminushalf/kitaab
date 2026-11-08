@@ -15,6 +15,7 @@ import { ConnectionView } from "@/components/connection-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
 import { backend, clearUndoableDone, hasUndoableDone, undoLastDone } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
+import { draftKey } from "@/lib/composer-drafts"
 import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
 
 export function App() {
@@ -30,6 +31,7 @@ export function App() {
 
 function Shell() {
   const view = useStore((s) => s.view)
+  const projectId = useStore((s) => s.projectId)
   const connection = useStore((s) => s.connection)
   const blocked = connection.state === "error" && connection.needsSignIn
   const openSettings = () => store.set({ settings: "general" })
@@ -118,7 +120,7 @@ function Shell() {
       {/* The content pane is opaque; only the sidebar shows the window's vibrancy. */}
       <SidebarInset className="min-h-0 overflow-hidden bg-background">
         {blocked && <ConnectionView onOpenSettings={() => openSettings()} />}
-        {!blocked && view.kind === "thread" && <ThreadView key={view.threadId ?? "new"} threadId={view.threadId} />}
+        {!blocked && view.kind === "thread" && <ThreadView key={draftKey(view.threadId, projectId)} threadId={view.threadId} />}
         {!blocked && view.kind === "routines" && <RoutinesView />}
         {!blocked && view.kind === "runs" && <AllRunsView />}
         {!blocked && view.kind === "routine" && <RoutineView routineId={view.routineId} />}

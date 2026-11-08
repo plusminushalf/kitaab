@@ -74,6 +74,8 @@ export function Composer({
   mentionables = [],
   citations = [],
   setCitations,
+  initialText = "",
+  onTextChange,
 }: {
   placeholder: string
   /** A reply is running: sending queues behind it or interrupts it. */
@@ -93,8 +95,11 @@ export function Composer({
   /** Passages cited from the thread; sent as quotes ahead of the text. */
   citations?: Citation[]
   setCitations?: (fn: (c: Citation[]) => Citation[]) => void
+  /** Unsent text from last time, and where to keep it. */
+  initialText?: string
+  onTextChange?: (text: string) => void
 }) {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialText)
   const [minHeight, setMinHeight] = useState(readHeight)
   const [mention, setMention] = useState<MentionState | null>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -150,6 +155,10 @@ export function Composer({
   }
 
   const imageCount = drafts.filter(isImage).length
+
+  const textChanged = useRef(onTextChange)
+  textChanged.current = onTextChange
+  useEffect(() => textChanged.current?.(text), [text])
 
   useEffect(() => {
     if (autoFocus) input.current?.focus()

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, PenLine, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +31,7 @@ import { StatusMark } from "@/components/routine-views"
 import { UpdateButton } from "@/components/update-button"
 import { backend, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
+import { useHasDraft } from "@/lib/composer-drafts"
 import { relativeTime } from "@kitab/core/format"
 import type { Id, Routine, Thread } from "@kitab/core/model"
 
@@ -174,6 +175,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                       className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
                     >
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      {t.id !== activeThreadId && <DraftMark threadId={t.id} />}
                       {/* On hover the done tick takes this spot, so the status steps aside
                           (keeping its width, so the title doesn't reflow). */}
                       <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
@@ -448,5 +450,15 @@ function SearchField({ value, onChange }: { value: string; onChange: (v: string)
         </button>
       )}
     </div>
+  )
+}
+
+/** Something you wrote in this thread and haven't sent yet. */
+function DraftMark({ threadId }: { threadId: Id }) {
+  if (!useHasDraft(threadId)) return null
+  return (
+    <span title="Unsent draft" aria-label="Unsent draft" className="flex shrink-0 text-sidebar-muted-foreground">
+      <PenLine className="size-3.5" />
+    </span>
   )
 }
