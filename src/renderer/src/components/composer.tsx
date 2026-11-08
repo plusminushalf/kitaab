@@ -30,16 +30,31 @@ const isImage = (d: Draft) => d.attachment.kind === "image"
 
 /**
  * Pasting an image puts `[Image #N]` where you're typing: the Nth image in the message, the
- * order Hermes hands them to the model. Delete the tag to send the image without it.
+ * order Hermes hands them to the model. The composer draws each tag as a pill and treats it as
+ * one character; the pill's × (or Backspace) takes the tag out and keeps the image.
+ *
+ * In the text box the tag's space is a no-break space, so a tag never wraps across two lines
+ * (the pill is drawn over it). It's sent with a plain space.
  */
-const imageTag = (n: number) => `[Image #${n}]`
-const IMAGE_TAG = /\[Image #(\d+)\]/g
+const imageTag = (n: number) => `[Image\u00a0#${n}]`
+const IMAGE_TAG = /\[Image[ \u00a0]#(\d+)\]/g
+const plainTags = (text: string) => text.replace(IMAGE_TAG, "[Image #$1]")
+const hasTag = (text: string, n: number) => [...text.matchAll(IMAGE_TAG)].some((m) => Number(m[1]) === n)
 
 /** Image `n` was removed: drop its tags and shift later ones down so each still names its picture. */
 function dropImageTag(text: string, n: number): string {
   return text
-    .replace(new RegExp(`\\[Image #${n}\\] ?`, "g"), "")
+    .replace(new RegExp(`\\[Image[ \\u00a0]#${n}\\] ?`, "g"), "")
     .replace(IMAGE_TAG, (tag, k) => (Number(k) > n ? imageTag(Number(k) - 1) : tag))
+}
+
+type Tag = { start: number; end: number; n: number }
+
+/** Tags that name an attached image, where they sit in the text. */
+function tagsIn(text: string, images: number): Tag[] {
+  return [...text.matchAll(IMAGE_TAG)]
+    .map((m) => ({ start: m.index, end: m.index + m[0].length, n: Number(m[1]) }))
+    .filter((t) => t.n >= 1 && t.n <= images)
 }
 
 const HEIGHT_KEY = "kitab.composerHeight"
@@ -167,6 +182,61 @@ export function Composer({
   }
 
   const imageCount = drafts.filter(isImage).length
+  const tags = tagsIn(text, imageCount)
+  const mirror = useRef<HTMLDivElement>(null)
+  const lastCaret = useRef(0)
+
+  // Through the editor, so ⌘Z puts it back.
+  const deleteRange = (start: number, end: number) => {
+    const el = input.current
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(start, end)
+    if (!document.execCommand("delete")) {
+      setText(el.value.slice(0, start) + el.value.slice(end))
+      requestAnimationFrame(() => el.setSelectionRange(start, start))
+    }
+  }
+
+  /** The pill's ×: the tag and one space next to it go; the image stays attached. */
+  const removeTag = (t: Tag) => {
+    const v = input.current?.value ?? text
+    if (v[t.end] === " ") deleteRange(t.start, t.end + 1)
+    else if (t.start > 0 && v[t.start - 1] === " ") deleteRange(t.start - 1, t.end)
+    else deleteRange(t.start, t.end)
+  }
+
+  // A tag is one unit: the caret steps over it, and a selection takes all of it or none.
+  const snapToTags = (el: HTMLTextAreaElement) => {
+    const found = tagsIn(el.value, imageCount)
+    let a = el.selectionStart
+    let b = el.selectionEnd
+    if (a === b) {
+      const t = found.find((t) => a > t.start && a < t.end)
+      if (t) {
+        const prev = lastCaret.current
+        a = b = prev <= t.start ? t.end : prev >= t.end ? t.start : a - t.start < t.end - a ? t.start : t.end
+        el.setSelectionRange(a, b)
+      }
+      lastCaret.current = a
+      return
+    }
+    for (const t of found) {
+      if (a > t.start && a < t.end) a = t.start
+      if (b > t.start && b < t.end) b = t.end
+    }
+    if (a !== el.selectionStart || b !== el.selectionEnd) el.setSelectionRange(a, b, el.selectionDirection)
+  }
+  const snap = useRef(snapToTags)
+  snap.current = snapToTags
+  // React's onSelect misses caret moves from the arrow keys; Chromium fires selectionchange on the box itself.
+  useEffect(() => {
+    const el = input.current
+    if (!el) return
+    const onChange = () => document.activeElement === el && snap.current(el)
+    el.addEventListener("selectionchange", onChange)
+    return () => el.removeEventListener("selectionchange", onChange)
+  }, [])
 
   const textChanged = useRef(onTextChange)
   textChanged.current = onTextChange
@@ -194,7 +264,7 @@ export function Composer({
     setText("")
     setMention(null)
     try {
-      await onSend(withCitations(text.trim(), citations), drafts, how)
+      await onSend(withCitations(plainTags(text).trim(), citations), drafts, how)
     } catch {
       // It didn't go (e.g. Hermes is disconnected): put it all back to edit, copy or resend.
       // Anything typed since stays, after it.
@@ -286,27 +356,45 @@ export function Composer({
                 <DraftTile
                   key={d.attachment.url}
                   draft={d}
-                  number={n && (imageCount > 1 || text.includes(imageTag(n))) ? n : undefined}
+                  number={n && (imageCount > 1 || hasTag(text, n)) ? n : undefined}
                   onRemove={() => removeDraft(i)}
                 />
               )
             })}
           </div>
         )}
+        <div className="relative">
         <textarea
           ref={input}
           rows={1}
           value={text}
           placeholder={placeholder}
-          style={{ minHeight }}
-          className="field-sizing-content max-h-[40vh] w-full resize-none bg-transparent px-1 font-composer text-prompt leading-relaxed outline-none placeholder:text-placeholder"
+          // With pills, the copy laid over the box draws the text; the box keeps the caret and selection.
+          // Inline, not text-transparent: cn() would drop text-prompt (the size) as a clashing text-* class.
+          style={{ minHeight, ...(tags.length > 0 && { color: "transparent", caretColor: "var(--foreground)" }) }}
+          className="block field-sizing-content max-h-[40vh] w-full resize-none bg-transparent px-1 font-composer text-prompt leading-relaxed outline-none placeholder:text-placeholder"
           onChange={(e) => {
             setText(e.target.value)
             trackMention(e.target)
           }}
           onSelect={(e) => trackMention(e.currentTarget)}
+          onScroll={(e) => {
+            if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop
+          }}
           onBlur={() => setMention(null)}
           onKeyDown={(e) => {
+            if ((e.key === "Backspace" || e.key === "Delete") && !e.metaKey) {
+              const el = e.currentTarget
+              const p = el.selectionStart
+              const t =
+                p === el.selectionEnd &&
+                tags.find((t) => (e.key === "Backspace" ? t.end === p : t.start === p))
+              if (t) {
+                e.preventDefault()
+                deleteRange(t.start, t.end)
+                return
+              }
+            }
             if (choosing && !e.nativeEvent.isComposing) {
               const n = options.length
               const index = Math.min(mention.index, n - 1)
@@ -343,6 +431,18 @@ export function Composer({
             if (tags.length) insertAtCaret(tags.join(" "))
           }}
         />
+        {tags.length > 0 && (
+          <div
+            ref={mirror}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden px-1 font-composer text-prompt leading-relaxed break-words whitespace-pre-wrap"
+          >
+            {withPills(text, tags, removeTag)}
+            {/* Keeps a trailing newline's empty line, as the text box has it. */}
+            {"\u200b"}
+          </div>
+        )}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             size="icon-sm"
@@ -405,6 +505,42 @@ export function Composer({
       />
     </div>
   )
+}
+
+/**
+ * The composer's text with each tag drawn as a pill. The tag's own text stays in place,
+ * invisible, so every line wraps exactly as it does in the text box underneath.
+ */
+function withPills(text: string, tags: Tag[], onRemove: (t: Tag) => void): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  let at = 0
+  for (const t of tags) {
+    if (t.start > at) out.push(text.slice(at, t.start))
+    out.push(
+      <span key={t.start} className="relative">
+        <span className="invisible">{text.slice(t.start, t.end)}</span>
+        <span className="absolute -inset-x-0.5 -inset-y-px flex items-center justify-between gap-0.5 overflow-hidden rounded-md bg-muted pr-0.5 pl-1.5 font-sans text-xs font-medium whitespace-nowrap text-foreground ring-1 ring-border">
+          <span className="truncate">Image #{t.n}</span>
+          <button
+            type="button"
+            tabIndex={-1}
+            title="Remove from text (keeps the image)"
+            className="pointer-events-auto flex size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            // Keeps focus (and the caret) in the text box.
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onRemove(t)
+            }}
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      </span>,
+    )
+    at = t.end
+  }
+  if (at < text.length) out.push(text.slice(at))
+  return out
 }
 
 function CitationChip({ citation: c, onRemove }: { citation: Citation; onRemove: () => void }) {
