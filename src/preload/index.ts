@@ -1,10 +1,33 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
-import type { ConnectionResult, FileText, HermesBridge, Settings, ThemeSearchSort, UpdateState } from "../shared/bridge"
+import type {
+  ConnectionResult,
+  FileText,
+  HermesBridge,
+  Settings,
+  SetupResult,
+  SetupStep,
+  SetupTarget,
+  ThemeSearchSort,
+  UpdateState,
+} from "../shared/bridge"
 
 const api: HermesBridge = {
   settings: {
     get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
+  },
+  setup: {
+    needed: (): Promise<boolean> => ipcRenderer.invoke("setup:needed"),
+    sshHosts: (): Promise<string[]> => ipcRenderer.invoke("setup:sshHosts"),
+    check: async (target: SetupTarget, onProgress: (steps: SetupStep[]) => void): Promise<SetupResult> => {
+      const h = (_: unknown, steps: SetupStep[]) => onProgress(steps)
+      ipcRenderer.on("setup:progress", h)
+      try {
+        return await ipcRenderer.invoke("setup:check", target)
+      } finally {
+        ipcRenderer.off("setup:progress", h)
+      }
+    },
   },
   connection: {
     open: (): Promise<ConnectionResult> => ipcRenderer.invoke("connection:open"),

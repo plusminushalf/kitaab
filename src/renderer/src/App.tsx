@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { SidebarInset, SidebarProvider, useSidebar } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -12,6 +12,7 @@ import { ThemeEditor } from "@/components/settings/theme-editor"
 import { appearance, useAppearance } from "@/lib/appearance/store"
 import { ThreadView } from "@/components/thread-view"
 import { ConnectionView } from "@/components/connection-view"
+import { SetupView } from "@/components/setup-view"
 import { SwipeIndicator } from "@/components/swipe-indicator"
 import { backend, clearUndoableDone, hasUndoableDone, undoLastDone, viewIdentity } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
@@ -19,11 +20,20 @@ import { draftKey } from "@/lib/composer-drafts"
 import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
 
 export function App() {
+  // Until a connection is set up, the first-run screen stands in for the whole app.
+  const [setup, setSetup] = useState<"checking" | "needed" | "done">("checking")
+  useEffect(() => {
+    void window.hermes.setup.needed().then((needed) => setSetup(needed ? "needed" : "done"))
+  }, [])
+
   return (
     <TooltipProvider>
-      <SidebarProvider className="h-full min-h-0">
-        <Shell />
-      </SidebarProvider>
+      {setup === "needed" && <SetupView onDone={() => setSetup("done")} />}
+      {setup === "done" && (
+        <SidebarProvider className="h-full min-h-0">
+          <Shell />
+        </SidebarProvider>
+      )}
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

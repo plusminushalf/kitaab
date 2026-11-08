@@ -66,7 +66,7 @@ export function GeneralSection() {
             label="SSH host"
             description="A host or an alias from ~/.ssh/config. Kitaab starts its own private Hermes backend there and reuses it on every launch. Your SSH key must be in the agent."
           >
-            <Input className="w-56" placeholder="dev" {...field("sshHost")} />
+            <Input className="w-56" placeholder="user@server" {...field("sshHost")} />
           </SettingRow>
           <SettingRow
             label="Dashboard URL"

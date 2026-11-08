@@ -72,7 +72,7 @@ On an Apple silicon Mac:
 curl -fsSL https://raw.githubusercontent.com/plusminushalf/kitaab/main/install.sh | bash
 ```
 
-This installs the latest release into `/Applications` and opens it. Set `KITAAB_VERSION=0.1.0` before `bash` to install a specific release. The installer verifies the release signature and the DMG's SHA-256 before installing anything (see below).
+This installs the latest release into `/Applications` and opens it. On first launch Kitaab asks where Hermes runs (an SSH host, or a dashboard URL), checks the connection step by step, and says what to fix if a step fails, such as an SSH key that isn't loaded or Hermes not being installed. Set `KITAAB_VERSION=0.1.0` before `bash` to install a specific release. The installer verifies the release signature and the DMG's SHA-256 before installing anything (see below).
 
 Kitaab isn't notarized by Apple. An app downloaded with `curl` opens without a Gatekeeper prompt. A DMG downloaded in a browser is blocked the first time it opens: allow it in System Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Kitaab.app`.
 

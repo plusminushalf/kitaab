@@ -3,12 +3,13 @@ import { basename, join } from "node:path"
 import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { installMenu } from "./menu"
-import { loadSettings, saveSettings, type Settings } from "./settings"
-import type { ConnectionResult, FileText } from "../shared/bridge"
+import { isConfigured, loadSettings, saveSettings, type Settings } from "./settings"
+import type { ConnectionResult, FileText, SetupTarget } from "../shared/bridge"
 import { restoreWindowState, trackWindowState } from "./window-state"
 import { Tunnel } from "./tunnel"
 import { AuthError, authedFetch, authRequired, forgetAuthMode, signIn, signOut, wsTicket } from "./auth"
-import { ensureRemoteBackend, stopRemoteBackend } from "./remote"
+import { connectedHosts, ensureRemoteBackend, stopRemoteBackend } from "./remote"
+import { checkTarget, plainConnectError, sshConfigHosts } from "./setup"
 import { installThemeIpc } from "./themes"
 import { acknowledgeUpdate, checkForUpdates, downloadUpdate, getUpdateState, installUpdate, startUpdater } from "./updater"
 
@@ -21,6 +22,8 @@ const tunnel = new Tunnel()
 // Keep our own folder so we never share its settings or its single-instance lock.
 // The folder keeps its pre-Kitaab name so existing settings survive the rename.
 app.setPath("userData", join(app.getPath("appData"), "hermes-desktop"))
+// Dev only: a separate profile, to try the first-run screen without touching your own.
+if (!app.isPackaged && process.env.KITAAB_USER_DATA) app.setPath("userData", process.env.KITAAB_USER_DATA)
 
 if (!app.requestSingleInstanceLock()) app.quit()
 
@@ -96,6 +99,18 @@ ipcMain.handle("settings:set", async (_e, next: Settings) => {
   return loadSettings()
 })
 
+// First run: no connection is set up until the person picks one and it passes the check.
+ipcMain.handle("setup:needed", () => !isConfigured())
+ipcMain.handle("setup:sshHosts", () => [...new Set([...connectedHosts(), ...sshConfigHosts()])])
+ipcMain.handle("setup:check", (e, t: SetupTarget) => {
+  current = null
+  return checkTarget(
+    t,
+    (steps) => e.sender.send("setup:progress", steps),
+    async (host, port) => `http://127.0.0.1:${await tunnel.open(host, port)}`,
+  )
+})
+
 // Two ways to reach Hermes:
 //  - SSH host (default): our own private `hermes serve` on that host, reached
 //    through a tunnel, authenticated with the session token we minted.
@@ -147,10 +162,13 @@ ipcMain.handle("connection:open", async (): Promise<ConnectionResult> => {
   } catch (e) {
     console.error("[connection]", e)
     current = null
+    const raw = e instanceof Error ? e.message : String(e)
+    const host = loadSettings().sshHost
     return {
       ok: false,
       needsSignIn: e instanceof AuthError && e.needsSignIn,
-      message: e instanceof Error ? e.message : String(e),
+      // Over SSH, say what's wrong in plain words ("SSH key not loaded") rather than ssh's own.
+      message: host ? await plainConnectError(host, raw) : raw,
     }
   }
 })

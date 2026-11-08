@@ -10,6 +10,31 @@ export type Settings = {
 import type { ConnectionResult } from "@kitab/core/platform"
 export type { ConnectionResult }
 
+/** Where the first-run screen should look for Hermes. */
+export type SetupTarget = { kind: "ssh"; host: string } | { kind: "url"; url: string }
+
+/** What went wrong, in plain words, and what to do about it. */
+export type SetupProblem = {
+  title: string
+  explain: string
+  /** A command that fixes it (or shows more), to run in Terminal. */
+  command?: string
+  link?: { label: string; url: string }
+  /** Raw output (ssh's stderr, the end of Hermes's log) for anyone who wants it. */
+  output?: string
+}
+
+export type SetupStep = {
+  id: string
+  label: string
+  state: "pending" | "running" | "ok" | "failed"
+  /** A short note once it's done, like the Hermes version. */
+  detail?: string
+  problem?: SetupProblem
+}
+
+export type SetupResult = { ok: boolean; steps: SetupStep[] }
+
 /** A server file's contents for the side panel; text is null for binary files. */
 export type FileText = { text: string | null; size: number; truncated: boolean }
 
@@ -69,6 +94,14 @@ export type HermesBridge = {
   settings: {
     get(): Promise<Settings>
     set(s: Settings): Promise<Settings>
+  }
+  setup: {
+    /** True until a connection has been set up: the app shows its first-run screen. */
+    needed(): Promise<boolean>
+    /** Host aliases from ~/.ssh/config, to suggest. */
+    sshHosts(): Promise<string[]>
+    /** Tries the target one step at a time; onProgress gets every step on each change. */
+    check(target: SetupTarget, onProgress: (steps: SetupStep[]) => void): Promise<SetupResult>
   }
   connection: {
     /** Opens the tunnel if needed and returns a ready-to-use WebSocket URL. */

@@ -19,6 +19,32 @@ const hex = (s: string, len: number) => {
   return s
 }
 
+/** Sets $hermes to the hermes binary: on PATH, in ~/.local/bin, or on the login shell's PATH. Empty if none. */
+const FIND_HERMES = `hermes=""
+for c in "$(command -v hermes 2>/dev/null)" "$HOME/.local/bin/hermes" "$("\${SHELL:-sh}" -lc 'command -v hermes' 2>/dev/null)"; do
+  if [ -n "$c" ] && [ -x "$c" ]; then hermes="$c"; break; fi
+done`
+
+/**
+ * Looks for Hermes the way spawnScript does, for a setup check. Prints `NOHERMES`, or
+ * `HERMES <path>` and `SERVE ok` or `SERVE old` (no SSH session support). Not `hermes --version`:
+ * it checks for updates and can take most of a minute.
+ */
+export function findHermesScript(): string {
+  return `
+${FIND_HERMES}
+[ -n "$hermes" ] || { echo "NOHERMES"; exit 0; }
+echo "HERMES $hermes"
+if "$hermes" serve --help 2>&1 | grep -q -- --ssh-session-token-file; then echo "SERVE ok"; else echo "SERVE old"; fi
+`
+}
+
+export function parseFindHermes(out: string): { path: string; serves: boolean } | null {
+  const path = out.match(/^HERMES (.+)$/m)?.[1]
+  if (!path) return null
+  return { path, serves: /^SERVE ok$/m.test(out) }
+}
+
 /** Lists every live Kitaab backend on the host. One `LIVE …` line each. */
 export function discoverScript(): string {
   return `
@@ -71,10 +97,7 @@ mkdir -p "$dir" && chmod 700 "$dir" || { echo "ERR cannot create $dir"; exit 1; 
 rm -f "$dir"/*.log.old 2>/dev/null
 for f in "$dir"/*.log; do [ -f "$f" ] && mv -f "$f" "$f.old"; done 2>/dev/null
 
-hermes=""
-for c in "$(command -v hermes 2>/dev/null)" "$HOME/.local/bin/hermes" "$("\${SHELL:-sh}" -lc 'command -v hermes' 2>/dev/null)"; do
-  if [ -n "$c" ] && [ -x "$c" ]; then hermes="$c"; break; fi
-done
+${FIND_HERMES}
 [ -n "$hermes" ] || { echo "ERR hermes not found on PATH"; exit 1; }
 
 token_file="$dir/${nonce}.token"

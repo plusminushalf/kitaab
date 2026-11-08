@@ -31,7 +31,18 @@ function writeLocal(host: string, value: Local) {
   writeFileSync(localFile(), JSON.stringify(all, null, 2))
 }
 
-const encrypt = (s: string) => safeStorage.encryptString(s).toString("base64")
+/** Hosts this Mac has connected to (it holds a backend token for them). */
+export function connectedHosts(): string[] {
+  try {
+    if (!existsSync(localFile())) return []
+    const all = JSON.parse(readFileSync(localFile(), "utf8")) as Record<string, Local>
+    return Object.keys(all).filter((h) => all[h]?.tokenEnc)
+  } catch {
+    return []
+  }
+}
+
+const encrypt =(s: string) => safeStorage.encryptString(s).toString("base64")
 const decrypt = (s?: string) => {
   if (!s) return null
   try {
