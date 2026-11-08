@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ZoomableImage } from "@/components/zoomable-image"
+import { citable } from "@/components/cite-selection"
 import { isKitabLink, openKitabLink } from "@kitab/core/links"
 import { serverImageUrl, serverPath } from "@kitab/core/server-files"
 import { highlight } from "@/lib/highlight"
@@ -137,6 +138,7 @@ function ReplyImage({ src, alt, written }: { src?: string; alt?: string; written
         <img
           src={src}
           alt={alt ?? ""}
+          {...citable(label, typeof written === "string" ? serverPath(written) : undefined, src)}
           onError={() => setFailed(true)}
           className="max-h-[32rem] max-w-full rounded-lg border object-contain"
         />

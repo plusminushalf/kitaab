@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import type { Attachment } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
 import { Spinner } from "@/components/ui/spinner"
-import { withCitations, type Citation } from "@/components/cite-selection"
+import { citedImages, withCitations, type Citation } from "@/components/cite-selection"
 
 export type Draft = { file: File; attachment: Attachment }
 
@@ -264,7 +264,9 @@ export function Composer({
     setText("")
     setMention(null)
     try {
-      await onSend(withCitations(plainTags(text).trim(), citations), drafts, how)
+      // Cited images go after the composer's own, so the tags typed here keep their numbers.
+      const cited = citedImages(citations).map((i) => attachmentToDraft({ kind: "image", name: i.name, url: i.url, path: i.path }))
+      await onSend(withCitations(plainTags(text).trim(), citations, imageCount + 1), [...drafts, ...cited], how)
     } catch {
       // It didn't go (e.g. Hermes is disconnected): put it all back to edit, copy or resend.
       // Anything typed since stays, after it.
@@ -547,8 +549,15 @@ function CitationChip({ citation: c, onRemove }: { citation: Citation; onRemove:
   return (
     <div className="group relative flex max-w-80 min-w-0 items-start gap-2 rounded-xl border bg-surface-raised px-3 py-2 text-xs">
       <TextQuote className="mt-px size-3.5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0" title={c.text}>
-        <div className="line-clamp-2 text-muted-foreground">{c.text}</div>
+      <div className="min-w-0" title={c.text || undefined}>
+        {c.images?.length ? (
+          <div className="mb-1 flex gap-1">
+            {c.images.map((img, i) => (
+              <img key={i} src={img.url} alt={img.name} title={img.name} className="size-9 rounded-md border object-cover" />
+            ))}
+          </div>
+        ) : null}
+        {c.text && <div className="line-clamp-2 text-muted-foreground">{c.text}</div>}
         {c.comment.trim() && <div className="mt-0.5 line-clamp-2">{c.comment.trim()}</div>}
       </div>
       <button

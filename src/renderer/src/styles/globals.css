@@ -359,6 +359,11 @@ a[href], [role="link"] { cursor: pointer; }
 ::highlight(kitab-cite) {
   background-color: color-mix(in oklab, var(--primary) 30%, transparent);
 }
+/* So does an image being cited. Drawn inside its edge: thread images sit in clipped, rounded boxes. */
+img[data-citing] {
+  outline: 3px solid color-mix(in oklab, var(--primary) 70%, transparent);
+  outline-offset: -3px;
+}
 
 /* ⌘F matches in a thread; the one you're on is stronger. */
 ::highlight(kitab-find) {

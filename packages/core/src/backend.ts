@@ -594,11 +594,30 @@ async function resume(threadId: Id): Promise<string> {
   return r.session_id
 }
 
+/**
+ * An image that's already on the server (a cited reply image): Hermes reads it from its path.
+ * The path is quoted, the way Hermes's attach input takes one with spaces. If Hermes won't take
+ * it that way, the bytes go up instead.
+ */
+async function attachServerImage(runtimeId: string, a: Attachment) {
+  try {
+    if (a.path!.includes('"')) throw new Error("unquotable path")
+    await gw.call("image.attach", { session_id: runtimeId, path: `"${a.path}"` })
+  } catch (e) {
+    if (!a.url) throw e
+    await gw.call("image.attach_bytes", { session_id: runtimeId, content_base64: await blobToBase64(a.url), filename: a.name })
+  }
+}
+
 async function attach(runtimeId: string, attachments: Attachment[]) {
   // Images first, in order: the composer's `[Image #N]` tags count them, and a PDF's pages
   // are queued as images too, so one sent earlier would shift the count.
   const ordered = [...attachments.filter((a) => a.kind === "image"), ...attachments.filter((a) => a.kind !== "image")]
   for (const a of ordered) {
+    if (a.kind === "image" && a.path && !/^(blob|data):/.test(a.url ?? "")) {
+      await attachServerImage(runtimeId, a)
+      continue
+    }
     if (!a.url) continue
     if (a.kind === "image") {
       await gw.call("image.attach_bytes", { session_id: runtimeId, content_base64: await blobToBase64(a.url), filename: a.name })

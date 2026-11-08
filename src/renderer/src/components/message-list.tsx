@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { CircleAlert, FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ZoomableImage } from "@/components/zoomable-image"
+import { citable } from "@/components/cite-selection"
 import type { Attachment, Message, Personality } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
 import { CodeBlock, Markdown } from "@/components/markdown"
@@ -256,7 +257,7 @@ function AttachmentView({ a, onView, onOpenFile, openFile }: FileHandlers & { a:
   if (a.kind === "image" && a.url && !failed) {
     return (
       <button onClick={() => onView(a)} className="overflow-hidden rounded-lg border" title={a.name}>
-        <img src={a.url} alt={a.name} onError={setFailed} className="max-h-64 max-w-80 object-cover" />
+        <img src={a.url} alt={a.name} {...citable(a.name, a.path, a.url)} onError={setFailed} className="max-h-64 max-w-80 object-cover" />
       </button>
     )
   }
