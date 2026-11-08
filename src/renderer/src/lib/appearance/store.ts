@@ -245,11 +245,18 @@ function apply() {
 // Pinning the window's scheme pins prefers-color-scheme too, so in the app the System
 // setting follows macOS through main. matchMedia is only for running without it.
 const bridge = window.hermes?.appearance
-if (bridge?.onSystemDark) {
-  bridge.onSystemDark((dark) => dark !== state.systemDark && set({ systemDark: dark }))
-  void bridge.systemDark().then((dark) => dark !== state.systemDark && set({ systemDark: dark }))
-} else {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => set({ systemDark: e.matches }))
+const systemDarkIs = (dark: boolean) => dark !== state.systemDark && set({ systemDark: dark })
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)")
+function recheckSystemDark() {
+  if (bridge?.systemDark) void bridge.systemDark().then(systemDarkIs)
+  else systemDarkIs(darkQuery.matches)
 }
+if (bridge?.onSystemDark) bridge.onSystemDark(systemDarkIs)
+else darkQuery.addEventListener("change", (e) => systemDarkIs(e.matches))
+recheckSystemDark()
+// A change can go unannounced (Chromium skips the event when scheme emulation is
+// cleared), so look again whenever the window comes back to the front.
+window.addEventListener("focus", recheckSystemDark)
+document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && recheckSystemDark())
 
 apply()
