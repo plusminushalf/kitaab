@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { FileIcon, FileImage, FileSpreadsheet, FileText, FileVideo } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { ZoomableImage } from "@/components/zoomable-image"
 import type { Attachment, Message, Personality } from "@kitab/core/model"
 import { bytes } from "@kitab/core/format"
 import { CodeBlock, Markdown } from "@/components/markdown"
@@ -80,7 +81,7 @@ export function MessageList({
         <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">
           <DialogTitle className="truncate">{viewing?.name}</DialogTitle>
           {viewing?.kind === "image" && (
-            <img src={viewing.url} alt={viewing.name} className="max-h-[80vh] w-full object-contain" />
+            <ZoomableImage src={viewing.url!} alt={viewing.name} className="max-h-[80vh]" />
           )}
           {viewing?.kind === "video" && <video src={viewing.url} controls autoPlay className="max-h-[80vh] w-full" />}
         </DialogContent>

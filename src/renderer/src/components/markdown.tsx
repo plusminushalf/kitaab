@@ -5,6 +5,7 @@ import { Check, Copy, ImageOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { ZoomableImage } from "@/components/zoomable-image"
 import { isKitabLink, openKitabLink } from "@kitab/core/links"
 import { serverImageUrl, serverPath } from "@kitab/core/server-files"
 import { highlight } from "@/lib/highlight"
@@ -143,7 +144,7 @@ function ReplyImage({ src, alt, written }: { src?: string; alt?: string; written
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">
           <DialogTitle className="truncate">{label}</DialogTitle>
-          <img src={src} alt={alt ?? ""} className="max-h-[80vh] w-full object-contain" />
+          <ZoomableImage src={src} alt={alt ?? ""} className="max-h-[80vh]" />
         </DialogContent>
       </Dialog>
     </>
