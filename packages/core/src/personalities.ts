@@ -257,9 +257,15 @@ async function switchSession(runtimeId: string, projectId: Id, want: string, fal
 export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id, text: string): Promise<Id[]> {
   const meta = threadMeta(threadId)
   const available = projectPersonalities(projectId)
-  const tagged = mentionsIn(text, available)[0]
+  const mentioned = mentionsIn(text, available)
+  const tagged = mentioned[0]
   let cast = meta.cast.filter((id) => available.some((p) => p.id === id))
-  if (tagged && !cast.includes(tagged.id)) cast = [...cast, tagged.id]
+  // Everyone mentioned joins the thread, but one turn has one speaker: the first mentioned.
+  for (const p of mentioned) if (!cast.includes(p.id)) cast = [...cast, p.id]
+  if (mentioned.length > 1) {
+    const rest = mentioned.slice(1).map((p) => p.name)
+    toast(`${tagged.name} answers this message. To hear from ${rest.join(" and ")} too, @mention them in your next one.`)
+  }
   let speaker: Id | undefined = tagged?.id ?? cast[0]
 
   // Nobody in the thread and nobody tagged: whatever the project uses answers.
