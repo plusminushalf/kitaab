@@ -1,4 +1,4 @@
-import type { Id, Subagent } from "./model"
+import type { Id, Subagent, Thread } from "./model"
 import { store } from "./store"
 
 // Helper agents a thread delegated work to (Hermes `delegate_task`). Live
@@ -13,6 +13,14 @@ const TERMINAL = new Set<Subagent["status"]>(["completed", "failed", "interrupte
 const KEEP_FINISHED = 30
 
 export const isActive = (a: Subagent) => !TERMINAL.has(a.status)
+
+/**
+ * The status a thread shows. Its own reply may be over while helpers it started
+ * are still going; it's still working then (you'd only be talking over them).
+ */
+export function shownStatus(t: Thread, subagents: Record<Id, Subagent[]>): Thread["status"] {
+  return t.status === "idle" && subagents[t.id]?.some(isActive) ? "working" : t.status
+}
 
 const str = (v: unknown) => (typeof v === "string" ? v : "")
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined)

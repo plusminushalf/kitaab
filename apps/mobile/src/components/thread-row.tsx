@@ -5,6 +5,7 @@ import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeabl
 import * as Haptics from "expo-haptics"
 import type { Thread } from "@kitab/core/model"
 import { relativeTime } from "@kitab/core/format"
+import { shownStatus } from "@kitab/core/subagents"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Avatar, Icon, StatusDot } from "./ui"
@@ -19,6 +20,7 @@ export const ThreadRow = memo(function ThreadRow({
 }) {
   const c = useColors()
   const personalities = useStore((s) => s.personalities)
+  const status = useStore((s) => shownStatus(t, s.subagents))
   const cast = t.cast.map((id) => personalities.find((p) => p.id === id)).filter((p) => p !== undefined)
 
   const row = (
@@ -29,7 +31,7 @@ export const ThreadRow = memo(function ThreadRow({
           <Text style={{ flex: 1, color: c.text, fontSize: 16, fontWeight: "500" }} numberOfLines={1}>
             {t.title}
           </Text>
-          <StatusDot status={t.status} />
+          <StatusDot status={status} />
           <Text style={{ color: c.textMuted, fontSize: 13 }}>{relativeTime(t.updatedAt)}</Text>
         </View>
         {t.preview || cast.length ? (

@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { aggregateStatus, ProjectBadge, StatusPill } from "@/components/project-badge"
 import { backend, projectIdFor } from "@kitab/core/backend"
+import { shownStatus } from "@kitab/core/subagents"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +26,7 @@ export function ProjectPicker({
   const projects = useStore((s) => s.projects)
   const projectId = useStore((s) => s.projectId)
   const threads = useStore((s) => s.threads)
+  const subagents = useStore((s) => s.subagents)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
@@ -220,7 +222,7 @@ export function ProjectPicker({
                 </div>
               )}
               {shown.map((p, i) => {
-                const own = threads.filter((t) => t.projectId === p.id)
+                const own = threads.filter((t) => t.projectId === p.id).map((t) => ({ ...t, status: shownStatus(t, subagents) }))
                 const status = own.length ? aggregateStatus(own) : "idle"
                 const n = projects.indexOf(p) + 1
                 // Only where the drop would change something.

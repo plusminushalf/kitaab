@@ -33,6 +33,7 @@ import { backend, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { useHasDraft } from "@/lib/composer-drafts"
 import { relativeTime } from "@kitab/core/format"
+import { shownStatus } from "@kitab/core/subagents"
 import type { Id, Routine, Thread } from "@kitab/core/model"
 
 type Sort = "activity" | "status" | "title"
@@ -79,6 +80,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const projects = useStore((s) => s.projects)
   const projectId = useStore((s) => s.projectId)
   const allThreads = useStore((s) => s.threads)
+  const subagents = useStore((s) => s.subagents)
   const view = useStore((s) => s.view)
   const connection = useStore((s) => s.connection)
   const doneCount = useStore((s) => s.doneCount)
@@ -166,42 +168,45 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           </ProjectPicker>
           <SidebarGroupContent>
             <SidebarMenu>
-              {threads.map((t) => (
-                <HoverCard key={t.id}>
-                  <HoverCardTrigger render={<SidebarMenuItem />}>
-                    <SidebarMenuButton
-                      isActive={t.id === activeThreadId}
-                      onClick={() => store.go({ kind: "thread", threadId: t.id })}
-                      className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
-                    >
-                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                      {t.id !== activeThreadId && <DraftMark threadId={t.id} />}
-                      {/* On hover the done tick takes this spot, so the status steps aside
-                          (keeping its width, so the title doesn't reflow). */}
-                      <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
-                        {t.status === "idle" ? (
-                          <span className="text-xs text-sidebar-muted-foreground tabular-nums">
-                            {relativeTime(t.updatedAt)}
-                          </span>
-                        ) : (
-                          <StatusPill status={t.status} />
-                        )}
-                      </span>
-                    </SidebarMenuButton>
-                    <SidebarMenuAction
-                      className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
-                      title="Mark as done (⇧⌘S)"
-                      aria-label={`Mark “${t.title}” as done`}
-                      onClick={() => void backend.setDone(t.id, true)}
-                    >
-                      <Check />
-                    </SidebarMenuAction>
-                  </HoverCardTrigger>
-                  <HoverCardContent>
-                    <ThreadCard thread={t} projectName={project?.name} />
-                  </HoverCardContent>
-                </HoverCard>
-              ))}
+              {threads.map((t) => {
+                const status = shownStatus(t, subagents)
+                return (
+                  <HoverCard key={t.id}>
+                    <HoverCardTrigger render={<SidebarMenuItem />}>
+                      <SidebarMenuButton
+                        isActive={t.id === activeThreadId}
+                        onClick={() => store.go({ kind: "thread", threadId: t.id })}
+                        className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
+                      >
+                        <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                        {t.id !== activeThreadId && <DraftMark threadId={t.id} />}
+                        {/* On hover the done tick takes this spot, so the status steps aside
+                            (keeping its width, so the title doesn't reflow). */}
+                        <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
+                          {status === "idle" ? (
+                            <span className="text-xs text-sidebar-muted-foreground tabular-nums">
+                              {relativeTime(t.updatedAt)}
+                            </span>
+                          ) : (
+                            <StatusPill status={status} />
+                          )}
+                        </span>
+                      </SidebarMenuButton>
+                      <SidebarMenuAction
+                        className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
+                        title="Mark as done (⇧⌘S)"
+                        aria-label={`Mark “${t.title}” as done`}
+                        onClick={() => void backend.setDone(t.id, true)}
+                      >
+                        <Check />
+                      </SidebarMenuAction>
+                    </HoverCardTrigger>
+                    <HoverCardContent>
+                      <ThreadCard thread={t} projectName={project?.name} />
+                    </HoverCardContent>
+                  </HoverCard>
+                )
+              })}
               {threads.length === 0 && connection.state === "connected" && (
                 <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">
                   {query.trim() ? "No matching threads." : "No threads yet."}
@@ -350,6 +355,7 @@ async function openLatestRun(r: Routine) {
 function ThreadCard({ thread, projectName }: { thread: Thread; projectName?: string }) {
   const personalities = useStore((s) => s.personalities)
   const routines = useStore((s) => s.routines)
+  const status = useStore((s) => shownStatus(thread, s.subagents))
   const cast = thread.cast
     .map((id) => personalities.find((p) => p.id === id)?.name)
     .filter((n): n is string => !!n)
@@ -380,7 +386,7 @@ function ThreadCard({ thread, projectName }: { thread: Thread; projectName?: str
         <div className="flex items-center gap-2">
           <Clock className="size-3.5 shrink-0" />
           <span className="truncate">Updated {relativeTime(thread.updatedAt)}</span>
-          {thread.status !== "idle" && <StatusPill status={thread.status} className="ml-auto" />}
+          {status !== "idle" && <StatusPill status={status} className="ml-auto" />}
         </div>
       </div>
       {thread.preview && (
