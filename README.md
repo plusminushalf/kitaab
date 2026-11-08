@@ -112,7 +112,7 @@ pnpm dev          # run with hot reload
 pnpm typecheck
 ```
 
-`pnpm dev` runs a private copy of Electron renamed to Kitaab (in `node_modules/.kitab-electron`), so the menu bar and Dock show the right name and icon.
+`pnpm dev` runs a private copy of Electron named "Kitaab Dev" (in `node_modules/.kitab-electron`), so the menu bar and Dock show our name and icon. It has its own name and bundle id, so `open -a Kitaab` and AppleScript still reach the installed app.
 
 ## Building the app
 
