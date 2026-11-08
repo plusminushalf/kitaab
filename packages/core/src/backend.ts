@@ -51,6 +51,18 @@ function patchThread(id: Id, patch: Partial<Thread>) {
   store.set((s) => ({ threads: s.threads.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))
 }
 
+/** The tool calls of the reply lastAssistant would update (the one running, else this turn's last). */
+function lastAssistantTools(threadId: Id): ToolCall[] {
+  const messages = store.get().details[threadId]?.messages ?? []
+  const running = messages.findLast((m) => m.role === "assistant" && m.streaming)
+  if (running) return running.tools ?? []
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") return messages[i].tools ?? []
+    if (messages[i].role === "user") break
+  }
+  return []
+}
+
 function lastAssistant(threadId: Id, fn: (m: Message) => Message) {
   store.updateDetail(threadId, (d) => {
     const messages = [...d.messages]
@@ -314,15 +326,27 @@ async function loadRoutines() {
 /** The thread last open in each project, so switching back reopens it. */
 const lastThread = new Map<Id, Id>()
 
-let refreshTimer: ReturnType<typeof setTimeout> | undefined
+// One timer per kind, so asking for routines never cancels a pending threads refresh.
+const refreshTimers = new Map<"threads" | "routines", ReturnType<typeof setTimeout>>()
 function refreshSoon(what: "threads" | "routines") {
-  clearTimeout(refreshTimer)
-  refreshTimer = setTimeout(() => {
-    // Another device may have changed a thread's cast or turned a run into a thread.
-    if (what === "threads") void refreshProfiles().then(() => loadThreads(profile())).catch(() => {})
-    else void loadRoutines().catch(() => {})
-  }, 400)
+  clearTimeout(refreshTimers.get(what))
+  refreshTimers.set(
+    what,
+    setTimeout(() => {
+      refreshTimers.delete(what)
+      // Another device may have changed a thread's cast or turned a run into a thread.
+      if (what === "threads") void refreshProfiles().then(() => loadThreads(profile())).catch(() => {})
+      else void loadRoutines().catch(() => {})
+    }, 400),
+  )
 }
+
+/**
+ * Hermes's cron tool (cronjob_manage) makes, changes and removes routines. The server only
+ * announces cron.changed for its default profile, so a routine made in a thread in any other
+ * project would stay off the Routines page until a reload.
+ */
+const isCronTool = (name: string | undefined) => !!name && /^cron/i.test(name)
 
 // ---- live events ------------------------------------------------------------------
 
@@ -376,6 +400,8 @@ function onEvent(e: GatewayEvent) {
       })
       break
     case "tool.complete":
+      if (isCronTool(p.name) || lastAssistantTools(threadId).some((t) => t.id === p.tool_id && isCronTool(t.name)))
+        refreshSoon("routines")
       lastAssistant(threadId, (m) => ({
         ...m,
         tools: (m.tools ?? []).map((t) =>
@@ -385,6 +411,8 @@ function onEvent(e: GatewayEvent) {
       }))
       break
     case "message.complete":
+      // Again once the turn has ended: a routine made to run at once shows as running.
+      if (lastAssistantTools(threadId).some((t) => isCronTool(t.name))) refreshSoon("routines")
       lastAssistant(threadId, (m) => {
         // Text or thinking that only came with the end (nothing streamed) still belongs in the parts.
         let parts = partsOf(m)
