@@ -585,7 +585,10 @@ async function resume(threadId: Id): Promise<string> {
 }
 
 async function attach(runtimeId: string, attachments: Attachment[]) {
-  for (const a of attachments) {
+  // Images first, in order: the composer's `[Image #N]` tags count them, and a PDF's pages
+  // are queued as images too, so one sent earlier would shift the count.
+  const ordered = [...attachments.filter((a) => a.kind === "image"), ...attachments.filter((a) => a.kind !== "image")]
+  for (const a of ordered) {
     if (!a.url) continue
     if (a.kind === "image") {
       await gw.call("image.attach_bytes", { session_id: runtimeId, content_base64: await blobToBase64(a.url), filename: a.name })

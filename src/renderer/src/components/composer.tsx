@@ -20,6 +20,22 @@ export function fileToDraft(file: File): Draft {
   return { file, attachment: { kind, name: file.name, size: file.size, url: URL.createObjectURL(file) } }
 }
 
+const isImage = (d: Draft) => d.attachment.kind === "image"
+
+/**
+ * Pasting an image puts `[Image #N]` where you're typing: the Nth image in the message, the
+ * order Hermes hands them to the model. Delete the tag to send the image without it.
+ */
+const imageTag = (n: number) => `[Image #${n}]`
+const IMAGE_TAG = /\[Image #(\d+)\]/g
+
+/** Image `n` was removed: drop its tags and shift later ones down so each still names its picture. */
+function dropImageTag(text: string, n: number): string {
+  return text
+    .replace(new RegExp(`\\[Image #${n}\\] ?`, "g"), "")
+    .replace(IMAGE_TAG, (tag, k) => (Number(k) > n ? imageTag(Number(k) - 1) : tag))
+}
+
 const HEIGHT_KEY = "kitab.composerHeight"
 const MIN_HEIGHT = 64
 
@@ -108,6 +124,32 @@ export function Composer({
       input.current?.setSelectionRange(caret, caret)
     })
   }
+
+  // Through the editor, so ⌘Z takes it back out.
+  const insertAtCaret = (s: string) => {
+    const el = input.current
+    if (!el) return
+    const start = el.selectionStart
+    const before = el.value.slice(0, start)
+    const after = el.value.slice(el.selectionEnd)
+    const insert = (before && !/\s$/.test(before) ? " " : "") + s + (/^\s/.test(after) ? "" : " ")
+    el.focus()
+    if (!document.execCommand("insertText", false, insert)) {
+      setText(before + insert + after)
+      const caret = start + insert.length
+      requestAnimationFrame(() => el.setSelectionRange(caret, caret))
+    }
+  }
+
+  const removeDraft = (i: number) => {
+    if (isImage(drafts[i])) {
+      const n = drafts.slice(0, i).filter(isImage).length + 1
+      setText((t) => dropImageTag(t, n))
+    }
+    setDrafts((all) => all.filter((_, j) => j !== i))
+  }
+
+  const imageCount = drafts.filter(isImage).length
 
   useEffect(() => {
     if (autoFocus) input.current?.focus()
@@ -217,9 +259,17 @@ export function Composer({
         )}
         {drafts.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {drafts.map((d, i) => (
-              <DraftTile key={d.attachment.url} draft={d} onRemove={() => setDrafts((all) => all.filter((_, j) => j !== i))} />
-            ))}
+            {drafts.map((d, i) => {
+              const n = isImage(d) ? drafts.slice(0, i).filter(isImage).length + 1 : undefined
+              return (
+                <DraftTile
+                  key={d.attachment.url}
+                  draft={d}
+                  number={n && (imageCount > 1 || text.includes(imageTag(n))) ? n : undefined}
+                  onRemove={() => removeDraft(i)}
+                />
+              )
+            })}
           </div>
         )}
         <textarea
@@ -263,10 +313,13 @@ export function Composer({
           }}
           onPaste={(e) => {
             const files = [...e.clipboardData.files]
-            if (files.length) {
-              e.preventDefault()
-              setDrafts((d) => [...d, ...files.map(fileToDraft)])
-            }
+            if (!files.length) return
+            e.preventDefault()
+            const added = files.map(fileToDraft)
+            const first = imageCount + 1
+            const tags = added.filter(isImage).map((_, k) => imageTag(first + k))
+            setDrafts((d) => [...d, ...added])
+            if (tags.length) insertAtCaret(tags.join(" "))
           }}
         />
         <div className="flex items-center gap-1">
@@ -352,7 +405,7 @@ function CitationChip({ citation: c, onRemove }: { citation: Citation; onRemove:
   )
 }
 
-function DraftTile({ draft: d, onRemove }: { draft: Draft; onRemove: () => void }) {
+function DraftTile({ draft: d, number, onRemove }: { draft: Draft; number?: number; onRemove: () => void }) {
   const a = d.attachment
   return (
     <div className="relative">
@@ -368,6 +421,11 @@ function DraftTile({ draft: d, onRemove }: { draft: Draft; onRemove: () => void 
             <div className="text-muted-foreground">{bytes(a.size)}</div>
           </div>
         </div>
+      )}
+      {number !== undefined && (
+        <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-1 font-mono text-[10px] leading-4 text-white">
+          #{number}
+        </span>
       )}
       <button
         aria-label={`Remove ${a.name}`}
