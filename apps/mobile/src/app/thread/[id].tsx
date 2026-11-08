@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { MenuView } from "@expo/ui/community/menu"
 import type { Attachment, Message } from "@kitab/core/model"
 import { backend } from "@kitab/core/backend"
+import { plainReplySpeaker } from "@kitab/core/personalities"
 import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
@@ -46,6 +47,11 @@ export default function ThreadScreen() {
     const ids = projects.find((p) => p.id === (thread?.projectId ?? projectId))?.personalityIds ?? []
     return personalities.filter((p) => ids.includes(p.id))
   }, [projects, personalities, thread?.projectId, projectId])
+  // Who a plain reply goes to (the last to answer, else the host), as the core decides it.
+  const answers = useMemo(() => {
+    const pid = id && thread ? plainReplySpeaker(id, thread.cast) : undefined
+    return pid ? personalities.find((p) => p.id === pid) : undefined
+  }, [id, thread, personalities])
   const threadCast = (thread?.cast ?? []).map((pid) => personalities.find((p) => p.id === pid)).filter((p) => p !== undefined)
 
   const messages = detail?.messages ?? (draft ? [draft] : [])
@@ -149,7 +155,7 @@ export default function ThreadScreen() {
           threadId={id}
           working={working}
           cast={projectCast}
-          placeholder={id ? "Reply" : "Start a thread"}
+          placeholder={id ? (answers ? `Reply to ${answers.name}` : "Reply") : "Start a thread"}
           onSend={send}
           onStop={id ? () => void backend.interrupt(id) : undefined}
         />

@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/page-header"
 import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/components/thread-details"
 import { useSubagentPolling } from "@/components/thread-agents"
 import { backend, isLocalThread, viewIdentity } from "@kitab/core/backend"
+import { plainReplySpeaker } from "@kitab/core/personalities"
 import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
 import { store, useStore, type SendMode } from "@/lib/store"
 import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
@@ -26,7 +27,11 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const projectId = useStore((s) => thread?.projectId ?? s.projectId)
   const castIds = useStore((s) => s.projects.find((p) => p.id === projectId)?.personalityIds)
   const mentionables = useMemo(() => personalities.filter((p) => castIds?.includes(p.id)), [personalities, castIds])
-  const host = thread?.cast.length ? personalities.find((p) => p.id === thread.cast[0]) : undefined
+  // Who a plain reply goes to (the last to answer, else the host), as the core decides it.
+  const answers = useMemo(() => {
+    const id = thread && threadId ? plainReplySpeaker(threadId, thread.cast) : undefined
+    return id ? personalities.find((p) => p.id === id) : undefined
+  }, [thread, threadId, personalities])
   // Mounted per thread (App keys it), so the key is fixed for this view's life.
   const key = draftKey(threadId, projectId)
   const [drafts, setDrafts] = useState<Draft[]>(() => readDraft(key).drafts)
@@ -205,8 +210,8 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
               <Composer
                 key={composerEpoch}
                 placeholder={
-                  host
-                    ? `Reply to ${host.name}…`
+                  answers
+                    ? `Reply to ${answers.name}…`
                     : mentionables.length
                       ? `${threadId ? "Reply" : "Ask anything"}, or type @ to bring in a personality…`
                       : threadId

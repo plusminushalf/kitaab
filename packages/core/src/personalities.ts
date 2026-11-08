@@ -204,6 +204,19 @@ export function mentionsIn(text: string, candidates: Personality[]): Personality
 
 // ---- choosing who answers --------------------------------------------------------------
 
+/**
+ * Who answers a message with no @mention: whoever in the thread answered last (you're talking
+ * with them), else the thread's host. The composer names them, so it must match prepareTurn.
+ */
+export function plainReplySpeaker(threadId: Id, cast: Id[]): Id | undefined {
+  const turns = threadMeta(threadId).turns
+  const latestFirst = Object.keys(turns)
+    .map(Number)
+    .sort((a, b) => b - a)
+  for (const i of latestFirst) if (cast.includes(turns[i])) return turns[i]
+  return cast[0]
+}
+
 /** The personality overlay each live session is on ("" = the project's default). Keyed by runtime id. */
 const sessionPersonality = new Map<string, string>()
 /** Who is answering the turn in flight, per thread. */
@@ -266,7 +279,7 @@ export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id
     const rest = mentioned.slice(1).map((p) => p.name)
     toast(`${tagged.name} answers this message. To hear from ${rest.join(" and ")} too, @mention them in your next one.`)
   }
-  let speaker: Id | undefined = tagged?.id ?? cast[0]
+  let speaker: Id | undefined = tagged?.id ?? plainReplySpeaker(threadId, cast)
 
   // Nobody in the thread and nobody tagged: whatever the project uses answers.
   if (speaker || meta.cast.length) {
