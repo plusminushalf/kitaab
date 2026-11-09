@@ -19,11 +19,13 @@ export function ProfilePicker({
   render,
   children,
   align = "start",
+  side = "bottom",
   create: openOnCreate = false,
 }: {
   render: ReactElement
   children: ReactNode
   align?: "start" | "center" | "end"
+  side?: "top" | "bottom"
   create?: boolean
 }) {
   const profiles = useStore((s) => s.profiles)
@@ -132,7 +134,7 @@ export function ProfilePicker({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger render={render}>{children}</PopoverTrigger>
-      <PopoverContent align={align} className="w-72 gap-0 overflow-hidden p-0" data-over-vibrancy>
+      <PopoverContent side={side} align={align} className="w-72 gap-0 overflow-hidden p-0" data-over-vibrancy>
         {draft !== null ? (
           <>
             <div className="flex items-center gap-2 border-b px-3">

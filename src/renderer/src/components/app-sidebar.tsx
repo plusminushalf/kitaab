@@ -162,21 +162,6 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       <SidebarContent>
         <SidebarGroup className={cn("pt-0", layout === "folders" && "gap-0.5")}>
-          {/* Profiles are Hermes profiles, switched and created here. A label, not a row,
-              so threads keep the full width. */}
-          <ProfilePicker
-            render={
-              <button
-                className="mb-0.5 flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                title="Switch profile"
-              />
-            }
-          >
-            {profile && <ProjectBadge name={profile.name} className="size-4 rounded text-[0.5rem]" />}
-            <span className="min-w-0 flex-1 truncate text-left">{profile?.name ?? "No profile"}</span>
-            <ChevronsUpDown className="size-3 shrink-0 opacity-70" />
-          </ProfilePicker>
-
           {groups.map(({ project: p, threads, all }) =>
             flat ? (
               <SidebarGroupContent key={p.id}>
@@ -260,27 +245,34 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         </SidebarMenu>
         <SidebarMenu className="flex-row items-center gap-1">
           <SidebarMenuItem className="min-w-0 flex-1">
-            <SidebarMenuButton onClick={onOpenSettings}>
-              <span
-                className={
-                  "size-2 rounded-full " +
-                  (connection.state === "connected"
-                    ? "bg-green-500"
-                    : connection.state === "error"
-                      ? "bg-destructive"
-                      : "bg-muted-foreground")
-                }
-              />
-              <span className="truncate">
-                {connection.state === "connected"
-                  ? connection.server
-                  : connection.state === "error"
-                    ? "Not connected"
-                    : "Connecting…"}
-              </span>
-              <Settings className="ml-auto" />
-            </SidebarMenuButton>
+            {connection.state === "connected" ? (
+              // Profiles are Hermes profiles, switched and created here.
+              <ProfilePicker side="top" render={<SidebarMenuButton title="Switch profile" />}>
+                {profile && <ProjectBadge name={profile.name} className="size-4 rounded text-[0.5rem]" />}
+                <span className="truncate">{profile?.name ?? "No profile"}</span>
+                <ChevronsUpDown className="ml-auto text-sidebar-muted-foreground" />
+              </ProfilePicker>
+            ) : (
+              // Only while Hermes is unreachable: when connected, the status says nothing.
+              <SidebarMenuButton onClick={onOpenSettings}>
+                <span
+                  className={cn("size-2 rounded-full", connection.state === "error" ? "bg-destructive" : "bg-muted-foreground")}
+                />
+                <span className="truncate">{connection.state === "error" ? "Not connected" : "Connecting…"}</span>
+              </SidebarMenuButton>
+            )}
           </SidebarMenuItem>
+          <IconTip label="Settings (⌘,)" side="top">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-sidebar-muted-foreground"
+              aria-label="Settings"
+              onClick={onOpenSettings}
+            >
+              <Settings />
+            </Button>
+          </IconTip>
           <ReconnectButton />
           {/* Shows only when there's an update to download or install. */}
           <UpdateButton />
@@ -651,11 +643,19 @@ function ReconnectButton() {
   )
 }
 
-function IconTip({ label, children }: { label: string; children: React.ReactElement }) {
+function IconTip({
+  label,
+  side = "bottom",
+  children,
+}: {
+  label: string
+  side?: "top" | "bottom"
+  children: React.ReactElement
+}) {
   return (
     <Tooltip>
       <TooltipTrigger render={children} />
-      <TooltipContent side="bottom">{label}</TooltipContent>
+      <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
   )
 }
