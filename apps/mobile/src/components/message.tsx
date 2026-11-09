@@ -5,6 +5,7 @@ import * as Clipboard from "expo-clipboard"
 import * as Haptics from "expo-haptics"
 import type { Message, Part, ToolCall } from "@kitab/core/model"
 import { splitTurn } from "@kitab/core/turn"
+import { splitImageTags } from "@kitab/core/user-text"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Markdown } from "./markdown"
@@ -179,7 +180,16 @@ export const MessageRow = memo(function MessageRow({ message: m }: { message: Me
         {m.text ? (
           <Pressable onLongPress={() => copy(m.text)} style={{ maxWidth: "85%", backgroundColor: c.messageSurface, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9 }}>
             <Text style={{ color: c.text, fontSize: 16, lineHeight: 22 }} selectable>
-              {m.text}
+              {/* [Image #N] tags (pasted on the Mac) read as pills, as they do there. */}
+              {splitImageTags(m.text).map((t, i) =>
+                typeof t === "string" ? (
+                  t
+                ) : (
+                  <Text key={i} style={{ backgroundColor: c.secondary, fontSize: 13, fontWeight: "600" }}>
+                    {` Image #${t} `}
+                  </Text>
+                ),
+              )}
             </Text>
           </Pressable>
         ) : null}

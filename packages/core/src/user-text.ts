@@ -65,3 +65,21 @@ export function previewText(raw: unknown): string | undefined {
     .trim()
   return text && text !== "..." && text !== "…" ? text : undefined
 }
+
+const IMAGE_TAG = /\[Image[  ]#(\d+)\]/g
+
+/**
+ * Splits a message around its `[Image #N]` tags (the Nth image sent with it), so the apps can
+ * draw each tag as a pill: text stays a string, a tag becomes its number.
+ */
+export function splitImageTags(text: string): (string | number)[] {
+  const out: (string | number)[] = []
+  let at = 0
+  for (const m of text.matchAll(IMAGE_TAG)) {
+    if (m.index > at) out.push(text.slice(at, m.index))
+    out.push(Number(m[1]))
+    at = m.index + m[0].length
+  }
+  if (at < text.length) out.push(text.slice(at))
+  return out
+}

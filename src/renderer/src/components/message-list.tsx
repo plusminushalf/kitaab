@@ -8,6 +8,7 @@ import { bytes } from "@kitab/core/format"
 import { CodeBlock, Markdown } from "@/components/markdown"
 import { WorkLog } from "@/components/work-log"
 import { splitTurn } from "@kitab/core/turn"
+import { splitImageTags } from "@kitab/core/user-text"
 
 export function MessageList({
   messages,
@@ -112,6 +113,9 @@ function MessageRow({
 }) {
   const files = { onView, onOpenFile, openFile }
   if (m.role === "user") {
+    // [Image #N] is the Nth image sent with the message; its pill opens that image.
+    const images = m.attachments?.filter((a) => a.kind === "image") ?? []
+    const openImage = (n: number) => images[n - 1] && onView(images[n - 1])
     return (
       <div className="flex min-w-0 flex-col items-end gap-2">
         {m.attachments?.length ? <Attachments items={m.attachments} {...files} align="end" /> : null}
@@ -122,11 +126,11 @@ function MessageRow({
                 <CodeBlock key={i} code={b.text} lang={b.lang} className="rounded-md border border-border whitespace-normal" />
               ) : b.kind === "quote" ? (
                 <blockquote key={i} className="border-l-2 border-current/30 pl-2.5 opacity-70">
-                  <InlineCode text={b.text} />
+                  <InlineCode text={b.text} onImage={openImage} />
                 </blockquote>
               ) : (
                 <div key={i}>
-                  <InlineCode text={b.text} />
+                  <InlineCode text={b.text} onImage={openImage} />
                 </div>
               ),
             )}
@@ -203,18 +207,37 @@ function userBlocks(text: string): UserBlock[] {
   return blocks.filter((b) => b.kind === "code" || b.text)
 }
 
-/** Text with its `inline code` spans set in mono. */
-function InlineCode({ text }: { text: string }) {
+/** Text with its `inline code` spans set in mono, and its [Image #N] tags as pills. */
+function InlineCode({ text, onImage }: { text: string; onImage?: (n: number) => void }) {
   const parts = text.split(/(`[^`\n]+`)/)
-  if (parts.length === 1) return text
   return parts.map((p, i) =>
     p.length > 2 && p.startsWith("`") && p.endsWith("`") ? (
       <code key={i} className="rounded bg-current/10 px-1 py-0.5 font-mono text-[0.9em]">
         {p.slice(1, -1)}
       </code>
     ) : (
-      p
+      splitImageTags(p).map((t, j) =>
+        typeof t === "string" ? (
+          t
+        ) : (
+          <ImagePill key={`${i}-${j}`} n={t} onOpen={onImage} />
+        ),
+      )
     ),
+  )
+}
+
+/** A pasted image's [Image #N] tag in a message you sent, drawn as in the composer. */
+function ImagePill({ n, onOpen }: { n: number; onOpen?: (n: number) => void }) {
+  return (
+    <button
+      type="button"
+      title="View image"
+      onClick={() => onOpen?.(n)}
+      className="mx-px inline-flex items-center rounded-md bg-muted px-1.5 align-[0.05em] font-sans text-xs leading-5 font-medium whitespace-nowrap text-foreground ring-1 ring-border select-text hover:bg-muted/70"
+    >
+      Image #{n}
+    </button>
   )
 }
 
