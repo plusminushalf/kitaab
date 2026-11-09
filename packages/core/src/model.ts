@@ -81,6 +81,10 @@ export type Thread = {
   /** You pressed Stop and the reply hasn't ended yet. */
   stopping?: boolean
   preview?: string
+  /** The model the thread last ran on, as Hermes's thread list reports it. */
+  model?: string
+  /** Who billed it ("anthropic", "openrouter", …), as Hermes's thread list reports it. */
+  provider?: string
 }
 
 export type Attachment = {

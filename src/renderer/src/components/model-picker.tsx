@@ -14,16 +14,19 @@ import { useStore, type ModelChoice, type ModelProvider } from "@/lib/store"
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 const FAVORITES = "favoriteModels"
 
-function providerIcon(slug: string): ComponentType<{ className?: string }> {
+/** A provider's mark. `slug` can be a provider slug, a model id, or both ("anthropic/claude-…"). */
+export function providerIcon(slug: string): ComponentType<{ className?: string }> {
+  slug = slug.toLowerCase()
   if (slug.includes("anthropic") || slug.includes("claude")) return Asterisk
   if (slug.includes("gemini") || slug.includes("google")) return Gem
-  if (slug.includes("openai")) return Sparkles
+  if (slug.includes("openai") || /(^|\/)(gpt|o\d)/.test(slug)) return Sparkles
   if (slug.includes("copilot")) return Bot
   return Cpu
 }
 
 /** Brand-ish tint for the composer chip's provider icon. */
-function providerTint(slug: string): string {
+export function providerTint(slug: string): string {
+  slug = slug.toLowerCase()
   if (slug.includes("anthropic") || slug.includes("claude")) return "text-[#d97757]"
   if (slug.includes("gemini") || slug.includes("google")) return "text-sky-500"
   return "text-primary"

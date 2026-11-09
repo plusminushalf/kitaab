@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, Copy, Ellipsis, Folder, FolderOpen, ListFilter, PenLine, Plus, Repeat, RotateCw, Search, Settings, SquarePen, Trash2, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, Copy, Ellipsis, Folder, FolderOpen, ListFilter, PenLine, Repeat, RotateCw, Search, Settings, SquarePen, Trash2, Users, X } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -33,13 +33,17 @@ import { UpdateButton } from "@/components/update-button"
 import { backend, reconnectNow, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { useHasDraft } from "@/lib/composer-drafts"
+import { adoptUnknown, markSeen, useUnseen } from "@/lib/seen-threads"
 import { useThreadSwitching } from "@/lib/thread-switching"
 import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/store"
 import { cn } from "@/lib/utils"
 import { relativeTime } from "@kitab/core/format"
+import { modelName, shortModelName } from "@kitab/core/model-names"
+import { providerIcon, providerTint } from "@/components/model-picker"
+import { Spinner } from "@/components/ui/spinner"
 import { shownStatus } from "@kitab/core/subagents"
 import { GENERAL, type Id, type Project, type Thread } from "@kitab/core/model"
-import { confirmRemoveProject, openNewProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
+import { confirmRemoveProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"
@@ -103,11 +107,37 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   )
   // Only General: no project headers, the list looks as it always has.
   const flat = projects.length === 1
+  // The list layout: one list of T3-style cards across every project, each saying where it lives.
+  const cards = !flat && layout === "switcher"
+  const cardList = useMemo(
+    () => (cards ? arrange(profileThreads, query, sort) : []),
+    [cards, profileThreads, query, sort],
+  )
+  const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
   const isOpen = (id: Id) => searching || flat || !collapsed.has(id)
   // The threads as shown, top to bottom, for ⌘[ ]/Ctrl+Tab and for moving on after "done".
-  const shown = useMemo(() => groups.flatMap((g) => (isOpen(g.project.id) ? g.threads : [])), [groups, collapsed, searching, flat])
+  const shown = useMemo(
+    () => (cards ? cardList : groups.flatMap((g) => (isOpen(g.project.id) ? g.threads : []))),
+    [cards, cardList, groups, collapsed, searching, flat],
+  )
   useEffect(() => setShownThreadOrder(shown.map((t) => t.id)), [shown])
   const activeThreadId = view.kind === "thread" ? view.threadId : null
+  useEffect(() => adoptUnknown(profileThreads), [profileThreads])
+  // The open thread counts as read whenever it moves while the window has focus, and
+  // again when you come back to the window.
+  const activeUpdatedAt = profileThreads.find((t) => t.id === activeThreadId)?.updatedAt
+  useEffect(() => {
+    if (!activeThreadId || activeUpdatedAt === undefined) return
+    // Read as of now, not just as of its timestamp: Hermes's list can later report a
+    // last-active a little after the live one for the same reply.
+    const mark = () => markSeen(activeThreadId, Math.max(activeUpdatedAt, Date.now()))
+    if (document.hasFocus()) mark()
+    window.addEventListener("focus", mark)
+    return () => {
+      window.removeEventListener("focus", mark)
+      if (document.hasFocus()) mark()
+    }
+  }, [activeThreadId, activeUpdatedAt])
   useThreadSwitching(shown, profileThreads)
   const inRoutines = view.kind === "routines" || view.kind === "routine" || view.kind === "run"
 
@@ -162,7 +192,21 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       <SidebarContent>
         <SidebarGroup className={cn("pt-0", layout === "folders" && "gap-0.5")}>
-          {groups.map(({ project: p, threads, all }) =>
+          {cards && (
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {cardList.map((t) => (
+                  <ThreadTile
+                    key={t.id}
+                    thread={t}
+                    project={projectNames.get(t.projectId) ?? "General"}
+                    active={t.id === activeThreadId}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          )}
+          {!cards && groups.map(({ project: p, threads, all }) =>
             flat ? (
               <SidebarGroupContent key={p.id}>
                 <SidebarMenu>
@@ -197,19 +241,10 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               />
             ),
           )}
-          {shown.length === 0 && (flat || searching) && connection.state === "connected" && (
+          {shown.length === 0 && (flat || cards || searching) && connection.state === "connected" && (
             <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">
               {searching ? "No matching threads." : "No threads yet."}
             </p>
-          )}
-          {connection.state === "connected" && profile && (
-            <button
-              onClick={openNewProject}
-              className="mt-0.5 flex h-7 w-full items-center gap-2 rounded-md px-2 text-xs text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-            >
-              <Plus className="size-3.5 shrink-0" />
-              <span className="truncate">New project</span>
-            </button>
           )}
         </SidebarGroup>
       </SidebarContent>
@@ -336,6 +371,87 @@ function ThreadRow({
       </HoverCardContent>
     </HoverCard>
   )
+}
+
+/**
+ * A thread in the list layout, as a T3-style card: the project it's in and when it last
+ * moved, then its title, then what it's up to (or your first message) and the model it runs on.
+ */
+function ThreadTile({ thread: t, project, active }: { thread: Thread; project: string; active: boolean }) {
+  const status = useStore((s) => shownStatus(t, s.subagents))
+  // The model picked in this app wins; otherwise what Hermes's list says it last ran on.
+  const picked = useStore((s) => s.threadModels[t.id])
+  const model = picked?.model ?? t.model
+  const slug = `${picked?.provider ?? t.provider ?? ""}/${model ?? ""}`
+  const unseen = useUnseen(t) && !active
+  const Mark = providerIcon(slug)
+  return (
+    <SidebarMenuItem>
+      <button
+        type="button"
+        data-active={active || undefined}
+        onClick={() => store.go({ kind: "thread", threadId: t.id })}
+        className="flex w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring data-active:bg-sidebar-accent"
+      >
+        <span className="flex h-5 items-center gap-2 text-xs text-sidebar-muted-foreground">
+          <ProjectBadge name={project} />
+          <span className="min-w-0 truncate">{project}</span>
+          {/* On hover the done tick takes this spot. */}
+          <span className="ml-auto shrink-0 tabular-nums group-hover/menu-item:invisible">{relativeTime(t.updatedAt)}</span>
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">{t.title}</span>
+          {!active && <DraftMark threadId={t.id} />}
+        </span>
+        <span className="flex h-4 items-center gap-2 text-xs text-sidebar-muted-foreground">
+          <TileStatus status={status} stopping={t.stopping} unseen={unseen} />
+          {/* At rest: the first thing you asked it. */}
+          {status === "idle" && !unseen && t.preview && <span className="min-w-0 flex-1 truncate">{t.preview}</span>}
+          {/* The model, with its provider's mark at the end, as T3 shows the agent's. */}
+          {model && (
+            <span title={modelName(model.split("/").pop()!)} className="ml-auto flex min-w-0 items-center gap-1.5">
+              <span className="min-w-0 truncate">{shortModelName(model.split("/").pop()!)}</span>
+              <Mark className={cn("size-4 shrink-0", providerTint(slug))} />
+            </span>
+          )}
+        </span>
+      </button>
+      <SidebarMenuAction
+        className="top-2! right-2! opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
+        title="Mark as done (⇧⌘S)"
+        aria-label={`Mark “${t.title}” as done`}
+        onClick={() => void backend.setDone(t.id, true)}
+      >
+        <Check />
+      </SidebarMenuAction>
+    </SidebarMenuItem>
+  )
+}
+
+/** A card's bottom-left: what the thread is doing, else whether it has a reply you haven't seen. */
+function TileStatus({ status, stopping, unseen }: { status: Thread["status"]; stopping?: boolean; unseen: boolean }) {
+  if (status === "working")
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 font-medium text-update-foreground">
+        <Spinner className="size-3" />
+        {stopping ? "Stopping" : "Working"}
+      </span>
+    )
+  if (status === "needs-you")
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 font-medium text-warning-foreground">
+        <span className="size-1.5 rounded-full bg-warning" />
+        Awaiting you
+      </span>
+    )
+  if (unseen)
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 font-medium text-sidebar-foreground">
+        <span className="size-1.5 rounded-full bg-primary" />
+        New reply
+      </span>
+    )
+  return null
 }
 
 const COLLAPSED_KEY = "kitab.sidebarCollapsedProjects"

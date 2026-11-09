@@ -64,7 +64,7 @@ export const DEFAULTS: AppearanceSettings = {
   fontSmoothing: true,
   panelAnimationMs: 200,
   chatWidth: "comfortable",
-  sidebarLayout: "folders",
+  sidebarLayout: "switcher",
   sidebarLayoutPicked: false,
   wordWrap: true,
   threadDetails: {
@@ -110,8 +110,8 @@ type State = {
 }
 
 const stored = read<Partial<AppearanceSettings>>(SETTINGS_KEY, {})
-// Every save stored the whole settings object, so a layout from before folders were the
-// default (2026-11-09) is only kept if you picked it.
+// Every save stored the whole settings object, so a saved layout is only kept if you
+// picked it; otherwise the current default (the list of cards) applies.
 if (!stored.sidebarLayoutPicked) delete stored.sidebarLayout
 let state: State = {
   settings: { ...DEFAULTS, ...stored, threadDetails: { ...DEFAULTS.threadDetails, ...stored.threadDetails } },

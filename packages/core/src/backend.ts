@@ -186,6 +186,8 @@ const toThread = (p: string, s: any): Thread => ({
   cast: threadCast(s.id),
   status: "idle",
   preview: previewText(s.preview),
+  model: typeof s.model === "string" && s.model ? s.model : undefined,
+  provider: typeof s.billing_provider === "string" && s.billing_provider ? s.billing_provider : undefined,
 })
 
 // ---- models ------------------------------------------------------------------------
