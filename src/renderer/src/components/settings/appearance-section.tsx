@@ -17,6 +17,7 @@ import {
   type AppearanceSettings,
   type ChatWidth,
   type ColorScheme,
+  type SidebarLayout,
 } from "@/lib/appearance/store"
 import { slug, type ThemeFamily } from "@/lib/appearance/tokens"
 import { cn } from "@/lib/utils"
@@ -143,6 +144,20 @@ export function AppearanceSection() {
               <ToggleGroupItem value="comfortable">Comfortable</ToggleGroupItem>
               <ToggleGroupItem value="wide">Wide</ToggleGroupItem>
               <ToggleGroupItem value="full">Full</ToggleGroupItem>
+            </ToggleGroup>
+          </SettingRow>
+          <SettingRow
+            label="Projects in the sidebar"
+            description="A switcher shows one project's threads at a time. Folders list every project, each in its own color, with its threads inside."
+          >
+            <ToggleGroup
+              variant="outline"
+              size="sm"
+              value={[settings.sidebarLayout]}
+              onValueChange={(v: string[]) => v[0] && set({ sidebarLayout: v[0] as SidebarLayout })}
+            >
+              <ToggleGroupItem value="switcher">Switcher</ToggleGroupItem>
+              <ToggleGroupItem value="folders">Folders</ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
           <SettingRow

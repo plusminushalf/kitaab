@@ -335,7 +335,14 @@ function refreshSoon(what: "threads" | "routines") {
     setTimeout(() => {
       refreshTimers.delete(what)
       // Another device may have changed a thread's cast or turned a run into a thread.
-      if (what === "threads") void refreshProfiles().then(() => loadThreads(profile())).catch(() => {})
+      // Every project whose threads are showing, not just this one: the sidebar can list them all.
+      if (what === "threads")
+        void refreshProfiles()
+          .then(() => {
+            const shown = new Set([profile(), ...store.get().threads.map((t) => t.projectId)])
+            return Promise.all([...shown].map((p) => loadThreads(p).catch(() => {})))
+          })
+          .catch(() => {})
       else void loadRoutines().catch(() => {})
     }, 400),
   )
@@ -1185,6 +1192,10 @@ export const backend: Backend = {
       loadRoutines().catch((e) => toast.error(`Routines: ${e.message ?? e}`)),
       changed ? refreshProfiles().catch(() => {}) : undefined,
     ])
+  },
+
+  loadProjectThreads(id) {
+    return loadThreads(id)
   },
 
   async createProject(name) {

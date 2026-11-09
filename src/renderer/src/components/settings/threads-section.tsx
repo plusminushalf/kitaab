@@ -3,11 +3,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { backend } from "@kitab/core/backend"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { useStore, type SendMode } from "@/lib/store"
+import { setCtrlTabMode, useCtrlTabMode, type CtrlTabMode } from "@/lib/thread-switching"
 import { SettingRow, SettingsCard, SettingsGroup } from "./settings-page"
 
 const SEND_MODES: { value: SendMode; label: string }[] = [
   { value: "queue", label: "Queue" },
   { value: "interrupt", label: "Interrupt" },
+]
+
+const CTRL_TAB_MODES: { value: CtrlTabMode; label: string }[] = [
+  { value: "recent", label: "Most recent" },
+  { value: "list", label: "List order" },
 ]
 
 /** Defaults for new threads (T3 Code's Settings → Threads), and what sending does while a reply runs. */
@@ -18,6 +24,7 @@ export function ThreadsSection() {
   const providers = useStore((s) => s.models)
   const project = useStore((s) => s.projects.find((p) => p.id === s.projectId))
   const enterSends = useStore((s) => s.enterSends)
+  const ctrlTab = useCtrlTabMode()
 
   const available = mine ? providers.find((p) => p.slug === mine.provider)?.models.includes(mine.model) : true
   const projectLabel = projectModel
@@ -71,6 +78,31 @@ export function ThreadsSection() {
               </SelectTrigger>
               <SelectContent>
                 {SEND_MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+        </SettingsCard>
+      </SettingsGroup>
+      <SettingsGroup title="Switching threads">
+        <SettingsCard>
+          <SettingRow
+            label="Ctrl+Tab"
+            description={
+              ctrlTab === "recent"
+                ? "Most recent: goes back to the thread you had open before. Hold Ctrl and keep pressing Tab to go further back; Ctrl+Shift+Tab goes the other way."
+                : "List order: opens the next thread down the list. Ctrl+Shift+Tab opens the one above."
+            }
+          >
+            <Select items={CTRL_TAB_MODES} value={ctrlTab} onValueChange={(v) => v && setCtrlTabMode(v as CtrlTabMode)}>
+              <SelectTrigger size="sm" className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CTRL_TAB_MODES.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>

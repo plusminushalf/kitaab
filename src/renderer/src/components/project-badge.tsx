@@ -10,7 +10,8 @@ export function initials(name: string): string {
   return letters.toUpperCase()
 }
 
-function hue(name: string): number {
+/** The hue a project is tinted with, from its name; the same everywhere it shows. */
+export function hue(name: string): number {
   let h = 0
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360
   return h

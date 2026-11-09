@@ -92,6 +92,8 @@ export interface Backend {
   createProject(name: string): Promise<Id>
   /** Saves the order projects are listed in (and ⌘1–⌘9 follow), for every device. */
   setProjectOrder(ids: Id[]): Promise<void>
+  /** Loads a project's threads without switching to it (the sidebar's project folders). */
+  loadProjectThreads(id: Id): Promise<void>
   loadThread(threadId: Id): Promise<void>
   /**
    * Starts a new thread when threadId is null. Resolves to the thread id. While a reply is

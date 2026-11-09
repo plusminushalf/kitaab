@@ -12,16 +12,19 @@ import { cn } from "@/lib/utils"
  * T3-style project switcher: a search field over the project list, each with its
  * badge and what its threads are up to. Arrow keys move, Enter switches. "New project"
  * turns the search field into a name field; Escape goes back to the list. Drag a row,
- * or press ⌥↑/⌥↓, to change the order (⌘1–⌘9 follow it).
+ * or press ⌥↑/⌥↓, to change the order (⌘1–⌘9 follow it). With `create`, it opens on the
+ * new project's name.
  */
 export function ProjectPicker({
   render,
   children,
   align = "start",
+  create: openOnCreate = false,
 }: {
   render: ReactElement
   children: ReactNode
   align?: "start" | "center" | "end"
+  create?: boolean
 }) {
   const projects = useStore((s) => s.projects)
   const projectId = useStore((s) => s.projectId)
@@ -83,7 +86,7 @@ export function ProjectPicker({
     setOpen(next)
     if (next) {
       setQuery("")
-      setDraft(null)
+      setDraft(openOnCreate ? "" : null)
       setError(null)
       setActive(
         Math.max(

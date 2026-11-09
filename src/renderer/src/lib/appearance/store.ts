@@ -7,6 +7,8 @@ import { cssVar, KITAB_FAMILY, type Appearance, type ThemeFamily, type ThemeVari
 
 export type ColorScheme = "system" | "light" | "dark"
 export type ChatWidth = "comfortable" | "wide" | "full"
+/** How the sidebar shows projects: one at a time behind a switcher, or every project as a folder. */
+export type SidebarLayout = "switcher" | "folders"
 
 export const THREAD_DETAIL_ITEMS = [
   ["machine", "Machine"],
@@ -40,6 +42,7 @@ export type AppearanceSettings = {
   fontSmoothing: boolean
   panelAnimationMs: number
   chatWidth: ChatWidth
+  sidebarLayout: SidebarLayout
   wordWrap: boolean
   threadDetails: Record<ThreadDetailItem, boolean>
 }
@@ -59,6 +62,7 @@ export const DEFAULTS: AppearanceSettings = {
   fontSmoothing: true,
   panelAnimationMs: 200,
   chatWidth: "comfortable",
+  sidebarLayout: "switcher",
   wordWrap: true,
   threadDetails: {
     machine: true,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, ListFilter, PenLine, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, Folder, FolderOpen, ListFilter, PenLine, Plus, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -20,21 +20,25 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { ProjectBadge, StatusPill } from "@/components/project-badge"
+import { aggregateStatus, hue, ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
 import { UpdateButton } from "@/components/update-button"
 import { backend, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { useHasDraft } from "@/lib/composer-drafts"
+import { useThreadSwitching } from "@/lib/thread-switching"
+import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/store"
+import { cn } from "@/lib/utils"
 import { relativeTime } from "@kitab/core/format"
 import { shownStatus } from "@kitab/core/subagents"
-import type { Id, Routine, Thread } from "@kitab/core/model"
+import type { Id, Project, Routine, Thread } from "@kitab/core/model"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"
@@ -49,38 +53,23 @@ function readSort(): Sort {
   }
 }
 
-/**
- * Ctrl+Tab opens the next thread down the list as shown (sort and search applied),
- * Ctrl+Shift+Tab the one above; both wrap. Away from the list's threads, they start
- * from the top or the bottom.
- */
-function useThreadCycling(threads: Thread[], activeThreadId: Id | null) {
-  const latest = useRef({ threads, activeThreadId })
-  latest.current = { threads, activeThreadId }
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab" || !e.ctrlKey || e.metaKey || e.altKey) return
-      // Ctrl+Tab never moves focus here, even when there's nowhere to go.
-      e.preventDefault()
-      if (store.get().settings) return
-      const { threads, activeThreadId } = latest.current
-      if (!threads.length) return
-      const by = e.shiftKey ? -1 : 1
-      const i = threads.findIndex((t) => t.id === activeThreadId)
-      const next = i === -1 ? (by === 1 ? 0 : threads.length - 1) : (i + by + threads.length) % threads.length
-      if (threads[next].id !== activeThreadId) store.go({ kind: "thread", threadId: threads[next].id })
-    }
-    window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
-  }, [])
+/** Threads matching the search, in the chosen order. */
+function arrange(list: Thread[], query: string, sort: Sort): Thread[] {
+  const q = query.trim().toLowerCase()
+  const shown = q ? list.filter((t) => t.title.toLowerCase().includes(q)) : [...list]
+  return shown.sort((a, b) =>
+    sort === "title"
+      ? a.title.localeCompare(b.title)
+      : sort === "status"
+        ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.updatedAt - a.updatedAt
+        : b.updatedAt - a.updatedAt,
+  )
 }
 
 export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const projects = useStore((s) => s.projects)
   const projectId = useStore((s) => s.projectId)
   const allThreads = useStore((s) => s.threads)
-  const subagents = useStore((s) => s.subagents)
   const view = useStore((s) => s.view)
   const connection = useStore((s) => s.connection)
   const doneCount = useStore((s) => s.doneCount)
@@ -96,20 +85,11 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   const project = projects.find((p) => p.id === projectId)
   const projectThreads = useMemo(() => allThreads.filter((t) => t.projectId === projectId), [allThreads, projectId])
-  const threads = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const list = q ? projectThreads.filter((t) => t.title.toLowerCase().includes(q)) : [...projectThreads]
-    return list.sort((a, b) =>
-      sort === "title"
-        ? a.title.localeCompare(b.title)
-        : sort === "status"
-          ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.updatedAt - a.updatedAt
-          : b.updatedAt - a.updatedAt,
-    )
-  }, [projectThreads, query, sort])
+  const threads = useMemo(() => arrange(projectThreads, query, sort), [projectThreads, query, sort])
+  const layout = useAppearance((s) => s.settings.sidebarLayout)
   useEffect(() => setShownThreadOrder(threads.map((t) => t.id)), [threads])
   const activeThreadId = view.kind === "thread" ? view.threadId : null
-  useThreadCycling(threads, activeThreadId)
+  useThreadSwitching(threads, projectThreads)
   const inRoutines = view.kind === "routines" || view.kind === "routine" || view.kind === "run"
 
   return (
@@ -120,7 +100,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="flex items-center gap-0.5">
           <SearchField value={query} onChange={setQuery} />
           <DropdownMenu>
-            <IconTip label="Sort threads">
+            <IconTip label="Sort and view">
               <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="text-sidebar-muted-foreground" />}>
                 <ListFilter />
               </DropdownMenuTrigger>
@@ -132,6 +112,17 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <DropdownMenuRadioItem value="activity">Last activity</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Show projects as</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={layout}
+                  onValueChange={(v) => appearance.update({ sidebarLayout: v as SidebarLayout })}
+                >
+                  <DropdownMenuRadioItem value="switcher">A switcher</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="folders">Folders</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -151,70 +142,38 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup className="pt-0">
-          {/* Projects are Hermes profiles, switched and created here. A label, not a row,
-              so threads keep the full width. */}
-          <ProjectPicker
-            render={
-              <button
-                className="mb-0.5 flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                title="Switch project"
-              />
-            }
-          >
-            {project && <ProjectBadge name={project.name} className="size-4 rounded text-[0.5rem]" />}
-            <span className="min-w-0 flex-1 truncate text-left">{project?.name ?? "No project"}</span>
-            <ChevronsUpDown className="size-3 shrink-0 opacity-70" />
-          </ProjectPicker>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {threads.map((t) => {
-                const status = shownStatus(t, subagents)
-                return (
-                  <HoverCard key={t.id}>
-                    <HoverCardTrigger render={<SidebarMenuItem />}>
-                      <SidebarMenuButton
-                        isActive={t.id === activeThreadId}
-                        onClick={() => store.go({ kind: "thread", threadId: t.id })}
-                        className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
-                      >
-                        <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                        {t.id !== activeThreadId && <DraftMark threadId={t.id} />}
-                        {/* On hover the done tick takes this spot, so the status steps aside
-                            (keeping its width, so the title doesn't reflow). */}
-                        <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
-                          {status === "idle" ? (
-                            <span className="text-xs text-sidebar-muted-foreground tabular-nums">
-                              {relativeTime(t.updatedAt)}
-                            </span>
-                          ) : (
-                            <StatusPill status={status} stopping={t.stopping} />
-                          )}
-                        </span>
-                      </SidebarMenuButton>
-                      <SidebarMenuAction
-                        className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
-                        title="Mark as done (⇧⌘S)"
-                        aria-label={`Mark “${t.title}” as done`}
-                        onClick={() => void backend.setDone(t.id, true)}
-                      >
-                        <Check />
-                      </SidebarMenuAction>
-                    </HoverCardTrigger>
-                    <HoverCardContent>
-                      <ThreadCard thread={t} projectName={project?.name} />
-                    </HoverCardContent>
-                  </HoverCard>
-                )
-              })}
-              {threads.length === 0 && connection.state === "connected" && (
-                <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">
-                  {query.trim() ? "No matching threads." : "No threads yet."}
-                </p>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {layout === "folders" ? (
+          <ProjectFolders query={query} sort={sort} activeThreadId={activeThreadId} />
+        ) : (
+          <SidebarGroup className="pt-0">
+            {/* Projects are Hermes profiles, switched and created here. A label, not a row,
+                so threads keep the full width. */}
+            <ProjectPicker
+              render={
+                <button
+                  className="mb-0.5 flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  title="Switch project"
+                />
+              }
+            >
+              {project && <ProjectBadge name={project.name} className="size-4 rounded text-[0.5rem]" />}
+              <span className="min-w-0 flex-1 truncate text-left">{project?.name ?? "No project"}</span>
+              <ChevronsUpDown className="size-3 shrink-0 opacity-70" />
+            </ProjectPicker>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {threads.map((t) => (
+                  <ThreadRow key={t.id} thread={t} active={t.id === activeThreadId} projectName={project?.name} />
+                ))}
+                {threads.length === 0 && connection.state === "connected" && (
+                  <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">
+                    {query.trim() ? "No matching threads." : "No threads yet."}
+                  </p>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <LatestRuns projectId={projectId} activeRoutineId={view.kind === "run" ? view.routineId : null} />
 
@@ -278,6 +237,255 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  )
+}
+
+/** A thread in the sidebar list. In a project folder, `tinted` colors it with the folder. */
+function ThreadRow({
+  thread: t,
+  active,
+  projectName,
+  tinted = false,
+  onOpen,
+}: {
+  thread: Thread
+  active: boolean
+  projectName?: string
+  tinted?: boolean
+  onOpen?: () => void
+}) {
+  const status = useStore((s) => shownStatus(t, s.subagents))
+  return (
+    <HoverCard>
+      <HoverCardTrigger render={<SidebarMenuItem />}>
+        <SidebarMenuButton
+          isActive={active}
+          onClick={onOpen ?? (() => store.go({ kind: "thread", threadId: t.id }))}
+          className={cn(
+            "pr-2! data-active:font-normal",
+            tinted
+              ? "hover:bg-[oklch(0.62_0.17_var(--h)/0.12)] data-active:bg-[oklch(0.62_0.17_var(--h)/0.2)] data-active:text-[oklch(0.4_0.14_var(--h))] dark:hover:bg-[oklch(0.62_0.17_var(--h)/0.14)] dark:data-active:bg-[oklch(0.62_0.17_var(--h)/0.26)] dark:data-active:text-[oklch(0.9_0.07_var(--h))]"
+              : "hover:bg-sidebar-row-hover data-active:bg-sidebar-accent",
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate">{t.title}</span>
+          {!active && <DraftMark threadId={t.id} />}
+          {/* On hover the done tick takes this spot, so the status steps aside
+              (keeping its width, so the title doesn't reflow). */}
+          <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
+            {status === "idle" ? (
+              <span className="text-xs text-sidebar-muted-foreground tabular-nums">{relativeTime(t.updatedAt)}</span>
+            ) : (
+              <StatusPill status={status} stopping={t.stopping} />
+            )}
+          </span>
+        </SidebarMenuButton>
+        <SidebarMenuAction
+          className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
+          title="Mark as done (⇧⌘S)"
+          aria-label={`Mark “${t.title}” as done`}
+          onClick={() => void backend.setDone(t.id, true)}
+        >
+          <Check />
+        </SidebarMenuAction>
+      </HoverCardTrigger>
+      <HoverCardContent>
+        <ThreadCard thread={t} projectName={projectName} />
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
+const OPEN_FOLDERS_KEY = "kitab.sidebarOpenFolders"
+
+function readOpenFolders(): Set<Id> {
+  try {
+    const v = JSON.parse(localStorage.getItem(OPEN_FOLDERS_KEY) ?? "[]")
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : [])
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * Every project as a folder of its threads, Dia-style: each folder takes its project's color
+ * and everything in it, open or active, wears that color. The open project's folder is
+ * always open; a thread in another folder opens that project. Searching opens every folder
+ * with a match and hides the rest.
+ */
+function ProjectFolders({ query, sort, activeThreadId }: { query: string; sort: Sort; activeThreadId: Id | null }) {
+  const projects = useStore((s) => s.projects)
+  const projectId = useStore((s) => s.projectId)
+  const allThreads = useStore((s) => s.threads)
+  const connected = useStore((s) => s.connection.state === "connected")
+  const [open, setOpen] = useState<Set<Id>>(readOpenFolders)
+  const searching = query.trim() !== ""
+
+  const toggle = (id: Id) =>
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      try {
+        localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify([...next]))
+      } catch {}
+      return next
+    })
+
+  // Other projects' threads load the first time their folder opens (all of them, to search).
+  const requested = useRef(new Set<Id>())
+  useEffect(() => {
+    if (!connected) {
+      requested.current.clear()
+      return
+    }
+    for (const p of projects) {
+      if (p.id === projectId || requested.current.has(p.id)) continue
+      if (!searching && !open.has(p.id)) continue
+      requested.current.add(p.id)
+      backend.loadProjectThreads(p.id).catch(() => requested.current.delete(p.id))
+    }
+  }, [connected, projects, projectId, open, searching])
+
+  const byProject = useMemo(() => {
+    const m = new Map<Id, Thread[]>()
+    for (const t of allThreads) m.set(t.projectId, [...(m.get(t.projectId) ?? []), t])
+    return m
+  }, [allThreads])
+
+  const folders = projects
+    .map((p) => ({ project: p, threads: arrange(byProject.get(p.id) ?? [], query, sort) }))
+    .filter((f) => !searching || f.threads.length > 0)
+
+  return (
+    <SidebarGroup className="gap-0.5 pt-0">
+      {folders.map(({ project: p, threads }) => (
+        <ProjectFolder
+          key={p.id}
+          project={p}
+          threads={threads}
+          allThreads={byProject.get(p.id) ?? []}
+          current={p.id === projectId}
+          open={searching || p.id === projectId || open.has(p.id)}
+          onToggle={() => toggle(p.id)}
+          activeThreadId={activeThreadId}
+          showEmpty={connected}
+        />
+      ))}
+      {searching && folders.length === 0 && (
+        <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">No matching threads.</p>
+      )}
+      <ProjectPicker
+        create
+        render={
+          <button className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring" />
+        }
+      >
+        <Plus className="size-4 shrink-0" />
+        <span className="truncate">New project</span>
+      </ProjectPicker>
+    </SidebarGroup>
+  )
+}
+
+function ProjectFolder({
+  project: p,
+  threads,
+  allThreads,
+  current,
+  open,
+  onToggle,
+  activeThreadId,
+  showEmpty,
+}: {
+  project: Project
+  threads: Thread[]
+  allThreads: Thread[]
+  current: boolean
+  open: boolean
+  onToggle: () => void
+  activeThreadId: Id | null
+  showEmpty: boolean
+}) {
+  const subagents = useStore((s) => s.subagents)
+  // Collapsed, the folder still says if something in it is working or waiting on you.
+  const status = open ? "done" : aggregateStatus(allThreads.map((t) => ({ ...t, status: shownStatus(t, subagents) })))
+  const Icon = open ? FolderOpen : Folder
+
+  /** Opens a thread (or a new one, for null) in this project, switching to it first. */
+  const openThread = (threadId: Id | null) => {
+    if (!current) void backend.selectProject(p.id)
+    store.go({ kind: "thread", threadId })
+  }
+
+  return (
+    <div
+      style={{ "--h": hue(p.name) } as React.CSSProperties}
+      className={cn("rounded-lg", open && "bg-[oklch(0.62_0.17_var(--h)/0.06)] pb-1 dark:bg-[oklch(0.62_0.17_var(--h)/0.09)]")}
+    >
+      <div className="group/folder relative">
+        <button
+          onClick={onToggle}
+          aria-expanded={open}
+          title={current ? `${p.name} (open project)` : p.name}
+          className="flex h-8 w-full items-center gap-2 rounded-md px-2 pr-14 text-left text-sm outline-none hover:bg-[oklch(0.62_0.17_var(--h)/0.1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <Icon className="size-4 shrink-0 fill-[oklch(0.62_0.17_var(--h)/0.28)] text-[oklch(0.55_0.17_var(--h))] dark:text-[oklch(0.76_0.14_var(--h))]" />
+          <span className="min-w-0 flex-1 truncate font-medium text-[oklch(0.38_0.1_var(--h))] dark:text-[oklch(0.9_0.06_var(--h))]">
+            {p.name}
+          </span>
+          {status !== "done" && (
+            <span className="flex shrink-0 group-hover/folder:invisible">
+              <StatusPill status={status} />
+            </span>
+          )}
+        </button>
+        <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover/folder:opacity-100 has-focus-visible:opacity-100">
+          <FolderAction label={`New thread in ${p.name}`} onClick={() => openThread(null)}>
+            <SquarePen />
+          </FolderAction>
+          <FolderAction
+            label={`${p.name} settings`}
+            onClick={() => {
+              if (!current) void backend.selectProject(p.id)
+              store.go({ kind: "project" })
+            }}
+          >
+            <Settings />
+          </FolderAction>
+        </div>
+      </div>
+      {open && (
+        <SidebarMenu className="px-1">
+          {threads.map((t) => (
+            <ThreadRow
+              key={t.id}
+              thread={t}
+              tinted
+              active={current && t.id === activeThreadId}
+              projectName={p.name}
+              onOpen={() => openThread(t.id)}
+            />
+          ))}
+          {threads.length === 0 && showEmpty && (
+            <p className="px-2 py-1 text-xs text-sidebar-muted-foreground">No threads yet.</p>
+          )}
+        </SidebarMenu>
+      )}
+    </div>
+  )
+}
+
+function FolderAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className="flex size-6 items-center justify-center rounded-md text-sidebar-muted-foreground outline-none hover:bg-[oklch(0.62_0.17_var(--h)/0.16)] hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-3.5"
+    >
+      {children}
+    </button>
   )
 }
 
