@@ -77,6 +77,11 @@ const api: HermesBridge = {
     ipcRenderer.on("menu", h)
     return () => void ipcRenderer.off("menu", h)
   },
+  shortcuts: {
+    get: () => ipcRenderer.invoke("shortcuts:get"),
+    set: (overrides) => ipcRenderer.invoke("shortcuts:set", overrides),
+    pause: (paused) => ipcRenderer.send("shortcuts:pause", paused),
+  },
   dock: {
     badge: (count: number) => ipcRenderer.send("app:badge", count),
     bounce: () => ipcRenderer.send("app:bounce"),

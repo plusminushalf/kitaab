@@ -6,10 +6,12 @@ import { PageHeader } from "@/components/page-header"
 import { backend } from "@kitab/core/backend"
 import { relativeTime } from "@kitab/core/format"
 import { store, useStore } from "@/lib/store"
+import { useShortcutLabel } from "@/lib/shortcuts"
 
 /** Threads marked done. Open one to read it, or bring it back to the list. */
 export function DoneView() {
   const done = useStore((s) => s.done)
+  const doneKey = useShortcutLabel("mark-done")
   const count = useStore((s) => s.doneCount)
 
   return (
@@ -22,7 +24,7 @@ export function DoneView() {
           <Empty className="h-full">
             <EmptyHeader>
               <EmptyTitle>Nothing done yet</EmptyTitle>
-              <EmptyDescription>Hover a thread and click the tick, or press ⇧⌘S, to mark it done.</EmptyDescription>
+              <EmptyDescription>Hover a thread and click the tick{doneKey ? `, or press ${doneKey},` : ""} to mark it done.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

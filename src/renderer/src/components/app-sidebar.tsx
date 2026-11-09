@@ -38,6 +38,7 @@ import { adoptUnknown, markSeen, useUnseen } from "@/lib/seen-threads"
 import { useThreadSwitching } from "@/lib/thread-switching"
 import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/store"
 import { cn } from "@/lib/utils"
+import { useShortcutLabel, withShortcut } from "@/lib/shortcuts"
 import { homePath, relativeTime } from "@kitab/core/format"
 import { modelName, shortModelName } from "@kitab/core/model-names"
 import { providerIcon, providerTint } from "@/components/model-picker"
@@ -73,6 +74,8 @@ function arrange(list: Thread[], query: string, sort: Sort): Thread[] {
 }
 
 export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const newThreadKey = useShortcutLabel("new-thread")
+  const settingsKey = useShortcutLabel("settings")
   const profiles = useStore((s) => s.profiles)
   const profileId = useStore((s) => s.profileId)
   const allThreads = useStore((s) => s.threads)
@@ -146,7 +149,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
     <Sidebar>
       {/* Clear space for the traffic lights; the strip drags the window. */}
       <div className="app-drag h-[52px] shrink-0" />
-      <SidebarHeader className="pt-0">
+      <SidebarHeader className="px-1 pt-0">
         <div className="flex items-center gap-0.5">
           <SearchField value={query} onChange={setQuery} />
           <DropdownMenu>
@@ -189,7 +192,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               <FolderPlus />
             </Button>
           </IconTip>
-          <IconTip label="New thread (⌘N)">
+          <IconTip label={withShortcut("New thread", newThreadKey)}>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -204,7 +207,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup className={cn("pt-0", layout === "folders" && "gap-0.5")}>
+        <SidebarGroup className={cn("px-1 pt-0", layout === "folders" && "gap-0.5")}>
           {cards && (
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
@@ -310,7 +313,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               </SidebarMenuButton>
             )}
           </SidebarMenuItem>
-          <IconTip label="Settings (⌘,)" side="top">
+          <IconTip label={withShortcut("Settings", settingsKey)} side="top">
             <Button
               variant="ghost"
               size="icon-sm"
@@ -344,6 +347,7 @@ function ThreadRow({
   place?: string
   tinted?: boolean
 }) {
+  const doneKey = useShortcutLabel("mark-done")
   const status = useStore((s) => shownStatus(t, s.subagents))
   return (
     <HoverCard>
@@ -373,7 +377,7 @@ function ThreadRow({
         </SidebarMenuButton>
         <SidebarMenuAction
           className="opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
-          title="Mark as done (⇧⌘S)"
+          title={withShortcut("Mark as done", doneKey)}
           aria-label={`Mark “${t.title}” as done`}
           onClick={() => void backend.setDone(t.id, true)}
         >
@@ -392,6 +396,7 @@ function ThreadRow({
  * moved, then its title, then what it's up to (or your first message) and the model it runs on.
  */
 function ThreadTile({ thread: t, project, active }: { thread: Thread; project: string; active: boolean }) {
+  const doneKey = useShortcutLabel("mark-done")
   const status = useStore((s) => shownStatus(t, s.subagents))
   // The model picked in this app wins; otherwise what Hermes's list says it last ran on.
   const picked = useStore((s) => s.threadModels[t.id])
@@ -405,7 +410,7 @@ function ThreadTile({ thread: t, project, active }: { thread: Thread; project: s
         type="button"
         data-active={active || undefined}
         onClick={() => store.go({ kind: "thread", threadId: t.id })}
-        className="flex w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring data-active:bg-sidebar-accent"
+        className="flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring data-active:bg-sidebar-accent"
       >
         <span className="flex h-5 items-center gap-2 text-xs text-sidebar-muted-foreground">
           <ProjectBadge name={project} />
@@ -432,7 +437,7 @@ function ThreadTile({ thread: t, project, active }: { thread: Thread; project: s
       </button>
       <SidebarMenuAction
         className="top-2! right-2! opacity-0 group-hover/menu-item:opacity-100 focus-visible:opacity-100"
-        title="Mark as done (⇧⌘S)"
+        title={withShortcut("Mark as done", doneKey)}
         aria-label={`Mark “${t.title}” as done`}
         onClick={() => void backend.setDone(t.id, true)}
       >

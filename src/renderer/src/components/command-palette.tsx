@@ -1,9 +1,11 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react"
-import { Check, CornerDownLeft, FolderPlus, MessageSquare, Repeat, Search, Settings, SquarePen, UserCog, Users } from "lucide-react"
+import { Check, CornerDownLeft, FolderPlus, Keyboard, MessageSquare, Repeat, Search, Settings, SquarePen, UserCog, Users } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { openNewProject, startNewThread } from "@/components/project-menu"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { useShortcutBindings } from "@/lib/shortcuts"
+import { acceleratorLabel } from "../../../shared/shortcuts"
 
 // ⌘K: one search field over what you can do, T3-style. Typing also finds threads in the
 // open profile by title.
@@ -39,20 +41,22 @@ function CommandPalette({ onDone }: { onDone: () => void }) {
   const doneCount = useStore((s) => s.doneCount)
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
+  const bindings = useShortcutBindings()
 
   const commands = useMemo<Item[]>(() => {
     const go = (view: Parameters<typeof store.go>[0]) => () => store.go(view)
     const list: (Item | false)[] = [
       connected && !!profileId && { id: "new-project", label: "New project…", icon: <FolderPlus />, run: openNewProject },
-      connected && { id: "new-thread", label: "New thread…", icon: <SquarePen />, hint: "⌘N", run: startNewThread },
-      { id: "routines", label: "Routines", icon: <Repeat />, hint: "⌥⌘2", run: go({ kind: "routines" }) },
-      { id: "personalities", label: "Personalities", icon: <Users />, hint: "⌥⌘3", run: go({ kind: "personalities" }) },
+      connected && { id: "new-thread", label: "New thread…", icon: <SquarePen />, hint: acceleratorLabel(bindings["new-thread"]), run: startNewThread },
+      { id: "routines", label: "Routines", icon: <Repeat />, hint: acceleratorLabel(bindings["go-routines"]), run: go({ kind: "routines" }) },
+      { id: "personalities", label: "Personalities", icon: <Users />, hint: acceleratorLabel(bindings["go-personalities"]), run: go({ kind: "personalities" }) },
       doneCount > 0 && { id: "done", label: "Done", icon: <Check />, run: go({ kind: "done" }) },
-      { id: "profile", label: "Profile settings", icon: <UserCog />, hint: "⌥⌘4", run: go({ kind: "profile" }) },
-      { id: "settings", label: "Settings", icon: <Settings />, hint: "⌘,", run: () => store.set({ settings: "general" }) },
+      { id: "profile", label: "Profile settings", icon: <UserCog />, hint: acceleratorLabel(bindings["go-profile"]), run: go({ kind: "profile" }) },
+      { id: "settings", label: "Settings", icon: <Settings />, hint: acceleratorLabel(bindings.settings), run: () => store.set({ settings: "general" }) },
+      { id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard />, run: () => store.set({ settings: "shortcuts" }) },
     ]
     return list.filter((i): i is Item => !!i)
-  }, [connected, profileId, doneCount])
+  }, [connected, profileId, doneCount, bindings])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()

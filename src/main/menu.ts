@@ -1,11 +1,20 @@
 import { app, Menu, shell, type MenuItemConstructorOptions } from "electron"
 
+import type { ShortcutId } from "../shared/shortcuts"
+
 type Send = (channel: string, ...args: unknown[]) => void
 
 // Native menu bar. Commands the renderer handles are sent as "menu:<command>".
-export function installMenu(send: Send) {
-  const cmd = (command: string) => () => send("menu", command)
+// Bindings come from Settings → Shortcuts; `paused` drops them while one is being
+// recorded, so pressing the old combination records it instead of running it.
+export function installMenu(send: Send, bindings: Record<ShortcutId, string>, paused = false) {
   const isDev = !app.isPackaged
+  const item = (label: string, id: ShortcutId): MenuItemConstructorOptions => ({
+    label,
+    ...(bindings[id] && !paused ? { accelerator: bindings[id] } : {}),
+    click: () => send("menu", id),
+  })
+  const cmd = (command: string) => () => send("menu", command)
 
   const template: MenuItemConstructorOptions[] = [
     {
@@ -14,7 +23,7 @@ export function installMenu(send: Send) {
         { role: "about" },
         { label: "Check for Updates…", click: cmd("check-updates") },
         { type: "separator" },
-        { label: "Settings…", accelerator: "Cmd+,", click: cmd("settings") },
+        item("Settings…", "settings"),
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -28,9 +37,9 @@ export function installMenu(send: Send) {
     {
       label: "File",
       submenu: [
-        { label: "New Thread", accelerator: "Cmd+N", click: cmd("new-thread") },
-        { label: "Commands…", accelerator: "Cmd+K", click: cmd("command-palette") },
-        { label: "Mark Thread as Done", accelerator: "Cmd+Shift+S", click: cmd("mark-done") },
+        item("New Thread", "new-thread"),
+        item("Commands…", "command-palette"),
+        item("Mark Thread as Done", "mark-done"),
         { type: "separator" },
         { role: "close" },
       ],
@@ -51,9 +60,9 @@ export function installMenu(send: Send) {
         {
           label: "Find",
           submenu: [
-            { label: "Find in Thread…", accelerator: "Cmd+F", click: cmd("find") },
-            { label: "Find Next", accelerator: "Cmd+G", click: cmd("find-next") },
-            { label: "Find Previous", accelerator: "Cmd+Shift+G", click: cmd("find-previous") },
+            item("Find in Thread…", "find"),
+            item("Find Next", "find-next"),
+            item("Find Previous", "find-previous"),
           ],
         },
         { type: "separator" },
@@ -66,16 +75,16 @@ export function installMenu(send: Send) {
     {
       label: "View",
       submenu: [
-        { label: "Toggle Sidebar", accelerator: "Cmd+B", click: cmd("toggle-sidebar") },
+        item("Toggle Sidebar", "toggle-sidebar"),
         { type: "separator" },
-        { label: "Back", accelerator: "Cmd+[", click: cmd("back") },
-        { label: "Forward", accelerator: "Cmd+]", click: cmd("forward") },
+        item("Back", "back"),
+        item("Forward", "forward"),
         { type: "separator" },
-        // ⌘1–⌘9 switch projects (handled in the renderer), so the views sit on ⌥⌘.
-        { label: "Threads", accelerator: "Cmd+Alt+1", click: cmd("go-threads") },
-        { label: "Routines", accelerator: "Cmd+Alt+2", click: cmd("go-routines") },
-        { label: "Personalities", accelerator: "Cmd+Alt+3", click: cmd("go-personalities") },
-        { label: "Profile Settings", accelerator: "Cmd+Alt+4", click: cmd("go-profile") },
+        // ⌘1–⌘9 switch profiles (handled in the renderer), so the views default to ⌥⌘.
+        item("Threads", "go-threads"),
+        item("Routines", "go-routines"),
+        item("Personalities", "go-personalities"),
+        item("Profile Settings", "go-profile"),
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },

@@ -31,7 +31,7 @@ export type View =
   | { kind: "profile" }
   | { kind: "done" }
 
-export type SettingsSection = "general" | "threads" | "appearance"
+export type SettingsSection = "general" | "threads" | "appearance" | "shortcuts"
 
 /**
  * What sending does while a reply is running. "queue" waits for the reply to finish;

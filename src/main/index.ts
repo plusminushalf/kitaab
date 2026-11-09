@@ -3,6 +3,8 @@ import { basename, join } from "node:path"
 import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { installMenu } from "./menu"
+import { currentBindings, loadShortcutOverrides, saveShortcutOverrides } from "./shortcuts"
+import type { ShortcutOverrides } from "../shared/shortcuts"
 import { isConfigured, loadSettings, saveSettings, type Settings } from "./settings"
 import type { ConnectionResult, FileText, SetupTarget } from "../shared/bridge"
 import { restoreWindowState, trackWindowState } from "./window-state"
@@ -288,9 +290,18 @@ ipcMain.handle("update:download", () => downloadUpdate())
 ipcMain.handle("update:install", () => installUpdate())
 ipcMain.on("update:acknowledge", () => acknowledgeUpdate())
 
+// Settings → Shortcuts: the person's changes, applied to the menu bar as they're saved.
+ipcMain.handle("shortcuts:get", () => loadShortcutOverrides())
+ipcMain.handle("shortcuts:set", (_e, next: ShortcutOverrides) => {
+  const saved = saveShortcutOverrides(next)
+  installMenu(send, currentBindings())
+  return saved
+})
+ipcMain.on("shortcuts:pause", (_e, paused: boolean) => installMenu(send, currentBindings(), paused))
+
 app.whenReady().then(() => {
   nativeTheme.themeSource = "system"
-  installMenu(send)
+  installMenu(send, currentBindings())
   mainWindow = createWindow()
   startUpdater()
 

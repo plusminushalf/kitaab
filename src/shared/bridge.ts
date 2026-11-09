@@ -8,6 +8,7 @@ export type Settings = {
 }
 
 import type { ConnectionResult } from "@kitab/core/platform"
+import type { ShortcutOverrides } from "./shortcuts"
 export type { ConnectionResult }
 
 /** Where the first-run screen should look for Hermes. */
@@ -151,6 +152,14 @@ export type HermesBridge = {
   /** Font families installed on this Mac. */
   fonts(): Promise<{ family: string; monospace: boolean }[]>
   onMenu(cb: (command: string) => void): () => void
+  shortcuts: {
+    /** The person's changes to the default bindings. */
+    get(): Promise<ShortcutOverrides>
+    /** Saves them and updates the menu bar; returns what was kept. */
+    set(overrides: ShortcutOverrides): Promise<ShortcutOverrides>
+    /** Turns the menu's shortcuts off while one is being recorded. */
+    pause(paused: boolean): void
+  }
   dock: {
     badge(count: number): void
     bounce(): void

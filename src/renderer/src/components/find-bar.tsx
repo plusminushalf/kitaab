@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react"
 import { ChevronDown, ChevronUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useShortcutLabel, withShortcut } from "@/lib/shortcuts"
 
 // Painted with the CSS Custom Highlight API, so the thread's DOM is never touched.
 const ALL = "kitab-find"
@@ -90,6 +91,8 @@ export function FindBar({
   onClose: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const nextKey = useShortcutLabel("find-next")
+  const previousKey = useShortcutLabel("find-previous")
   const [query, setQuery] = useState("")
   const [ranges, setRanges] = useState<Range[]>([])
   const [current, setCurrent] = useState(0)
@@ -189,7 +192,7 @@ export function FindBar({
         size="icon-xs"
         variant="ghost"
         aria-label="Previous match"
-        title="Previous match (⇧⌘G)"
+        title={withShortcut("Previous match", previousKey)}
         disabled={!ranges.length}
         onClick={() => step(-1)}
       >
@@ -199,7 +202,7 @@ export function FindBar({
         size="icon-xs"
         variant="ghost"
         aria-label="Next match"
-        title="Next match (⌘G)"
+        title={withShortcut("Next match", nextKey)}
         disabled={!ranges.length}
         onClick={() => step(1)}
       >
