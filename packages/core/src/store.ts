@@ -136,6 +136,8 @@ export interface Backend {
   /** What Enter does while a reply is running, saved on this device. */
   setEnterSends(mode: SendMode): void
   answer(threadId: Id, question: PendingQuestion, value: string): Promise<void>
+  /** Files a routine under one of its profile's projects (GENERAL for none). */
+  setRoutineProject(routineId: Id, projectId: Id): Promise<void>
   loadRuns(routineId: Id): Promise<void>
   loadRunReport(routineId: Id, runId: Id): Promise<void>
   /** Replying to a run turns it into a thread. Resolves to the new thread id. */

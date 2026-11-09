@@ -12,7 +12,8 @@ import { http, platform, type Platform } from "./platform"
 //   config.yaml  platform_hints.cron.append       a note for routine runs
 // (platform_hints is a top-level key; Hermes ignores it under agent:)
 //   skill        kitab                                  how to do things in Kitaab, read on demand
-//   plugin       plugins/kitaab                         start_thread and request_secret (kitaab-plugin.ts)
+//   plugin       plugins/kitaab                         start_thread, request_secret, set_routine_project,
+//                                                       and filing new routines (kitaab-plugin.ts)
 //   ui_meta      kitab.context                          what was written, so it's written once
 //
 // Which apps the user has is kept on the default profile, one key per install:
@@ -21,7 +22,7 @@ import { http, platform, type Platform } from "./platform"
 export type DeviceKind = Platform["kind"]
 
 /** Bump when the texts change in a way older apps shouldn't undo. */
-const VERSION = 6
+const VERSION = 7
 const DEVICE = "kitab.device."
 const MARKER = "kitab.context"
 const SKILL = "kitab"
@@ -136,7 +137,7 @@ export function routineHint(profile: ProfileInfo, kinds: DeviceKind[]): string {
 export function skillText(profile: ProfileInfo, kinds: DeviceKind[]): string {
   const p = profile.id
   const description =
-    "How to do things in Kitaab: start or hand off to a new thread, link to threads, routines and runs, set up routines, ask for secrets"
+    "How to do things in Kitaab: start or hand off to a new thread, link to threads, routines and runs, set up routines and file them under projects, ask for secrets"
   return `---
 name: ${SKILL}
 description: ${JSON.stringify(description)}
@@ -191,7 +192,7 @@ right away. The user sees it in the thread list, on every device.
    \`[Launch post story](kitaab://thread/<id>?profile=${p})\`.
 
 Never start a thread with \`hermes chat\`, a script or by editing \`state.db\`: those sessions don't
-show in Kitaab, or show broken. \`start_thread\` and \`request_secret\` come from Kitaab's plugin and
+show in Kitaab, or show broken. \`start_thread\`, \`request_secret\` and \`set_routine_project\` come from Kitaab's plugin and
 may not be loaded yet: look them up with \`tool_describe\`. If they don't exist, tell the user to open
 Kitaab so it can set this profile up, rather than working around it.
 
@@ -229,6 +230,13 @@ A routine is a cron job; the \`cronjob\` tool creates, edits, pauses and removes
 Routines list follows. Each run starts with no memory of this chat, so write its prompt as a full
 brief, like a \`start_thread\` message. The run's last reply is the report the user reads, so ask
 for the report you want them to see. After creating one, link to it.
+
+Kitaab files every routine under one of the profile's projects, and its Routines list shows
+which. A routine you make is filed under this thread's project on its own (or under the project
+owning its \`workdir\`, if you give it one). A routine made in a thread with no project folder is
+in General. To move a routine, because the user asks or because it plainly belongs to another
+project, call \`set_routine_project\` with the cron job id and the project's name (or
+\`General\`). Say which project it's in when you tell the user about a new routine.
 
 ## Ask for a secret
 

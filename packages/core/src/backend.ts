@@ -9,6 +9,7 @@ import { setFileAccess } from "./server-files"
 import { previewText, splitUserText } from "./user-text"
 import { syncKitabContext } from "./kitab-context"
 import { forgetThreadMeta, migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
+import { forgetGoneRoutines, readRoutineTags, routineProject, saveRoutineProject } from "./routine-tags"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
 import { inOrder, readProfileOrder, writeProfileOrder } from "./profile-order"
@@ -149,6 +150,7 @@ function toRoutine(j: any): Routine {
   return {
     id: j.id,
     profileId,
+    projectId: routineProject(j.id),
     name,
     schedule: humanSchedule(j.schedule?.expr ?? j.schedule_display ?? j.schedule?.display ?? ""),
     enabled: j.enabled !== false,
@@ -321,9 +323,15 @@ async function loadThreads(p: string) {
 }
 
 async function loadRoutines() {
-  const res = await api<any[] | { jobs: any[] }>(`/api/cron/jobs?profile=all`)
+  // The tags too: Kitaab's plugin files a routine the agent just made under its thread's project.
+  const [res, list] = await Promise.all([
+    api<any[] | { jobs: any[] }>(`/api/cron/jobs?profile=all`),
+    gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false }).catch(() => null),
+  ])
   const jobs = Array.isArray(res) ? res : res.jobs
+  if (list) readRoutineTags(list.profiles)
   store.set({ routines: jobs.map(toRoutine) })
+  if (list) void forgetGoneRoutines(jobs.map((j) => j.id))
 }
 
 /** The thread last open in each project, so switching back reopens it. */
@@ -847,11 +855,14 @@ export function profileIdFor(name: string): string {
 async function refreshProfiles() {
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
   readThreadMeta(profiles)
+  readRoutineTags(profiles)
   readMyModel(profiles)
   // The order can change on another device too.
   readProfileOrder(profiles)
   store.set((s) => ({
     personalities: readLibrary(profiles),
+    // A routine may have moved project on another device.
+    routines: s.routines.map((r) => (r.projectId === routineProject(r.id) ? r : { ...r, projectId: routineProject(r.id) })),
     profiles: inOrder(
       s.profiles.map((pr) => {
         const row = profiles.find((p) => p.name === pr.id)
@@ -1442,6 +1453,20 @@ export const backend: Backend = {
     }
     openRequests.delete(question.id)
     removePending(threadId, question.id)
+  },
+
+  async setRoutineProject(routineId, projectId) {
+    const routine = store.get().routines.find((r) => r.id === routineId)
+    if (!routine) throw new Error("That routine is gone")
+    const place = (id: Id) =>
+      store.set((s) => ({ routines: s.routines.map((r) => (r.id === routineId ? { ...r, projectId: id } : r)) }))
+    place(projectId)
+    try {
+      await saveRoutineProject(routine.profileId, routineId, projectId)
+    } catch (e) {
+      place(routine.projectId)
+      throw e
+    }
   },
 
   async loadRuns(routineId) {

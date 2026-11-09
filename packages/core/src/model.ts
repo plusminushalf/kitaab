@@ -159,6 +159,8 @@ export type PendingQuestion = {
 export type Routine = {
   id: Id
   profileId: Id
+  /** The project it's filed under in that profile (a Kitaab tag; see routine-tags.ts), else GENERAL. */
+  projectId: Id
   name: string
   schedule: string
   personalityId?: Id

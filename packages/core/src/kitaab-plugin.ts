@@ -3,7 +3,7 @@ import { http } from "./platform"
 
 // Kitaab's own Hermes plugin, installed into every project (profile) by syncKitabContext.
 //
-// It adds two tools. start_thread makes a new thread (a hand-off, a side task) the way Kitaab
+// It adds three tools. start_thread makes a new thread (a hand-off, a side task) the way Kitaab
 // does, through session.create and prompt.submit inside the server, and sends its first message.
 // request_secret: the agent names a secret it needs and where it goes (a key
 // in a .env file, a private file, or Hermes's own .env), Hermes sends the app a `secret`
@@ -11,6 +11,8 @@ import { http } from "./platform"
 // destination. The tool result only says where the value went, and the plugin adds the value
 // to Hermes's redaction list, so it never reaches the model, the transcript or a later tool
 // result (backend.ts answers the request; the cards are in each app's pending-question UI).
+// set_routine_project files a routine under a project, and a post_tool_call hook files each
+// routine the agent makes under its thread's project (the tags: routine-tags.ts).
 //
 // Files go to <profile home>/plugins/kitaab/ through Hermes's file upload, the plugin is added
 // to the profile's plugins.enabled, and /api/dashboard/agent-plugins/activate loads it into
@@ -21,14 +23,16 @@ export const PLUGIN = "kitaab"
 
 const PLUGIN_YAML = String.raw`name: kitaab
 version: 1.0.0
-description: "Kitaab's tools: request_secret asks the user for a secret through Kitaab and saves it without the agent seeing it; start_thread starts a new Kitaab thread with a first message."
+description: "Kitaab's tools: request_secret asks the user for a secret through Kitaab and saves it without the agent seeing it; start_thread starts a new Kitaab thread with a first message; set_routine_project files a routine under a project. New routines are filed under their thread's project."
 author: Kitaab
 kind: standalone
 provides_tools:
   - request_secret
   - start_thread
+  - set_routine_project
 provides_hooks:
   - transform_tool_result
+  - post_tool_call
 `
 
 // Python: keep it ASCII, with no backticks and no dollar-brace (this is a template literal).
@@ -38,6 +42,10 @@ request_secret asks the user for a secret (API key, token, password) through Kit
 secret card and writes it where it belongs: a key in a .env file, a private file, or Hermes's
 own .env. The value never enters the conversation. The tool returns only where it went, and
 Hermes scrubs the exact value from everything the model sees afterwards.
+
+Routines (cron jobs) are filed under a project with a Kitaab tag in the profile's ui_meta
+(kitab.routine.<job id> = {project, at}). When the agent makes a routine, the post_tool_call
+hook files it under the project of the thread it was made in; set_routine_project moves one.
 """
 
 from __future__ import annotations
@@ -453,6 +461,152 @@ def start_thread(args: dict, **_kw) -> str:
     )
 
 
+# ---- routine projects --------------------------------------------------------------------------
+
+_ROUTINE_KEY = "kitab.routine."
+_RID_ROUTINE = "kitaab-routine-project"
+
+
+def _here() -> str:
+    from hermes_constants import get_hermes_home, profile_name_for_home
+    return profile_name_for_home(get_hermes_home()) or "default"
+
+
+def _gateway_call(method: str, params: dict) -> dict:
+    """Calls one of the app gateway's methods in-process. Raises when it isn't there or fails."""
+    from tui_gateway import server as gateway
+    fn = gateway._methods.get(method)
+    if fn is None:
+        raise RuntimeError("this Hermes server has no " + method)
+    reply = fn(_RID_ROUTINE, params)
+    if "error" in reply:
+        raise RuntimeError(_error_text(reply))
+    return reply.get("result") or {}
+
+
+def _projects(profile: str) -> list:
+    got = _gateway_call("projects.list", {"profile": profile}).get("projects") or []
+    return [p for p in got if isinstance(p, dict) and not p.get("archived")]
+
+
+def _folders(project: dict) -> list:
+    out = []
+    for f in project.get("folders") or []:
+        path = f.get("path") if isinstance(f, dict) else f
+        if isinstance(path, str) and path:
+            out.append(path)
+    if isinstance(project.get("primary_path"), str) and project["primary_path"]:
+        out.append(project["primary_path"])
+    return out
+
+
+def _project_for(projects: list, cwd: str):
+    """The project owning cwd: the one with the deepest folder cwd is in. None for General."""
+    if not cwd:
+        return None
+    here = os.path.expanduser(cwd).rstrip("/") or "/"
+    best, depth = None, -1
+    for p in projects:
+        for raw in _folders(p):
+            f = os.path.expanduser(raw).rstrip("/") or "/"
+            inside = here == f or here.startswith(f + "/") or f == "/"
+            if inside and len(f) > depth:
+                best, depth = p, len(f)
+    return best
+
+
+def _tag(profile: str, routine_id: str, project) -> None:
+    import time
+    value = {"project": project["id"], "at": int(time.time() * 1000)} if project else None
+    got = _gateway_call("profiles.configure", {"name": profile, "ui_meta": {_ROUTINE_KEY + routine_id: value}})
+    if not (got.get("applied") or {}).get("ui_meta"):
+        raise RuntimeError("Hermes didn't save the routine's project")
+
+
+def _file_new_routine(tool_name=None, args=None, result=None, status=None, **_kw) -> None:
+    """After the agent makes a routine: file it under the project of the thread it was made in."""
+    if tool_name != "cronjob_manage" or not isinstance(args, dict) or str(args.get("action") or "") != "create":
+        return
+    try:
+        data = json.loads(result) if isinstance(result, str) else result
+        routine_id = data.get("job_id") if isinstance(data, dict) and data.get("success") else None
+        if not routine_id:
+            return
+        # A routine given its own folder belongs where it works; otherwise where its thread works.
+        cwd = str(args.get("workdir") or "").strip()
+        if not cwd:
+            from agent.runtime_cwd import scoped_session_cwd
+            cwd = scoped_session_cwd() or ""
+        profile = _here()
+        project = _project_for(_projects(profile), cwd)
+        if project:
+            _tag(profile, str(routine_id), project)
+    except Exception:
+        logger.debug("kitaab: couldn't file the new routine under a project", exc_info=True)
+
+
+ROUTINE_PROJECT_SCHEMA = {
+    "name": "set_routine_project",
+    "description": (
+        "File a routine (cron job) under a Kitaab project, or under General. Kitaab's Routines list "
+        "shows each routine's project. A routine you make with cronjob_manage is filed under this "
+        "thread's project on its own; use this to move one, for example when the user says it belongs "
+        "to another project. Only changes how Kitaab files it: the job itself is not touched."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "routine_id": {
+                "type": "string",
+                "description": "The cron job id (cronjob_manage with action list shows them).",
+            },
+            "project": {
+                "type": "string",
+                "description": "The project's name, slug or id in this profile, or 'General' for none.",
+            },
+        },
+        "required": ["routine_id", "project"],
+        "additionalProperties": False,
+    },
+}
+
+
+def set_routine_project(args: dict, **_kw) -> str:
+    routine_id = str(args.get("routine_id") or "").strip()
+    wanted = str(args.get("project") or "").strip()
+    if not routine_id:
+        return _fail("routine_id is required")
+    if not wanted:
+        return _fail("project is required (a project's name, or General)")
+    try:
+        profile = _here()
+        try:
+            from cron.jobs import get_job
+            if get_job(routine_id) is None:
+                return _fail("there's no routine with id " + routine_id + " in this profile")
+        except ImportError:
+            pass
+        projects = _projects(profile)
+        key = wanted.lower()
+        if key in ("general", "none", ""):
+            project = None
+        else:
+            project = next((p for p in projects if key in (str(p.get("id")).lower(), str(p.get("slug") or "").lower(),
+                                                              str(p.get("name") or "").lower())), None)
+            if project is None:
+                names = ", ".join(str(p.get("name")) for p in projects) or "none"
+                return _fail("no project called " + wanted + " in this profile. Its projects: " + names + ", and General")
+        _tag(profile, routine_id, project)
+    except Exception as e:
+        return _fail("couldn't file the routine: " + str(e))
+    return _result(
+        filed=True,
+        routine_id=routine_id,
+        project=project["name"] if project else "General",
+        link="kitaab://routine/" + routine_id + "?profile=" + profile,
+    )
+
+
 def register(ctx) -> None:
     ctx.register_tool(
         name="request_secret",
@@ -470,7 +624,16 @@ def register(ctx) -> None:
         description="Start a new Kitaab thread with a first message",
         emoji="\U0001F9F5",
     )
+    ctx.register_tool(
+        name="set_routine_project",
+        toolset="kitaab",
+        schema=ROUTINE_PROJECT_SCHEMA,
+        handler=set_routine_project,
+        description="File a routine under a Kitaab project",
+        emoji="\U0001F4C1",
+    )
     ctx.register_hook("transform_tool_result", _scrub)
+    ctx.register_hook("post_tool_call", _file_new_routine)
 `
 
 export const PLUGIN_FILES: Record<string, string> = { "plugin.yaml": PLUGIN_YAML, "__init__.py": INIT_PY }

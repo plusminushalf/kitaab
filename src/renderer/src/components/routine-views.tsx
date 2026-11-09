@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { ChevronRight, CircleAlert, CirclePause, MessageSquare, Repeat } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, CircleAlert, CirclePause, FolderClosed, MessageSquare, Repeat } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { hue } from "@/components/project-badge"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { Composer, type Draft } from "@/components/composer"
@@ -9,7 +18,7 @@ import { PageHeader } from "@/components/page-header"
 import { Markdown } from "@/components/markdown"
 import { backend } from "@kitab/core/backend"
 import { dateTime, nextRun, relativeTime } from "@kitab/core/format"
-import type { Id, Routine, Run } from "@kitab/core/model"
+import { GENERAL, type Id, type Project, type Routine, type Run } from "@kitab/core/model"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -35,6 +44,26 @@ export function StatusMark({ state, className }: { state: RoutineState | Run["st
       ) : (
         <span className={cn("size-2 rounded-full", state === "new" ? "bg-muted-foreground/40" : "bg-emerald-500")} />
       )}
+    </span>
+  )
+}
+
+/** The project a routine is filed under, when it's one of its profile's projects (not General). */
+function useRoutineProject(r?: Routine): Project | undefined {
+  return useStore((s) => (r && r.projectId !== GENERAL ? s.projects[r.profileId]?.find((p) => p.id === r.projectId) : undefined))
+}
+
+/** A routine's project as a small tinted tag, in the project's hue (as in the sidebar). */
+function ProjectTag({ name }: { name: string }) {
+  return (
+    <span
+      style={{ "--h": hue(name) } as React.CSSProperties}
+      className={cn(
+        "inline-flex max-w-32 shrink-0 items-center truncate rounded-md px-1.5 py-px text-[0.6875rem] leading-4 font-medium",
+        "bg-[oklch(0.62_0.17_var(--h)/0.14)] text-[oklch(0.5_0.17_var(--h))] dark:bg-[oklch(0.62_0.17_var(--h)/0.2)] dark:text-[oklch(0.78_0.13_var(--h))]",
+      )}
+    >
+      {name}
     </span>
   )
 }
@@ -115,6 +144,7 @@ function RowGroup({ title, count, children }: { title: string; count?: number; c
 
 function RoutineRow({ routine: r, personality }: { routine: Routine; personality?: string }) {
   const state = stateOf(r)
+  const project = useRoutineProject(r)
   const meta = [r.schedule, personality, r.skills?.join(", ")].filter(Boolean).join(" · ")
   return (
     <button
@@ -123,7 +153,10 @@ function RoutineRow({ routine: r, personality }: { routine: Routine; personality
     >
       <StatusMark state={state} />
       <div className="min-w-0 flex-1">
-        <div className={cn("truncate text-sm font-medium", state === "paused" && "text-muted-foreground")}>{r.name}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn("truncate text-sm font-medium", state === "paused" && "text-muted-foreground")}>{r.name}</span>
+          {project && <ProjectTag name={project.name} />}
+        </div>
         <div className="truncate text-xs text-muted-foreground">{meta}</div>
       </div>
       <div className="hidden shrink-0 flex-col items-end gap-0.5 text-xs tabular-nums sm:flex">
@@ -204,9 +237,13 @@ export function RoutineView({ routineId }: { routineId: Id }) {
                 <StatusMark state={state} className="mt-1" />
                 <div className="min-w-0 flex-1">
                   <h1 className="text-lg font-semibold">{routine.name}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {routine.schedule}
-                    {personality && ` · ${personality.name}`}
+                  <p className="flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+                    <span>
+                      {routine.schedule}
+                      {personality && ` · ${personality.name}`}
+                    </span>
+                    <span aria-hidden>·</span>
+                    <RoutineProjectMenu routine={routine} />
                   </p>
                 </div>
               </div>
@@ -270,6 +307,44 @@ export function RoutineView({ routineId }: { routineId: Id }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** "in Pitwall ▾" on a routine's page: the project it's filed under, and a menu to move it. */
+function RoutineProjectMenu({ routine }: { routine: Routine }) {
+  const projects = useStore((s) => s.projects[routine.profileId])
+  const options: Project[] = [{ id: GENERAL, profileId: routine.profileId, name: "General", folders: [] }, ...(projects ?? [])]
+  const current = options.find((p) => p.id === routine.projectId) ?? options[0]
+  const move = (p: Project) => {
+    if (p.id === current.id) return
+    backend
+      .setRoutineProject(routine.id, p.id)
+      .then(() => toast.success(`Moved to ${p.name}`))
+      .catch((e) => toast.error(`Couldn't move it: ${e instanceof Error ? e.message : e}`))
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" />
+        }
+      >
+        <span>in {current.name}</span>
+        <ChevronDown className="size-3.5 opacity-70" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>File it under</DropdownMenuLabel>
+          {options.map((p) => (
+            <DropdownMenuItem key={p.id} onClick={() => move(p)}>
+              <FolderClosed />
+              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              {p.id === current.id && <Check className="ml-auto" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

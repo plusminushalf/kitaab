@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from "
 import { router, Stack } from "expo-router"
 import { backend } from "@kitab/core/backend"
 import { nextRun, relativeTime } from "@kitab/core/format"
-import type { Routine } from "@kitab/core/model"
+import { GENERAL, type Routine } from "@kitab/core/model"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
@@ -18,6 +18,7 @@ export default function Routines() {
   const all = useStore((s) => s.routines)
   const profileId = useStore((s) => s.profileId)
   const personalities = useStore((s) => s.personalities)
+  const projects = useStore((s) => (s.profileId ? s.projects[s.profileId] : undefined))
   const connected = useStore((s) => s.connection.state === "connected")
   const [refreshing, setRefreshing] = useState(false)
 
@@ -54,6 +55,8 @@ export default function Routines() {
         }
         renderItem={({ item: r }) => {
           const who = r.personalityId ? personalities.find((p) => p.id === r.personalityId)?.name : undefined
+          // The project it's filed under; General goes unsaid.
+          const project = r.projectId !== GENERAL ? projects?.find((p) => p.id === r.projectId)?.name : undefined
           const state = stateOf(r)
           return (
             <Pressable onPress={() => router.push(`/routine/${encodeURIComponent(r.id)}`)} style={({ pressed }) => ({ backgroundColor: pressed ? c.secondary : c.canvas })}>
@@ -66,7 +69,7 @@ export default function Routines() {
                     {r.name}
                   </Text>
                   <Text style={{ color: c.textMuted, fontSize: 14 }} numberOfLines={1}>
-                    {[r.schedule, who].filter(Boolean).join(" · ")}
+                    {[project, r.schedule, who].filter(Boolean).join(" · ")}
                   </Text>
                   {state === "failed" && r.lastError ? (
                     <Text style={{ color: c.error, fontSize: 13 }} numberOfLines={2}>
