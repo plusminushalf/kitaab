@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { ListChecks, Paintbrush, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -26,6 +27,11 @@ import { FontPicker } from "./font-picker"
 import { SettingRow, SettingsCard, SettingsGroup } from "./settings-page"
 import { SchemePreview, ThemeCard } from "./theme-card"
 import { store } from "@/lib/store"
+
+const SIDEBAR_LAYOUTS: { value: SidebarLayout; label: string }[] = [
+  { value: "switcher", label: "List" },
+  { value: "folders", label: "Folders" },
+]
 
 export function AppearanceSection() {
   const settings = useAppearance((s) => s.settings)
@@ -150,15 +156,22 @@ export function AppearanceSection() {
             label="Projects in the sidebar"
             description="A list shows every thread in the open profile as one list, each saying which project it's in. Folders show each project as a card in its own color, with its threads inside."
           >
-            <ToggleGroup
-              variant="outline"
-              size="sm"
-              value={[settings.sidebarLayout]}
-              onValueChange={(v: string[]) => v[0] && set({ sidebarLayout: v[0] as SidebarLayout })}
+            <Select
+              items={SIDEBAR_LAYOUTS}
+              value={settings.sidebarLayout}
+              onValueChange={(v) => v && set({ sidebarLayout: v as SidebarLayout })}
             >
-              <ToggleGroupItem value="switcher">List</ToggleGroupItem>
-              <ToggleGroupItem value="folders">Folders</ToggleGroupItem>
-            </ToggleGroup>
+              <SelectTrigger size="sm" className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SIDEBAR_LAYOUTS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </SettingRow>
           <SettingRow
             label="Thread details"
