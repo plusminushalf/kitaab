@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { backend } from "@kitab/core/backend"
+import { homePath } from "@kitab/core/format"
 import { folderNameFor } from "@kitab/core/projects"
 import { platform } from "@kitab/core/platform"
 import { GENERAL, type Project } from "@kitab/core/model"
@@ -228,7 +229,7 @@ function RenameProjectForm({ project, onDone }: { project: Project; onDone: () =
     >
       <DialogHeader>
         <DialogTitle>Rename project</DialogTitle>
-        {project.folder && <DialogDescription className="font-mono text-xs break-all">{project.folder}</DialogDescription>}
+        {project.folder && <DialogDescription className="font-mono text-xs break-all">{homePath(project.folder)}</DialogDescription>}
       </DialogHeader>
       <Input autoFocus value={name} disabled={busy} onChange={(e) => setName(e.target.value)} />
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -325,7 +326,7 @@ function NewThreadPicker({ onDone }: { onDone: () => void }) {
             >
               <Folder className="size-4 shrink-0 fill-[oklch(0.62_0.17_var(--h)/0.28)] text-[oklch(0.55_0.17_var(--h))] dark:text-[oklch(0.76_0.14_var(--h))]" />
               <span className="min-w-0 truncate">{p.name}</span>
-              {p.folder && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{p.folder}</span>}
+              {p.folder && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{homePath(p.folder)}</span>}
               {p.id === projectId && <span className="ml-auto shrink-0 text-xs text-muted-foreground">Current</span>}
               {i === active && <CornerDownLeft className={cn("size-3.5 shrink-0 text-muted-foreground", p.id !== projectId && "ml-auto")} />}
             </div>

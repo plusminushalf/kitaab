@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { ActivityIndicator, RefreshControl, ScrollView, Switch, Text, View } from "react-native"
 import { loadSkills, setSkillEnabled } from "@kitab/core/skills"
+import { homePath } from "@kitab/core/format"
 import { toast } from "@kitab/core/platform"
 import { router } from "expo-router"
 import { GENERAL } from "@kitab/core/model"
@@ -55,7 +56,7 @@ export default function ProfileScreen() {
           p.id === GENERAL ? (
             <Row key={p.id} title={p.name} detail="Threads with no project folder" />
           ) : (
-            <Row key={p.id} title={p.name} detail={p.folder} chevron onPress={() => router.push(`/project/${encodeURIComponent(p.id)}`)} />
+            <Row key={p.id} title={p.name} detail={p.folder && homePath(p.folder)} chevron onPress={() => router.push(`/project/${encodeURIComponent(p.id)}`)} />
           ),
         )}
         <Row title="New project…" onPress={connected ? () => promptNewProject() : undefined} last />

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
 import { NewSkillForm } from "@/components/skill-picker"
 import { GENERAL, type Id, type Personality, type Profile, type Skill } from "@kitab/core/model"
+import { homePath } from "@kitab/core/format"
 import { confirmRemoveProject, openNewProject, openRenameProject, useProfileProjects } from "@/components/project-menu"
 import { setPersonalitySkills } from "@kitab/core/personalities"
 import { loadSkills, readSkill, saveSkill, setSkillEnabled } from "@kitab/core/skills"
@@ -176,7 +177,7 @@ function ProjectsSection() {
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm">{p.name}</div>
             <div className="truncate font-mono text-xs text-muted-foreground">
-              {p.id === GENERAL ? "Threads with no project folder" : p.folder}
+              {p.id === GENERAL ? "Threads with no project folder" : p.folder && homePath(p.folder)}
             </div>
           </div>
           {p.id !== GENERAL && (

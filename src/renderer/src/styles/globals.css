@@ -228,6 +228,12 @@ body {
 [data-slot="sidebar-container"] {
   transition-duration: var(--panel-duration, 200ms) !important;
 }
+/* Dragging the edge follows the pointer, with no easing. */
+[data-resizing] [data-slot="sidebar-gap"],
+[data-resizing] [data-slot="sidebar-container"] {
+  transition: none !important;
+}
+[data-resizing] { user-select: none; }
 
 /* Prompt and code typography. */
 .font-composer { font-family: var(--font-composer); }

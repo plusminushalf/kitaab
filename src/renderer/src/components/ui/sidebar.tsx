@@ -27,7 +27,11 @@ import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+// Matches T3 Code: dragged between 208px and the window less 640px, remembered.
+const SIDEBAR_WIDTH_DEFAULT = 272
+const SIDEBAR_WIDTH_MIN = 208
+const SIDEBAR_MAIN_MIN = 640
+const SIDEBAR_WIDTH_STORAGE_KEY = "kitaab.sidebarWidth"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -40,6 +44,35 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  /** The width as last chosen, before fitting it to the window. */
+  width: number
+  setWidth: (width: number) => void
+  resetWidth: () => void
+  setResizing: (resizing: boolean) => void
+}
+
+function readStoredWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))
+    return Number.isFinite(n) && n > 0 ? n : SIDEBAR_WIDTH_DEFAULT
+  } catch {
+    return SIDEBAR_WIDTH_DEFAULT
+  }
+}
+
+function fitWidth(width: number, windowWidth: number): number {
+  const max = Math.max(SIDEBAR_WIDTH_MIN, windowWidth - SIDEBAR_MAIN_MIN)
+  return Math.round(Math.min(max, Math.max(SIDEBAR_WIDTH_MIN, width)))
+}
+
+function useWindowWidth(): number {
+  return React.useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("resize", onChange)
+      return () => window.removeEventListener("resize", onChange)
+    },
+    () => window.innerWidth
+  )
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -113,6 +146,26 @@ function SidebarProvider({
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
 
+  const [width, _setWidth] = React.useState(readStoredWidth)
+  const [resizing, setResizing] = React.useState(false)
+  const windowWidth = useWindowWidth()
+  const setWidth = React.useCallback(
+    (next: number) => {
+      const fitted = fitWidth(next, window.innerWidth)
+      _setWidth(fitted)
+      try {
+        localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(fitted))
+      } catch {}
+    },
+    []
+  )
+  const resetWidth = React.useCallback(() => {
+    _setWidth(SIDEBAR_WIDTH_DEFAULT)
+    try {
+      localStorage.removeItem(SIDEBAR_WIDTH_STORAGE_KEY)
+    } catch {}
+  }, [])
+
   const contextValue = React.useMemo<SidebarContextProps>(
     () => ({
       state,
@@ -122,17 +175,22 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      width,
+      setWidth,
+      resetWidth,
+      setResizing,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, width, setWidth, resetWidth]
   )
 
   return (
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
+        data-resizing={resizing ? "" : undefined}
         style={
           {
-            "--sidebar-width": SIDEBAR_WIDTH,
+            "--sidebar-width": `${fitWidth(width, windowWidth)}px`,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
           } as React.CSSProperties
@@ -277,24 +335,45 @@ function SidebarTrigger({
   )
 }
 
+/** The sidebar's edge: drag it to resize, double-click to go back to the default width. */
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { width, setWidth, resetWidth, setResizing, state } = useSidebar()
+
+  const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || state === "collapsed") return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = width
+    const target = event.currentTarget
+    target.setPointerCapture(event.pointerId)
+    setResizing(true)
+    const previousCursor = document.body.style.cursor
+    document.body.style.cursor = "col-resize"
+    const onMove = (e: PointerEvent) => setWidth(startWidth + e.clientX - startX)
+    const onUp = () => {
+      target.removeEventListener("pointermove", onMove)
+      target.removeEventListener("pointerup", onUp)
+      target.removeEventListener("pointercancel", onUp)
+      document.body.style.cursor = previousCursor
+      setResizing(false)
+    }
+    target.addEventListener("pointermove", onMove)
+    target.addEventListener("pointerup", onUp)
+    target.addEventListener("pointercancel", onUp)
+  }
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Resize sidebar"
       tabIndex={-1}
-      onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      onPointerDown={onPointerDown}
+      onDoubleClick={resetWidth}
+      title="Drag to resize, double-click to reset"
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
-        "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-        "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-        "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
-        "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
-        "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
+        "absolute inset-y-0 z-20 hidden w-3 cursor-col-resize group-data-[side=left]:-right-1.5 group-data-[side=right]:-left-1.5 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] after:-translate-x-1/2 after:transition-colors hover:after:bg-sidebar-border in-data-resizing:after:bg-sidebar-border sm:flex",
+        "group-data-[collapsible=offcanvas]:hidden",
         className
       )}
       {...props}

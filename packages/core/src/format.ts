@@ -45,3 +45,11 @@ export function bytes(n: number | undefined): string {
   while (n >= 1024 && i < units.length - 1) (n /= 1024), i++
   return `${n.toFixed(i ? 1 : 0)} ${units[i]}`
 }
+
+/**
+ * A server path as people read it: the home folder shown as `~`, so
+ * /home/me/.hermes/profiles/x reads ~/.hermes/profiles/x. Display only; copy the real path.
+ */
+export function homePath(path: string): string {
+  return path.replace(/^(?:\/home\/[^/]+|\/Users\/[^/]+|\/root)(?=\/|$)/, "~")
+}

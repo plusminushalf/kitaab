@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router"
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller"
 import * as Clipboard from "expo-clipboard"
 import { backend } from "@kitab/core/backend"
+import { homePath } from "@kitab/core/format"
 import { folderNameFor } from "@kitab/core/projects"
 import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
@@ -115,7 +116,7 @@ export default function ProjectEditor() {
           existing?.folder ? (
             <Section title="Folder on the server" footer="New threads in this project start here.">
               <Row
-                title={existing.folder}
+                title={homePath(existing.folder)}
                 onPress={() => {
                   void Clipboard.setStringAsync(existing.folder!)
                   toast("Copied the folder path")

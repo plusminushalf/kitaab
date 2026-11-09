@@ -30,7 +30,7 @@ import { ProjectBadge } from "@/components/project-badge"
 import { AgentsSection, useActiveAgentCount, useSubagents } from "@/components/thread-agents"
 import { appearance, THREAD_DETAIL_ITEMS, useAppearance } from "@/lib/appearance/store"
 import { backend } from "@kitab/core/backend"
-import { relativeTime } from "@kitab/core/format"
+import { homePath, relativeTime } from "@kitab/core/format"
 import type { Id } from "@kitab/core/model"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
@@ -177,7 +177,7 @@ function DetailsBody({ threadId }: { threadId: Id }) {
         )}
         {show.project && (project?.folder || thread.cwd) && (
           <Row icon={FolderClosed}>
-            <span className="font-mono text-xs break-all">{thread.cwd ?? project?.folder}</span>
+            <span className="font-mono text-xs break-all">{homePath(thread.cwd ?? project?.folder ?? "")}</span>
           </Row>
         )}
         {show.model && model && (

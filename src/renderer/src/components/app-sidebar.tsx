@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, Copy, Ellipsis, Folder, FolderOpen, ListFilter, PenLine, Repeat, RotateCw, Search, Settings, SquarePen, Trash2, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, Copy, Ellipsis, Folder, FolderOpen, FolderPlus, ListFilter, PenLine, Repeat, RotateCw, Search, Settings, SquarePen, Trash2, Users, X } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -12,6 +12,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
@@ -37,13 +38,13 @@ import { adoptUnknown, markSeen, useUnseen } from "@/lib/seen-threads"
 import { useThreadSwitching } from "@/lib/thread-switching"
 import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/store"
 import { cn } from "@/lib/utils"
-import { relativeTime } from "@kitab/core/format"
+import { homePath, relativeTime } from "@kitab/core/format"
 import { modelName, shortModelName } from "@kitab/core/model-names"
 import { providerIcon, providerTint } from "@/components/model-picker"
 import { Spinner } from "@/components/ui/spinner"
 import { shownStatus } from "@kitab/core/subagents"
 import { GENERAL, type Id, type Project, type Thread } from "@kitab/core/model"
-import { confirmRemoveProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
+import { confirmRemoveProject, openNewProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"
@@ -176,6 +177,18 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          <IconTip label="Add project">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-sidebar-muted-foreground"
+              aria-label="Add project"
+              disabled={connection.state !== "connected"}
+              onClick={openNewProject}
+            >
+              <FolderPlus />
+            </Button>
+          </IconTip>
           <IconTip label="New thread (⌘N)">
             <Button
               variant="ghost"
@@ -313,6 +326,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           <UpdateButton />
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   )
 }
@@ -515,7 +529,7 @@ function ProjectMoreMenu({ project: p, className }: { project: Project; classNam
         {p.folder && (
           <>
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="font-mono text-[0.7rem] font-normal break-all">{p.folder}</DropdownMenuLabel>
+              <DropdownMenuLabel className="font-mono text-[0.7rem] font-normal break-all">{homePath(p.folder)}</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuItem
               onClick={() => {
@@ -554,7 +568,7 @@ function ProjectGroup({ project: p, threads, allThreads, open, onToggle, activeT
         <button
           onClick={onToggle}
           aria-expanded={open}
-          title={p.folder ? `${p.name}\n${p.folder}` : p.name}
+          title={p.folder ? `${p.name}\n${homePath(p.folder)}` : p.name}
           className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 pr-14 text-left text-xs font-medium text-sidebar-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           <ChevronRight aria-hidden className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")} />
@@ -608,7 +622,7 @@ function ProjectFolder({ project: p, threads, allThreads, open, onToggle, active
         <button
           onClick={onToggle}
           aria-expanded={open}
-          title={p.folder ? `${p.name}\n${p.folder}` : p.name}
+          title={p.folder ? `${p.name}\n${homePath(p.folder)}` : p.name}
           className="flex h-8 w-full items-center gap-2 rounded-lg px-2 pr-14 text-left text-sm outline-none hover:bg-[oklch(0.62_0.17_var(--h)/0.1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           <Icon className="size-4 shrink-0 fill-[oklch(0.62_0.17_var(--h)/0.28)] text-[oklch(0.55_0.17_var(--h))] dark:text-[oklch(0.76_0.14_var(--h))]" />
