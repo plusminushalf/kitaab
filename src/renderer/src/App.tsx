@@ -17,7 +17,8 @@ import { SwipeIndicator } from "@/components/swipe-indicator"
 import { backend, clearUndoableDone, hasUndoableDone, undoLastDone, viewIdentity } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { draftKey } from "@/lib/composer-drafts"
-import { ProjectDialogHost } from "@/components/project-menu"
+import { ProjectDialogHost, startNewThread } from "@/components/project-menu"
+import { CommandPaletteHost, openCommandPalette } from "@/components/command-palette"
 import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
 
 export function App() {
@@ -98,7 +99,9 @@ function Shell() {
           case "check-updates":
             return void checkForUpdatesLoudly()
           case "new-thread":
-            return store.go({ kind: "thread", threadId: null })
+            return startNewThread()
+          case "command-palette":
+            return openCommandPalette()
           case "toggle-sidebar":
             return toggleSidebar()
           case "go-threads":
@@ -146,6 +149,7 @@ function Shell() {
       </SidebarInset>
       <SettingsOverlay />
       <ProjectDialogHost />
+      <CommandPaletteHost />
       {editing && (
         <ThemeEditor
           target={editing}

@@ -29,6 +29,7 @@ export function installMenu(send: Send) {
       label: "File",
       submenu: [
         { label: "New Thread", accelerator: "Cmd+N", click: cmd("new-thread") },
+        { label: "Commands…", accelerator: "Cmd+K", click: cmd("command-palette") },
         { label: "Mark Thread as Done", accelerator: "Cmd+Shift+S", click: cmd("mark-done") },
         { type: "separator" },
         { role: "close" },

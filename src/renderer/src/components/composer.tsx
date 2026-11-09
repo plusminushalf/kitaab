@@ -368,6 +368,7 @@ export function Composer({
         <div className="relative">
         <textarea
           ref={input}
+          data-composer-input
           rows={1}
           value={text}
           placeholder={placeholder}

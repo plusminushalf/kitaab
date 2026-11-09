@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils"
 import { relativeTime } from "@kitab/core/format"
 import { shownStatus } from "@kitab/core/subagents"
 import { GENERAL, type Id, type Project, type Thread } from "@kitab/core/model"
-import { confirmRemoveProject, openNewProject, openRenameProject, useProfileProjects } from "@/components/project-menu"
+import { confirmRemoveProject, openNewProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
 
 type Sort = "activity" | "status" | "title"
 const SORT_KEY = "kitab.sidebarSort"
@@ -152,7 +152,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               size="icon-sm"
               className="text-sidebar-muted-foreground"
               aria-label="New thread"
-              onClick={() => store.go({ kind: "thread", threadId: null })}
+              onClick={startNewThread}
             >
               <SquarePen />
             </Button>
