@@ -7,7 +7,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
@@ -30,7 +29,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { aggregateStatus, hue, ProjectBadge, StatusPill } from "@/components/project-badge"
 import { ProfilePicker } from "@/components/profile-picker"
-import { StatusMark } from "@/components/routine-views"
 import { UpdateButton } from "@/components/update-button"
 import { backend, reconnectNow, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
@@ -40,7 +38,7 @@ import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/
 import { cn } from "@/lib/utils"
 import { relativeTime } from "@kitab/core/format"
 import { shownStatus } from "@kitab/core/subagents"
-import { GENERAL, type Id, type Project, type Routine, type Thread } from "@kitab/core/model"
+import { GENERAL, type Id, type Project, type Thread } from "@kitab/core/model"
 import { confirmRemoveProject, openNewProject, openRenameProject, useProfileProjects } from "@/components/project-menu"
 
 type Sort = "activity" | "status" | "title"
@@ -229,41 +227,37 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
             </button>
           )}
         </SidebarGroup>
-
-        <LatestRuns profileId={profileId} activeRoutineId={view.kind === "run" ? view.routineId : null} />
-
-        <SidebarGroup>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton isActive={inRoutines} onClick={() => store.go({ kind: "routines" })}>
-                <Repeat />
-                <span>Routines</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                isActive={view.kind === "personalities"}
-                onClick={() => store.go({ kind: "personalities" })}
-              >
-                <Users />
-                <span>Personalities</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {doneCount > 0 && (
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={view.kind === "done"} onClick={() => store.go({ kind: "done" })}>
-                  <Check />
-                  <span>Done</span>
-                  <span className="ml-auto text-xs text-sidebar-muted-foreground tabular-nums">{doneCount}</span>
-                  <ChevronRight className="text-sidebar-muted-foreground" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-          </SidebarMenu>
-        </SidebarGroup>
       </SidebarContent>
 
+      {/* Pinned below the scrolling thread list, so the nav is always in reach. */}
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton isActive={inRoutines} onClick={() => store.go({ kind: "routines" })}>
+              <Repeat />
+              <span>Routines</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={view.kind === "personalities"}
+              onClick={() => store.go({ kind: "personalities" })}
+            >
+              <Users />
+              <span>Personalities</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {doneCount > 0 && (
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={view.kind === "done"} onClick={() => store.go({ kind: "done" })}>
+                <Check />
+                <span>Done</span>
+                <span className="ml-auto text-xs text-sidebar-muted-foreground tabular-nums">{doneCount}</span>
+                <ChevronRight className="text-sidebar-muted-foreground" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
         <SidebarMenu className="flex-row items-center gap-1">
           <SidebarMenuItem className="min-w-0 flex-1">
             <SidebarMenuButton onClick={onOpenSettings}>
@@ -561,76 +555,6 @@ function FolderAction({ label, onClick, children }: { label: string; onClick: ()
       {children}
     </button>
   )
-}
-
-const LATEST_RUNS = 4
-
-/** The project's most recent routine runs, newest first. A row opens that run's report. */
-function LatestRuns({ profileId, activeRoutineId }: { profileId: Id | null; activeRoutineId: Id | null }) {
-  const all = useStore((s) => s.routines)
-  const recent = useMemo(
-    () =>
-      all
-        .filter((r) => r.profileId === profileId && (r.running || r.lastRunAt))
-        .sort((a, b) => Number(!!b.running) - Number(!!a.running) || (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0))
-        .slice(0, LATEST_RUNS),
-    [all, profileId],
-  )
-
-  const viewingAll = useStore((s) => s.view.kind === "runs")
-
-  // Pinned to the bottom with the nav below it, so the thread list keeps the space above.
-  if (recent.length === 0) return <div className="mt-auto" />
-
-  return (
-    <SidebarGroup className="mt-auto">
-      <SidebarGroupLabel className="pr-1 text-sidebar-muted-foreground">
-        <span className="flex-1">Latest runs</span>
-        <button
-          onClick={() => store.go({ kind: "runs" })}
-          className={
-            "rounded px-1.5 py-0.5 text-xs font-normal outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring " +
-            (viewingAll ? "text-sidebar-foreground" : "text-sidebar-muted-foreground")
-          }
-        >
-          View all
-        </button>
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {recent.map((r) => (
-            <SidebarMenuItem key={r.id}>
-              <SidebarMenuButton
-                isActive={r.id === activeRoutineId}
-                onClick={() => void openLatestRun(r)}
-                title={r.lastError && r.lastStatus === "failed" ? `${r.name}\n${r.lastError}` : r.name}
-                className="pr-2! hover:bg-sidebar-row-hover data-active:bg-sidebar-accent data-active:font-normal"
-              >
-                <StatusMark
-                  state={r.running ? "running" : r.lastStatus === "failed" ? "failed" : "ok"}
-                  className="-ml-0.5 size-4"
-                />
-                <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                <span className="ml-auto shrink-0 text-xs text-sidebar-muted-foreground tabular-nums">
-                  {r.running ? "Running" : relativeTime(r.lastRunAt!)}
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  )
-}
-
-/** Opens the routine's newest run, or the routine itself if its runs can't be listed. */
-async function openLatestRun(r: Routine) {
-  try {
-    await backend.loadRuns(r.id)
-  } catch {}
-  const runs = store.get().runs[r.id] ?? []
-  const latest = runs.reduce<(typeof runs)[number] | undefined>((a, b) => (!a || b.startedAt > a.startedAt ? b : a), undefined)
-  store.go(latest ? { kind: "run", routineId: r.id, runId: latest.id } : { kind: "routine", routineId: r.id })
 }
 
 /** What a thread row's hover card shows: the full title, then where and who, then the latest words. */
