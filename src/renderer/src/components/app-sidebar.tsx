@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronRight, ChevronsUpDown, Clock, Folder, FolderOpen, ListFilter, PenLine, Plus, Repeat, Search, Settings, SquarePen, Users, X } from "lucide-react"
+import { Check, ChevronRight, ChevronsUpDown, Clock, Folder, FolderOpen, ListFilter, PenLine, Plus, Repeat, RotateCw, Search, Settings, SquarePen, Users, X } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -30,7 +30,7 @@ import { aggregateStatus, hue, ProjectBadge, StatusPill } from "@/components/pro
 import { ProjectPicker } from "@/components/project-picker"
 import { StatusMark } from "@/components/routine-views"
 import { UpdateButton } from "@/components/update-button"
-import { backend, setShownThreadOrder } from "@kitab/core/backend"
+import { backend, reconnectNow, setShownThreadOrder } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { useHasDraft } from "@/lib/composer-drafts"
 import { useThreadSwitching } from "@/lib/thread-switching"
@@ -232,6 +232,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               <Settings className="ml-auto" />
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <ReconnectButton />
           {/* Shows only when there's an update to download or install. */}
           <UpdateButton />
         </SidebarMenu>
@@ -603,6 +604,47 @@ function ThreadCard({ thread, projectName }: { thread: Thread; projectName?: str
         </p>
       )}
     </div>
+  )
+}
+
+/** Shows while not connected: tries to reach Hermes again now instead of waiting for the next retry. */
+function ReconnectButton() {
+  const connection = useStore((s) => s.connection)
+  const [retrying, setRetrying] = useState(false)
+  if (connection.state !== "error" && !retrying) return null
+
+  const retry = async () => {
+    if (retrying) return
+    setRetrying(true)
+    try {
+      await reconnectNow()
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Reconnect"
+            aria-disabled={retrying || undefined}
+            onClick={retry}
+            className={cn(
+              "grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-control text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+              retrying ? "cursor-default" : "cursor-pointer hover:bg-sidebar-row-hover",
+            )}
+          />
+        }
+      >
+        <RotateCw className={cn("size-4", retrying && "animate-spin")} />
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-64">
+        {retrying ? "Reconnecting…" : connection.state === "error" ? `Reconnect · ${connection.message}` : "Reconnect"}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

@@ -766,6 +766,12 @@ function resumeLive() {
 
 let connecting: Promise<void> | null = null
 
+/** Tries again right away (skipping the backoff wait), and starts the backoff over. */
+export function reconnectNow(): Promise<void> {
+  attempt = 0
+  return backend.connect()
+}
+
 async function connectOnce() {
   clearTimeout(reconnectTimer)
   gw.close()
