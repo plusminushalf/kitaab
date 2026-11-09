@@ -36,7 +36,7 @@ import { store, useStore } from "@/lib/store"
 import { useHasDraft } from "@/lib/composer-drafts"
 import { adoptUnknown, markSeen, useUnseen } from "@/lib/seen-threads"
 import { useThreadSwitching } from "@/lib/thread-switching"
-import { appearance, useAppearance, type SidebarLayout } from "@/lib/appearance/store"
+import { useAppearance } from "@/lib/appearance/store"
 import { cn } from "@/lib/utils"
 import { useShortcutLabel, withShortcut } from "@/lib/shortcuts"
 import { homePath, relativeTime } from "@kitab/core/format"
@@ -155,7 +155,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="flex items-center gap-0.5">
           <SearchField value={query} onChange={setQuery} />
           <DropdownMenu>
-            <IconTip label="Sort and view">
+            <IconTip label="Sort threads">
               <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="text-sidebar-muted-foreground" />}>
                 <ListFilter />
               </DropdownMenuTrigger>
@@ -167,17 +167,6 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <DropdownMenuRadioItem value="activity">Last activity</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Show projects as</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={layout}
-                  onValueChange={(v) => appearance.update({ sidebarLayout: v as SidebarLayout })}
-                >
-                  <DropdownMenuRadioItem value="switcher">A list</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="folders">Folders</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </DropdownMenuContent>

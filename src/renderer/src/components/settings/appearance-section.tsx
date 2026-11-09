@@ -148,7 +148,7 @@ export function AppearanceSection() {
           </SettingRow>
           <SettingRow
             label="Projects in the sidebar"
-            description="A list shows each project in the open profile under a small heading. Folders show each one as a card in its own color, with its threads inside."
+            description="A list shows every thread in the open profile as one list, each saying which project it's in. Folders show each project as a card in its own color, with its threads inside."
           >
             <ToggleGroup
               variant="outline"
