@@ -254,6 +254,21 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
             </p>
           )}
         </SidebarGroup>
+        {/* Done threads sit at the end of the list, as on the phone. */}
+        {doneCount > 0 && !searching && (
+          <SidebarGroup className="px-1 pt-0">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton isActive={view.kind === "done"} onClick={() => store.go({ kind: "done" })}>
+                  <Check />
+                  <span>Done</span>
+                  <span className="ml-auto text-xs text-sidebar-muted-foreground tabular-nums">{doneCount}</span>
+                  <ChevronRight className="text-sidebar-muted-foreground" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       {/* Pinned below the scrolling thread list, so the nav is always in reach. */}
@@ -278,16 +293,6 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               <span>Personalities</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {doneCount > 0 && (
-            <SidebarMenuItem>
-              <SidebarMenuButton isActive={view.kind === "done"} onClick={() => store.go({ kind: "done" })}>
-                <Check />
-                <span>Done</span>
-                <span className="ml-auto text-xs text-sidebar-muted-foreground tabular-nums">{doneCount}</span>
-                <ChevronRight className="text-sidebar-muted-foreground" />
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
         </SidebarMenu>
         <SidebarMenu className="flex-row items-center gap-1">
           <SidebarMenuItem className="min-w-0 flex-1">
