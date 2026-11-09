@@ -265,7 +265,8 @@ function ThreadRow({
           className={cn(
             "pr-2! data-active:font-normal",
             tinted
-              ? "hover:bg-[oklch(0.62_0.17_var(--h)/0.12)] data-active:bg-[oklch(0.62_0.17_var(--h)/0.2)] data-active:text-[oklch(0.4_0.14_var(--h))] dark:hover:bg-[oklch(0.62_0.17_var(--h)/0.14)] dark:data-active:bg-[oklch(0.62_0.17_var(--h)/0.26)] dark:data-active:text-[oklch(0.9_0.07_var(--h))]"
+              ? // Dia-style: the active thread is a raised neutral tab sitting on the folder's color.
+                "rounded-lg hover:bg-[oklch(0.62_0.17_var(--h)/0.12)] data-active:bg-white data-active:text-sidebar-foreground data-active:shadow-[0_1px_2px_oklch(0_0_0/0.08),0_0_0_1px_oklch(0_0_0/0.05)] dark:hover:bg-[oklch(0.62_0.17_var(--h)/0.16)] dark:data-active:bg-[oklch(0.16_0.012_var(--h)/0.9)] dark:data-active:text-white dark:data-active:shadow-[0_1px_3px_oklch(0_0_0/0.35),inset_0_0_0_1px_oklch(1_0_0/0.06)]"
               : "hover:bg-sidebar-row-hover data-active:bg-sidebar-accent",
           )}
         >
@@ -422,21 +423,33 @@ function ProjectFolder({
   return (
     <div
       style={{ "--h": hue(p.name) } as React.CSSProperties}
-      className={cn("rounded-lg", open && "bg-[oklch(0.62_0.17_var(--h)/0.06)] pb-1 dark:bg-[oklch(0.62_0.17_var(--h)/0.09)]")}
+      className={cn(
+        "rounded-xl border border-transparent px-1",
+        // Open, the folder is a card in its color with a hairline edge.
+        open &&
+          "my-0.5 border-[oklch(0.62_0.17_var(--h)/0.2)] bg-[oklch(0.62_0.17_var(--h)/0.1)] py-1 dark:border-[oklch(0.72_0.12_var(--h)/0.18)] dark:bg-[oklch(0.5_0.11_var(--h)/0.24)]",
+      )}
     >
       <div className="group/folder relative">
         <button
           onClick={onToggle}
           aria-expanded={open}
           title={current ? `${p.name} (open project)` : p.name}
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2 pr-14 text-left text-sm outline-none hover:bg-[oklch(0.62_0.17_var(--h)/0.1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          className="flex h-8 w-full items-center gap-2 rounded-lg px-2 pr-14 text-left text-sm outline-none hover:bg-[oklch(0.62_0.17_var(--h)/0.1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           <Icon className="size-4 shrink-0 fill-[oklch(0.62_0.17_var(--h)/0.28)] text-[oklch(0.55_0.17_var(--h))] dark:text-[oklch(0.76_0.14_var(--h))]" />
-          <span className="min-w-0 flex-1 truncate font-medium text-[oklch(0.38_0.1_var(--h))] dark:text-[oklch(0.9_0.06_var(--h))]">
+          <span className="min-w-0 truncate font-medium text-[oklch(0.38_0.1_var(--h))] dark:text-[oklch(0.82_0.1_var(--h))]">
             {p.name}
           </span>
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0 text-[oklch(0.55_0.12_var(--h)/0.8)] transition-transform dark:text-[oklch(0.76_0.1_var(--h)/0.8)]",
+              open && "rotate-90",
+            )}
+          />
           {status !== "done" && (
-            <span className="flex shrink-0 group-hover/folder:invisible">
+            <span className="ml-auto flex shrink-0 group-hover/folder:invisible">
               <StatusPill status={status} />
             </span>
           )}
@@ -457,7 +470,7 @@ function ProjectFolder({
         </div>
       </div>
       {open && (
-        <SidebarMenu className="px-1">
+        <SidebarMenu className="gap-0.5 pt-0.5 pl-4">
           {threads.map((t) => (
             <ThreadRow
               key={t.id}
