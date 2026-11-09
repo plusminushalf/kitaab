@@ -7,7 +7,7 @@ import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { MenuView } from "@expo/ui/community/menu"
 import * as Clipboard from "expo-clipboard"
-import { GENERAL, type Attachment, type Message } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Attachment, type Message } from "@kitab/core/model"
 import { backend } from "@kitab/core/backend"
 import { plainReplySpeaker } from "@kitab/core/personalities"
 import { toast } from "@kitab/core/platform"
@@ -100,7 +100,7 @@ export default function ThreadScreen() {
                 <NewThreadProjectMenu />
               ) : threadCast.length || (hasProjects && thread && !thread.fromRun) ? (
                 <Text style={{ color: c.textMuted, fontSize: 12 }} numberOfLines={1}>
-                  {[hasProjects && thread && !thread.fromRun ? (project?.name ?? (thread.projectId === GENERAL ? "General" : undefined)) : undefined, threadCast.map((p) => p.name).join(", ")]
+                  {[hasProjects && thread && !thread.fromRun ? (project?.name ?? (thread.projectId === GENERAL ? NO_PROJECT : undefined)) : undefined, threadCast.map((p) => p.name).join(", ")]
                     .filter(Boolean)
                     .join(" · ")}
                 </Text>

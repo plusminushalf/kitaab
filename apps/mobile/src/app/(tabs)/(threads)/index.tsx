@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, SectionList, Text, View } from "react-native
 import { router, Stack } from "expo-router"
 import { backend } from "@kitab/core/backend"
 import { homePath } from "@kitab/core/format"
-import { GENERAL, type Project } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Project } from "@kitab/core/model"
 import { MenuView } from "@expo/ui/community/menu"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
@@ -104,7 +104,7 @@ function ProjectHeader({ project, onNewThread }: { project: Project; onNewThread
   const general = project.id === GENERAL
   return (
     <MenuView
-      title={general ? "General" : project.folder && homePath(project.folder)}
+      title={general ? NO_PROJECT : project.folder && homePath(project.folder)}
       actions={[
         { id: "new-thread", title: "New thread here", image: "square.and.pencil" },
         general

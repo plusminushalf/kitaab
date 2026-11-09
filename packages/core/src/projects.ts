@@ -1,4 +1,4 @@
-import { GENERAL, type Id, type Project, type Thread } from "./model"
+import { GENERAL, NO_PROJECT, type Id, type Project, type Thread } from "./model"
 import { http, platform } from "./platform"
 import { store } from "./store"
 
@@ -159,6 +159,6 @@ export function currentProject(): Project | undefined {
 /** General plus the profile's projects, as the lists show them. */
 export function projectsOf(profileId: Id | null): Project[] {
   const s = store.get()
-  const general: Project = { id: GENERAL, profileId: profileId ?? "default", name: "General", folders: [] }
+  const general: Project = { id: GENERAL, profileId: profileId ?? "default", name: NO_PROJECT, folders: [] }
   return profileId ? [general, ...(s.projects[profileId] ?? [])] : [general]
 }

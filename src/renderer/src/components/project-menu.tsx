@@ -17,7 +17,7 @@ import { backend } from "@kitab/core/backend"
 import { homePath } from "@kitab/core/format"
 import { folderNameFor } from "@kitab/core/projects"
 import { platform } from "@kitab/core/platform"
-import { GENERAL, type Project } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Project } from "@kitab/core/model"
 import { hue } from "@/components/project-badge"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -48,9 +48,9 @@ export function startNewThread() {
   setDialog({ mode: "new-thread" })
 }
 
-/** Takes a project off the list, after asking. Its threads move to General. */
+/** Takes a project off the list, after asking. Its threads stay, with no project. */
 export async function confirmRemoveProject(project: Project) {
-  if (!(await platform().confirm(`Remove “${project.name}”? Its threads move to General. Its folder and threads stay on the server.`)))
+  if (!(await platform().confirm(`Remove “${project.name}”? Its threads stay, with no project. Its folder and threads stay on the server.`)))
     return
   try {
     await backend.removeProject(project.id)
@@ -64,7 +64,7 @@ export async function confirmRemoveProject(project: Project) {
 export function useProfileProjects(): Project[] {
   const profileId = useStore((s) => s.profileId)
   const projects = useStore((s) => (s.profileId ? s.projects[s.profileId] : undefined))
-  const general: Project = { id: GENERAL, profileId: profileId ?? "", name: "General", folders: [] }
+  const general: Project = { id: GENERAL, profileId: profileId ?? "", name: NO_PROJECT, folders: [] }
   return [general, ...(projects ?? [])]
 }
 
@@ -80,7 +80,7 @@ export function NewThreadPlace() {
           <button className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" />
         }
       >
-        <span>in {current.name}</span>
+        <span>{current.id === GENERAL ? NO_PROJECT : `in ${current.name}`}</span>
         <ChevronDown className="size-3.5 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52">

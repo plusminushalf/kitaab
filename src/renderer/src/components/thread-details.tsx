@@ -31,7 +31,7 @@ import { AgentsSection, useActiveAgentCount, useSubagents } from "@/components/t
 import { appearance, THREAD_DETAIL_ITEMS, useAppearance } from "@/lib/appearance/store"
 import { backend } from "@kitab/core/backend"
 import { homePath, relativeTime } from "@kitab/core/format"
-import type { Id } from "@kitab/core/model"
+import { NO_PROJECT, type Id } from "@kitab/core/model"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
 
@@ -172,7 +172,7 @@ function DetailsBody({ threadId }: { threadId: Id }) {
         {show.project && profile && (
           <Row icon={() => <ProjectBadge name={profile.name} className="size-4.5 text-[0.55rem]" />}>
             {profile.name}
-            <span className="text-muted-foreground"> · {project?.name ?? "General"}</span>
+            <span className="text-muted-foreground"> · {project?.name ?? NO_PROJECT}</span>
           </Row>
         )}
         {show.project && (project?.folder || thread.cwd) && (

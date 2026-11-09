@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/page-header"
 import { Markdown } from "@/components/markdown"
 import { backend } from "@kitab/core/backend"
 import { dateTime, nextRun, relativeTime } from "@kitab/core/format"
-import { GENERAL, type Id, type Project, type Routine, type Run } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Id, type Project, type Routine, type Run } from "@kitab/core/model"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -313,13 +313,13 @@ export function RoutineView({ routineId }: { routineId: Id }) {
 /** "in Pitwall ▾" on a routine's page: the project it's filed under, and a menu to move it. */
 function RoutineProjectMenu({ routine }: { routine: Routine }) {
   const projects = useStore((s) => s.projects[routine.profileId])
-  const options: Project[] = [{ id: GENERAL, profileId: routine.profileId, name: "General", folders: [] }, ...(projects ?? [])]
+  const options: Project[] = [{ id: GENERAL, profileId: routine.profileId, name: NO_PROJECT, folders: [] }, ...(projects ?? [])]
   const current = options.find((p) => p.id === routine.projectId) ?? options[0]
   const move = (p: Project) => {
     if (p.id === current.id) return
     backend
       .setRoutineProject(routine.id, p.id)
-      .then(() => toast.success(`Moved to ${p.name}`))
+      .then(() => toast.success(p.id === GENERAL ? "Moved out of its project" : `Moved to ${p.name}`))
       .catch((e) => toast.error(`Couldn't move it: ${e instanceof Error ? e.message : e}`))
   }
   return (
@@ -329,7 +329,7 @@ function RoutineProjectMenu({ routine }: { routine: Routine }) {
           <button className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" />
         }
       >
-        <span>in {current.name}</span>
+        <span>{current.id === GENERAL ? NO_PROJECT : `in ${current.name}`}</span>
         <ChevronDown className="size-3.5 opacity-70" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52">

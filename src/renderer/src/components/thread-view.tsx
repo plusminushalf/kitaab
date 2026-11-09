@@ -16,8 +16,8 @@ import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/componen
 import { useSubagentPolling } from "@/components/thread-agents"
 import { backend, isLocalThread, viewIdentity } from "@kitab/core/backend"
 import { plainReplySpeaker } from "@kitab/core/personalities"
-import { GENERAL, type Attachment, type Id, type PendingQuestion } from "@kitab/core/model"
-import { NewThreadPlace } from "@/components/project-menu"
+import { GENERAL, NO_PROJECT, type Attachment, type Id, type PendingQuestion } from "@kitab/core/model"
+import { NewThreadPlace, startNewThread } from "@/components/project-menu"
 import { store, useStore, type SendMode } from "@/lib/store"
 import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
 
@@ -116,7 +116,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
 
   const profileName = useStore((s) => s.profiles.find((p) => p.id === profileId)?.name)
   const projectName = useStore((s) =>
-    projectId === GENERAL ? "General" : profileId ? s.projects[profileId]?.find((p) => p.id === projectId)?.name : undefined,
+    projectId === GENERAL ? NO_PROJECT : profileId ? s.projects[profileId]?.find((p) => p.id === projectId)?.name : undefined,
   )
   // A reply is running. While Hermes asks a question, your next message answers it instead.
   const answering = detail?.pending.some((q) => q.kind === "clarify")
@@ -187,13 +187,15 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
                   <Spinner className="size-5" aria-label={connected ? "Loading" : "Reconnecting"} />
                   {!connected && <span>Reconnecting…</span>}
                 </div>
-              ) : (
+              ) : threadId ? (
                 <Empty className="h-full">
                   <EmptyHeader>
-                    <EmptyTitle>{threadId ? "Nothing here yet" : "Start a thread"}</EmptyTitle>
+                    <EmptyTitle>Nothing here yet</EmptyTitle>
                     <EmptyDescription>Drop images, video or files anywhere to attach them.</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
+              ) : (
+                <NewThreadPrompt projectId={projectId} projectName={projectName} />
               )}
             </div>
 
@@ -256,6 +258,49 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         )}
       </div>
       {openFile && <SidePanel file={openFile} onClose={() => setOpenFile(null)} />}
+    </div>
+  )
+}
+
+/**
+ * A new thread's empty view, after T3's: what you're starting, and where. In a project it
+ * offers a way out of it; with no project it offers the project picker, when there's one to pick.
+ */
+function NewThreadPrompt({ projectId, projectName }: { projectId: Id; projectName?: string }) {
+  const inProject = projectId !== GENERAL && !!projectName
+  const hasProjects = useStore((s) => !!s.profileId && (s.projects[s.profileId]?.length ?? 0) > 0)
+  const focusComposer = () => requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-composer-input]")?.focus())
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <h1 className="text-2xl font-normal tracking-tight text-balance text-muted-foreground">
+        {inProject ? (
+          <>
+            What should we work on in <span className="font-medium text-foreground">{projectName}</span>?
+          </>
+        ) : (
+          <span className="text-foreground">What should we work on?</span>
+        )}
+      </h1>
+      {inProject ? (
+        <button
+          type="button"
+          className="rounded-md px-1.5 py-0.5 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => {
+            backend.selectProject(GENERAL)
+            focusComposer()
+          }}
+        >
+          or start without a project
+        </button>
+      ) : hasProjects ? (
+        <button
+          type="button"
+          className="rounded-md px-1.5 py-0.5 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={startNewThread}
+        >
+          or pick a project
+        </button>
+      ) : null}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { router } from "expo-router"
 import { MenuView } from "@expo/ui/community/menu"
 import * as Haptics from "expo-haptics"
 import { backend } from "@kitab/core/backend"
-import { GENERAL, type Project } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Project } from "@kitab/core/model"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Icon } from "./ui"
@@ -48,7 +48,7 @@ export function ProfileMenu() {
 export function useProfileProjects(): Project[] {
   const profileId = useStore((s) => s.profileId)
   const projects = useStore((s) => (s.profileId ? s.projects[s.profileId] : undefined))
-  return useMemo(() => [{ id: GENERAL, profileId: profileId ?? "", name: "General", folders: [] }, ...(projects ?? [])], [profileId, projects])
+  return useMemo(() => [{ id: GENERAL, profileId: profileId ?? "", name: NO_PROJECT, folders: [] }, ...(projects ?? [])], [profileId, projects])
 }
 
 /** Opens the new-project form. `thenThread` opens a new thread in the project once it's made. */

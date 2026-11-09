@@ -44,7 +44,7 @@ import { modelName, shortModelName } from "@kitab/core/model-names"
 import { providerIcon, providerTint } from "@/components/model-picker"
 import { Spinner } from "@/components/ui/spinner"
 import { shownStatus } from "@kitab/core/subagents"
-import { GENERAL, type Id, type Project, type Thread } from "@kitab/core/model"
+import { GENERAL, NO_PROJECT, type Id, type Project, type Thread } from "@kitab/core/model"
 import { confirmRemoveProject, openNewProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
 
 type Sort = "activity" | "status" | "title"
@@ -75,6 +75,8 @@ function arrange(list: Thread[], query: string, sort: Sort): Thread[] {
 
 export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const newThreadKey = useShortcutLabel("new-thread")
+  const list = useRef<HTMLDivElement>(null)
+  const listContinues = useMoreBelow(list)
   const settingsKey = useShortcutLabel("settings")
   const profiles = useStore((s) => s.profiles)
   const profileId = useStore((s) => s.profileId)
@@ -206,7 +208,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent ref={list}>
         <SidebarGroup className={cn("px-1 pt-0", layout === "folders" && "gap-0.5")}>
           {cards && (
             <SidebarGroupContent>
@@ -215,7 +217,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <ThreadTile
                     key={t.id}
                     thread={t}
-                    project={projectNames.get(t.projectId) ?? "General"}
+                    project={projectNames.get(t.projectId) ?? NO_PROJECT}
                     active={t.id === activeThreadId}
                   />
                 ))}
@@ -266,7 +268,11 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       </SidebarContent>
 
       {/* Pinned below the scrolling thread list, so the nav is always in reach. */}
-      <SidebarFooter>
+      {/* A faint shadow along its top edge while threads continue underneath. */}
+      <SidebarFooter
+        data-list-continues={listContinues || undefined}
+        className="relative z-10 transition-shadow duration-150 data-list-continues:shadow-[0_-1px_0_oklch(0_0_0/0.04),0_-6px_10px_-6px_oklch(0_0_0/0.10)] dark:data-list-continues:shadow-[0_-1px_0_oklch(1_0_0/0.04),0_-6px_10px_-6px_oklch(0_0_0/0.45)]"
+      >
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton isActive={inRoutines} onClick={() => store.go({ kind: "routines" })}>
@@ -520,6 +526,8 @@ function newThreadIn(p: Project) {
   store.go({ kind: "thread", threadId: null })
 }
 
+const newThreadLabel = (p: Project) => (p.id === GENERAL ? "New thread without a project" : `New thread in ${p.name}`)
+
 /** The … menu on a project: rename it or take it off the list. General has neither. */
 function ProjectMoreMenu({ project: p, className }: { project: Project; className?: string }) {
   if (p.id === GENERAL) return null
@@ -585,7 +593,7 @@ function ProjectGroup({ project: p, threads, allThreads, open, onToggle, activeT
           )}
         </button>
         <div className="absolute top-0.5 right-1 flex gap-0.5 opacity-0 group-hover/folder:opacity-100 has-focus-visible:opacity-100 has-data-popup-open:opacity-100">
-          <button title={`New thread in ${p.name}`} aria-label={`New thread in ${p.name}`} onClick={() => newThreadIn(p)} className={action}>
+          <button title={newThreadLabel(p)} aria-label={newThreadLabel(p)} onClick={() => newThreadIn(p)} className={action}>
             <SquarePen />
           </button>
           <ProjectMoreMenu project={p} className={action} />
@@ -648,7 +656,7 @@ function ProjectFolder({ project: p, threads, allThreads, open, onToggle, active
           )}
         </button>
         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover/folder:opacity-100 has-focus-visible:opacity-100 has-data-popup-open:opacity-100">
-          <FolderAction label={`New thread in ${p.name}`} onClick={() => newThreadIn(p)}>
+          <FolderAction label={newThreadLabel(p)} onClick={() => newThreadIn(p)}>
             <SquarePen />
           </FolderAction>
           <ProjectMoreMenu project={p} className={FOLDER_ACTION} />
@@ -687,7 +695,7 @@ function FolderAction({ label, onClick, children }: { label: string; onClick: ()
 /** What a thread row's hover card shows: the full title, then where and who, then the latest words. */
 function ThreadCard({ thread, place }: { thread: Thread; place?: string }) {
   const projectName = useStore((s) =>
-    thread.projectId === GENERAL ? "General" : s.projects[thread.profileId]?.find((p) => p.id === thread.projectId)?.name,
+    thread.projectId === GENERAL ? NO_PROJECT : s.projects[thread.profileId]?.find((p) => p.id === thread.projectId)?.name,
   )
   const personalities = useStore((s) => s.personalities)
   const routines = useStore((s) => s.routines)
@@ -735,6 +743,26 @@ function ThreadCard({ thread, place }: { thread: Thread; place?: string }) {
       )}
     </div>
   )
+}
+
+/** Whether a scrolling list has more below what's showing. */
+function useMoreBelow(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 1)
+    check()
+    el.addEventListener("scroll", check, { passive: true })
+    const resized = new ResizeObserver(check)
+    resized.observe(el)
+    for (const child of el.children) resized.observe(child)
+    return () => {
+      el.removeEventListener("scroll", check)
+      resized.disconnect()
+    }
+  }, [ref])
+  return more
 }
 
 /** Shows while not connected: tries to reach Hermes again now instead of waiting for the next retry. */

@@ -17,6 +17,8 @@ export type Profile = {
 
 /** The project every profile has: threads with no project folder (and every thread from before projects). */
 export const GENERAL = "general"
+/** What the lists call General. */
+export const NO_PROJECT = "No project"
 
 /**
  * One line of work inside a profile, with its own folder on the server: a Hermes project.
