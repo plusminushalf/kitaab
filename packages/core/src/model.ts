@@ -4,14 +4,37 @@
 
 export type Id = string
 
-export type Project = {
+/**
+ * A Hermes profile: the top level. It owns the knowledge (memory, skills), the cast of
+ * personalities, the model and the routines, and holds any number of projects.
+ */
+export type Profile = {
   id: Id
   name: string
-  /** Library personalities added to this project (its cast). */
+  /** Library personalities added to this profile (its cast). */
   personalityIds?: Id[]
 }
 
-/** A named character from your library. Behaviour only: it never keeps project facts. */
+/** The project every profile has: threads with no project folder (and every thread from before projects). */
+export const GENERAL = "general"
+
+/**
+ * One line of work inside a profile, with its own folder on the server: a Hermes project.
+ * A thread belongs to the project whose folder it works in. Every profile also has General
+ * (id GENERAL), which has no folder and isn't stored in Hermes.
+ */
+export type Project = {
+  id: Id
+  profileId: Id
+  name: string
+  /** Where its threads work: the folder new threads start in. Unset for General. */
+  folder?: string
+  /** Every folder that counts as this project's (the primary one first). */
+  folders: string[]
+  color?: string
+}
+
+/** A named character from your library. Behaviour only: it never keeps profile facts. */
 export type Personality = {
   id: Id
   name: string
@@ -43,7 +66,11 @@ export type Skill = {
 
 export type Thread = {
   id: Id
+  profileId: Id
+  /** The project in that profile: the one whose folder `cwd` is in, else GENERAL. */
   projectId: Id
+  /** The folder the thread works in on the server, when it has one. */
+  cwd?: string
   title: string
   updatedAt: number
   /** Personality ids; the first one is the host. */
@@ -131,7 +158,7 @@ export type PendingQuestion = {
 
 export type Routine = {
   id: Id
-  projectId: Id
+  profileId: Id
   name: string
   schedule: string
   personalityId?: Id

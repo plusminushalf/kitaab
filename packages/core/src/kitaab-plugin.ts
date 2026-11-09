@@ -369,9 +369,14 @@ START_SCHEMA = {
                 "type": "string",
                 "description": "The first message: the full brief the new thread starts from (markdown).",
             },
-            "project": {
+            "profile": {
                 "type": "string",
-                "description": "The project (Hermes profile id) to start it in. Leave out for this project.",
+                "description": "The Kitaab profile (Hermes profile id) to start it in. Leave out for this profile.",
+            },
+            "cwd": {
+                "type": "string",
+                "description": "The folder it works in, which puts it in the project owning that folder. "
+                               "Leave out to start it in this thread's project (the same folder as this thread).",
             },
         },
         "required": ["title", "message"],
@@ -390,7 +395,9 @@ def _error_text(reply: dict) -> str:
 def start_thread(args: dict, **_kw) -> str:
     title = " ".join(str(args.get("title") or "").split())[:120]
     message = str(args.get("message") or "").strip()
-    project = str(args.get("project") or "").strip()
+    # "project" is what this was called before profiles held projects.
+    profile = str(args.get("profile") or args.get("project") or "").strip()
+    cwd = str(args.get("cwd") or "").strip()
     if not title:
         return _fail("title is required")
     if not message:
@@ -406,13 +413,24 @@ def start_thread(args: dict, **_kw) -> str:
     submit = gateway._methods.get("prompt.submit")
     if create is None or submit is None:
         return _fail("This Hermes server can't start threads (no session.create).")
-    project = project or profile_name_for_home(get_hermes_home()) or "default"
+    here = profile_name_for_home(get_hermes_home()) or "default"
+    profile = profile or here
+    if not cwd and profile == here:
+        # Same project as this thread: it works in this thread's folder.
+        try:
+            from agent.runtime_cwd import scoped_session_cwd
+            cwd = scoped_session_cwd() or ""
+        except Exception:
+            cwd = ""
 
     # No app is watching the new thread yet. The detached sink keeps it resumable: events are
     # dropped, and when the user opens it Kitaab resumes it and gets the rest live.
     token = bind_transport(gateway._detached_ws_transport)
     try:
-        created = create(_RID, {"profile": project, "source": "desktop", "title": title})
+        params = {"profile": profile, "source": "desktop", "title": title}
+        if cwd:
+            params.update(cwd=os.path.expanduser(cwd), cwd_explicit=True)
+        created = create(_RID, params)
         if "error" in created:
             return _fail(f"couldn't make the thread: {_error_text(created)}")
         made = created["result"]
@@ -420,13 +438,14 @@ def start_thread(args: dict, **_kw) -> str:
     finally:
         reset_transport(token)
     thread = made["stored_session_id"]
-    link = f"kitaab://thread/{thread}?project={project}"
+    link = f"kitaab://thread/{thread}?profile={profile}"
     if "error" in sent:
         return _fail(f"the thread was made but its first message didn't go: {_error_text(sent)}")
     return _result(
         started=True,
         thread_id=thread,
-        project=project,
+        profile=profile,
+        cwd=cwd or None,
         title=title,
         link=link,
         note="The new thread is answering its first message now. Tell the user with a markdown link to "

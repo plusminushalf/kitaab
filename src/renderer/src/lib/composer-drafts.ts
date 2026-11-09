@@ -1,10 +1,11 @@
+import { GENERAL } from "@kitab/core/model"
 import { useSyncExternalStore } from "react"
 import { onThreadRenamed } from "@kitab/core/backend"
 import type { Draft } from "@/components/composer"
 import type { Citation } from "@/components/cite-selection"
 
 /**
- * What you've written but not sent, per thread (and per project for a new thread), so it's
+ * What you've written but not sent, per thread (and per profile and project for a new thread), so it's
  * still there when you come back. Text is also saved across restarts; attachments and
  * citations last until the app quits.
  */
@@ -31,7 +32,8 @@ function persist() {
   } catch {}
 }
 
-export const draftKey = (threadId: string | null, projectId: string | null) => threadId ?? `new:${projectId ?? ""}`
+export const draftKey = (threadId: string | null, profileId: string | null, projectId?: string) =>
+  threadId ?? (projectId && projectId !== GENERAL ? `new:${profileId ?? ""}:${projectId}` : `new:${profileId ?? ""}`)
 
 export function readDraft(key: string): ComposerDraft {
   return saved.get(key) ?? EMPTY

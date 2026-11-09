@@ -1,10 +1,10 @@
-import type { Id, Project } from "./model"
+import type { Id, Profile } from "./model"
 import { store } from "./store"
 
-// The order you put projects in (the project switcher, ⌘1–⌘9). It lives on the
+// The order you put profiles in (the profile switcher, ⌘1–⌘9). It lives on the
 // server so the Mac and the iPhone agree:
-//   ui_meta["kitab.projectOrder"] = [projectId, …] on the default profile
-// Projects missing from the list (new ones, or made elsewhere) follow, in Hermes's order.
+//   ui_meta["kitab.projectOrder"] = [profileId, …] on the default profile
+// Profiles missing from the list (new ones, or made elsewhere) follow, in Hermes's order.
 
 const KEY = "kitab.projectOrder"
 
@@ -13,17 +13,17 @@ type ProfileRow = { name: string; is_default?: boolean; ui_meta?: Record<string,
 let home = "default"
 let order: Id[] = []
 
-/** `projects` in your order. */
-export function inOrder(projects: Project[]): Project[] {
+/** `profiles` in your order. */
+export function inOrder(profiles: Profile[]): Profile[] {
   const rank = new Map(order.map((id, i) => [id, i]))
-  return projects
+  return profiles
     .map((p, i) => ({ p, i }))
     .sort((a, b) => (rank.get(a.p.id) ?? order.length + a.i) - (rank.get(b.p.id) ?? order.length + b.i))
     .map((x) => x.p)
 }
 
-/** Picks up your order from what profiles.list returned. Call before setting projects. */
-export function readProjectOrder(rows: ProfileRow[]) {
+/** Picks up your order from what profiles.list returned. Call before setting profiles. */
+export function readProfileOrder(rows: ProfileRow[]) {
   const row = rows.find((r) => r.is_default) ?? rows.find((r) => r.name === "default") ?? rows[0]
   home = row?.name ?? "default"
   const v = row?.ui_meta?.[KEY]
@@ -31,16 +31,16 @@ export function readProjectOrder(rows: ProfileRow[]) {
 }
 
 /** Saves a new order for every device. Shows it at once and puts it back if Hermes refuses. */
-export async function writeProjectOrder(gw: { call<T>(method: string, params: any): Promise<T> }, ids: Id[]) {
+export async function writeProfileOrder(gw: { call<T>(method: string, params: any): Promise<T> }, ids: Id[]) {
   const before = order
   order = ids
-  store.set((s) => ({ projects: inOrder(s.projects) }))
+  store.set((s) => ({ profiles: inOrder(s.profiles) }))
   try {
     const r = await gw.call<any>("profiles.configure", { name: home, ui_meta: { [KEY]: ids } })
-    if (!r?.applied?.ui_meta) throw new Error("Hermes didn't save the project order")
+    if (!r?.applied?.ui_meta) throw new Error("Hermes didn't save the profile order")
   } catch (e) {
     order = before
-    store.set((s) => ({ projects: inOrder(s.projects) }))
+    store.set((s) => ({ profiles: inOrder(s.profiles) }))
     throw e
   }
 }

@@ -23,7 +23,7 @@ const EMPTY: ThreadMeta = { cast: [], turns: {} }
 
 type ProfileRow = { name: string; ui_meta?: Record<string, any> }
 
-const metas = new Map<Id, { projectId: Id; meta: ThreadMeta }>()
+const metas = new Map<Id, { profileId: Id; meta: ThreadMeta }>()
 
 function parse(v: any): ThreadMeta | null {
   if (!v || typeof v !== "object") return null
@@ -52,7 +52,7 @@ export function readThreadMeta(rows: ProfileRow[]) {
     for (const [k, v] of Object.entries(row.ui_meta ?? {})) {
       if (!k.startsWith(PREFIX)) continue
       const meta = parse(v)
-      if (meta) metas.set(k.slice(PREFIX.length), { projectId: row.name, meta })
+      if (meta) metas.set(k.slice(PREFIX.length), { profileId: row.name, meta })
     }
   }
 }
@@ -60,30 +60,30 @@ export function readThreadMeta(rows: ProfileRow[]) {
 export const threadMeta = (threadId: Id): ThreadMeta => metas.get(threadId)?.meta ?? EMPTY
 
 /** The project a thread's metadata lives in, when it has any. */
-export const metaProject = (threadId: Id): Id | undefined => metas.get(threadId)?.projectId
+export const metaProfile = (threadId: Id): Id | undefined => metas.get(threadId)?.profileId
 
 /** Threads that grew out of routine runs, with their project. */
-export function runThreads(projectId?: Id): { id: Id; projectId: Id; run: RunOrigin }[] {
-  const out: { id: Id; projectId: Id; run: RunOrigin }[] = []
-  for (const [id, v] of metas) if (v.meta.run && (!projectId || v.projectId === projectId)) out.push({ id, projectId: v.projectId, run: v.meta.run })
+export function runThreads(profileId?: Id): { id: Id; profileId: Id; run: RunOrigin }[] {
+  const out: { id: Id; profileId: Id; run: RunOrigin }[] = []
+  for (const [id, v] of metas) if (v.meta.run && (!profileId || v.profileId === profileId)) out.push({ id, profileId: v.profileId, run: v.meta.run })
   return out
 }
 
 export const runOrigin = (threadId: Id) => {
   const v = metas.get(threadId)
-  return v?.meta.run ? { projectId: v.projectId, ...v.meta.run } : undefined
+  return v?.meta.run ? { profileId: v.profileId, ...v.meta.run } : undefined
 }
 
 const same = (a: ThreadMeta, b: ThreadMeta) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Saves a thread's metadata (cache first, then Hermes). Skips the write when nothing changed. */
-export async function saveThreadMeta(projectId: Id, threadId: Id, patch: Partial<ThreadMeta>) {
+export async function saveThreadMeta(profileId: Id, threadId: Id, patch: Partial<ThreadMeta>) {
   const prev = metas.get(threadId)?.meta ?? EMPTY
   const next: ThreadMeta = { ...prev, ...patch }
   if (!next.run) delete next.run
   if (metas.has(threadId) && same(prev, next)) return
-  metas.set(threadId, { projectId, meta: next })
-  const r = await gw.call<any>("profiles.configure", { name: projectId, ui_meta: { [PREFIX + threadId]: next } })
+  metas.set(threadId, { profileId, meta: next })
+  const r = await gw.call<any>("profiles.configure", { name: profileId, ui_meta: { [PREFIX + threadId]: next } })
   if (!r?.applied?.ui_meta) throw new Error("Hermes didn't save the thread's details")
 }
 
@@ -93,7 +93,7 @@ export async function forgetThreadMeta(threadId: Id) {
   if (!v) return
   metas.delete(threadId)
   // ui_meta merges key by key; null removes the key.
-  await gw.call("profiles.configure", { name: v.projectId, ui_meta: { [PREFIX + threadId]: null } })
+  await gw.call("profiles.configure", { name: v.profileId, ui_meta: { [PREFIX + threadId]: null } })
 }
 
 // ---- one-time move of what older versions kept on this Mac ----------------------------
@@ -118,12 +118,12 @@ function writeLocal(key: string, value: Record<string, any>) {
  * Uploads thread metadata older versions kept in localStorage. Run threads know their
  * project; plain threads are moved once a project lists them (pass its session ids).
  */
-export async function migrateLocal(projectId?: Id, sessionIds: Id[] = []) {
+export async function migrateLocal(profileId?: Id, sessionIds: Id[] = []) {
   const runs = readLocal(LOCAL_RUNS)
   const threads = readLocal(LOCAL_THREADS)
   const moves: { id: Id; project: Id; run?: any }[] = []
   for (const [id, v] of Object.entries(runs)) if (typeof v?.profile === "string") moves.push({ id, project: v.profile, run: v })
-  if (projectId) for (const id of sessionIds) if (threads[id] && !runs[id]) moves.push({ id, project: projectId })
+  if (profileId) for (const id of sessionIds) if (threads[id] && !runs[id]) moves.push({ id, project: profileId })
   if (!moves.length) return
   await Promise.all(
     moves.map(async ({ id, project, run }) => {

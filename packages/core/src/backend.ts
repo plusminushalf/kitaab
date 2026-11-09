@@ -1,6 +1,6 @@
 import { http, platform, toast } from "./platform"
 import { Gateway, RpcError, type GatewayEvent, type ServerRequest } from "./gateway"
-import type { Attachment, Id, Message, PendingQuestion, Routine, Run, Thread, ToolCall } from "./model"
+import { GENERAL, type Attachment, type Id, type Message, type PendingQuestion, type Routine, type Run, type Thread, type ToolCall } from "./model"
 import { store, type Backend, type ModelChoice, type SendMode } from "./store"
 import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
@@ -11,13 +11,15 @@ import { syncKitabContext } from "./kitab-context"
 import { forgetThreadMeta, migrateLocal, readThreadMeta, runOrigin, runThreads, saveThreadMeta, threadMeta } from "./thread-meta"
 import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
-import { inOrder, readProjectOrder, writeProjectOrder } from "./project-order"
+import { inOrder, readProfileOrder, writeProfileOrder } from "./profile-order"
+import * as projects from "./projects"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 import { readCachedTranscript, writeCachedTranscript } from "./transcript-cache"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
-//   profile            → Project
+//   profile            → Profile
+//   Hermes project     → Project  (see projects.ts; a thread's cwd says which one it's in)
 //   non-cron session   → Thread   (thread id = stored session id)
 //   cron job           → Routine
 //   cron job's session → Run      (replying to one makes it a Thread)
@@ -31,7 +33,7 @@ const openRequests = new Map<string, { threadId: Id; req: ServerRequest }>()
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 let attempt = 0
 
-const profile = () => store.get().projectId ?? "default"
+const profile = () => store.get().profileId ?? "default"
 const api = <T>(path: string) => http().get<T>(path)
 const q = encodeURIComponent
 
@@ -139,14 +141,14 @@ function mapTranscript(rows: any[]): Message[] {
 }
 
 function toRoutine(j: any): Routine {
-  const projectId: string = j.profile ?? "default"
+  const profileId: string = j.profile ?? "default"
   const raw: string = j.name ?? j.id
   // Jobs are often named "[bot:<profile>] …". Inside that project the tag says nothing new.
-  const tag = `[bot:${projectId}]`
+  const tag = `[bot:${profileId}]`
   const name = raw.toLowerCase().startsWith(tag.toLowerCase()) ? raw.slice(tag.length).trim() || raw : raw
   return {
     id: j.id,
-    projectId,
+    profileId,
     name,
     schedule: humanSchedule(j.schedule?.expr ?? j.schedule_display ?? j.schedule?.display ?? ""),
     enabled: j.enabled !== false,
@@ -169,9 +171,14 @@ const blobToBase64 = (url: string) => platform().base64(url)
 
 // ---- lists ----------------------------------------------------------------------
 
+/** A session's working folder, when Hermes stored one. */
+const cwdOf = (s: any): string | undefined => (typeof s.cwd === "string" && s.cwd ? s.cwd : undefined)
+
 const toThread = (p: string, s: any): Thread => ({
   id: s.id,
-  projectId: p,
+  profileId: p,
+  projectId: projects.projectFor(store.get().projects[p] ?? [], cwdOf(s)),
+  cwd: cwdOf(s),
   title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
   cast: threadCast(s.id),
@@ -202,8 +209,8 @@ async function loadModels(p: string) {
         )
         return { slug: x.slug, name: x.name, models, caps }
       }),
-    projectModel: r.model ? { model: r.model, provider: r.provider, fast: fast.value === "fast" } : null,
-    projectEffort: effort.value && effort.value !== "none" ? effort.value : "medium",
+    profileModel: r.model ? { model: r.model, provider: r.provider, fast: fast.value === "fast" } : null,
+    profileEffort: effort.value && effort.value !== "none" ? effort.value : "medium",
     draftModel: null,
   })
   resolveDefault()
@@ -276,21 +283,15 @@ async function loadThreads(p: string) {
   const fromRuns = runThreads(p).filter((r) => !r.run.done)
   const threads: Thread[] = [
     ...res.sessions.map(
-      (s): Thread => ({
-        id: s.id,
-        projectId: p,
-        title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
-        updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
-        cast: threadCast(s.id),
-        // `is_active` only means "recently active". Live events decide "working".
-        status: "idle",
-        preview: previewText(s.preview),
-      }),
+      // `is_active` only means "recently active". Live events decide "working".
+      (s): Thread => toThread(p, s),
     ),
     ...fromRuns.map(
       ({ id, run }): Thread => ({
         id,
-        projectId: p,
+        profileId: p,
+        // A run works wherever its routine does; it isn't anyone's project thread.
+        projectId: GENERAL,
         title: run.title,
         updatedAt: run.updatedAt,
         cast: threadCast(id),
@@ -305,13 +306,15 @@ async function loadThreads(p: string) {
   store.set((s) => ({
     // Keep live status for threads we're already tracking.
     threads: [
-      ...s.threads.filter((t) => t.projectId !== p && !fresh.some((f) => f.id === t.id)),
+      ...s.threads.filter((t) => t.profileId !== p && !fresh.some((f) => f.id === t.id)),
       // Threads made here that the server doesn't list yet (it lists a thread once a message
       // is saved): dropping them would make a thread you just started blink out of the list.
-      ...s.threads.filter((t) => t.projectId === p && (isLocalThread(t.id) || unlisted.has(t.id)) && !fresh.some((f) => f.id === t.id)),
+      ...s.threads.filter((t) => t.profileId === p && (isLocalThread(t.id) || unlisted.has(t.id)) && !fresh.some((f) => f.id === t.id)),
       ...fresh.map((t) => {
         const known = s.threads.find((k) => k.id === t.id)
-        return known && known.status !== "idle" ? { ...t, status: known.status, stopping: known.stopping } : t
+        // A thread made here may not have its folder stored yet: it stays in the project it was made in.
+        const kept = known && !t.cwd && known.cwd ? { ...t, cwd: known.cwd, projectId: known.projectId } : t
+        return known && known.status !== "idle" ? { ...kept, status: known.status, stopping: known.stopping } : kept
       }),
     ],
   }))
@@ -339,7 +342,7 @@ function refreshSoon(what: "threads" | "routines") {
       if (what === "threads")
         void refreshProfiles()
           .then(() => {
-            const shown = new Set([profile(), ...store.get().threads.map((t) => t.projectId)])
+            const shown = new Set([profile(), ...store.get().threads.map((t) => t.profileId)])
             return Promise.all([...shown].map((p) => loadThreads(p).catch(() => {})))
           })
           .catch(() => {})
@@ -447,7 +450,7 @@ function onEvent(e: GatewayEvent) {
       platform().attention()
       void claimCreatedSkills(
         threadId,
-        store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile(),
+        store.get().threads.find((t) => t.id === threadId)?.profileId ?? profile(),
         speakerFor(threadId),
       )
       break
@@ -624,7 +627,7 @@ function ensureRuntime(threadId: Id): Promise<string> {
 }
 
 async function resume(threadId: Id): Promise<string> {
-  const p = runOrigin(threadId)?.projectId ?? store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile()
+  const p = runOrigin(threadId)?.profileId ?? store.get().threads.find((t) => t.id === threadId)?.profileId ?? profile()
   const r = await gw.call<any>("session.resume", { session_id: threadId, profile: p })
   runtimeOf.set(threadId, r.session_id)
   storedOf.set(r.session_id, threadId)
@@ -701,7 +704,13 @@ store.subscribe(() => {
   const { view } = store.get()
   if (view === shownView) return
   shownView = view
-  if (view.kind === "thread" && view.threadId) showCached(view.threadId)
+  if (view.kind === "thread" && view.threadId) {
+    showCached(view.threadId)
+    // The open thread's project is where the next new thread goes (⌘N starts one beside it).
+    const s = store.get()
+    const t = s.threads.find((x) => x.id === view.threadId)
+    if (t && t.profileId === s.profileId && t.projectId !== s.projectId && !t.fromRun) backend.selectProject(t.projectId)
+  }
 })
 
 const cacheTimers = new Map<Id, ReturnType<typeof setTimeout>>()
@@ -798,15 +807,15 @@ async function connectOnce() {
   store.set({ connection: { state: "connected", server: r.label, version: r.version } })
 
   const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", {})
-  readProjectOrder(profiles)
-  const projects = inOrder(
+  readProfileOrder(profiles)
+  const rows = inOrder(
     profiles.map((p) => ({
       id: p.name as string,
       name: (p.display_name as string) || (p.name === "default" ? "Default" : (p.name as string)),
       personalityIds: castOf(p),
     })),
   )
-  store.set({ projects, personalities: readLibrary(profiles) })
+  store.set({ profiles: rows, personalities: readLibrary(profiles) })
   readThreadMeta(profiles)
   readMyModel(profiles)
   void migrateLocal()
@@ -814,15 +823,16 @@ async function connectOnce() {
   void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
   let saved: string | null = null
   try {
+    // Saved under its old name, from when a profile was called a project.
     saved = platform().storage.get("projectId")
   } catch {}
-  const pick = projects.find((p) => p.id === saved)?.id ?? projects.find((p) => p.id === "default")?.id ?? projects[0]?.id
-  if (pick) await backend.selectProject(pick)
+  const pick = rows.find((p) => p.id === saved)?.id ?? rows.find((p) => p.id === "default")?.id ?? rows[0]?.id
+  if (pick) await backend.selectProfile(pick)
   resumeLive()
 }
 
 /** Hermes profile names: lowercase letters, digits, "-" and "_", starting with a letter or digit, at most 64. */
-export function projectIdFor(name: string): string {
+export function profileIdFor(name: string): string {
   return name
     .trim()
     .toLowerCase()
@@ -839,16 +849,19 @@ async function refreshProfiles() {
   readThreadMeta(profiles)
   readMyModel(profiles)
   // The order can change on another device too.
-  readProjectOrder(profiles)
+  readProfileOrder(profiles)
   store.set((s) => ({
     personalities: readLibrary(profiles),
-    projects: inOrder(
-      s.projects.map((pr) => {
+    profiles: inOrder(
+      s.profiles.map((pr) => {
         const row = profiles.find((p) => p.name === pr.id)
         return row ? { ...pr, personalityIds: castOf(row) } : pr
       }),
     ),
   }))
+  // Another device may have added, renamed or removed a project.
+  const open = store.get().profileId
+  if (open) await projects.loadProjects(gw, open).catch(() => {})
 }
 
 /** The thread list's order as shown (sort and search applied), so marking the open
@@ -939,9 +952,14 @@ export function onThreadRenamed(l: (from: Id, to: Id) => void): () => void {
 
 let sendSeq = 0
 const newLocalId = () => `${LOCAL}${Date.now().toString(36)}-${(sendSeq++).toString(36)}`
+/** Where a new thread goes: the open profile, in the picked project's folder. */
+function newThreadPlace(): Pick<Thread, "profileId" | "projectId" | "cwd"> {
+  const project = projects.currentProject()
+  return { profileId: profile(), projectId: project?.id ?? GENERAL, cwd: project?.folder }
+}
 const titleFor = (text: string, attachments: Attachment[]) => text.split("\n")[0].slice(0, 80) || attachments[0]?.name || "New thread"
-const projectOfThread = (threadId: Id) =>
-  runOrigin(threadId)?.projectId ?? store.get().threads.find((t) => t.id === threadId)?.projectId ?? profile()
+const profileOfThread = (threadId: Id) =>
+  runOrigin(threadId)?.profileId ?? store.get().threads.find((t) => t.id === threadId)?.profileId ?? profile()
 
 function rekey<T>(rec: Record<Id, T>, from: Id, to: Id): Record<Id, T> {
   if (!(from in rec)) return rec
@@ -995,7 +1013,7 @@ function forgetMissingThread(threadId: Id, notify = true) {
   if (run) void forgetThreadMeta(threadId).catch((e) => console.warn("[thread-meta]", e))
   store.set((s) => {
     const remaining = s.threads.filter((t) => t.id !== threadId)
-    const project = s.threads.find((t) => t.id === threadId)?.projectId ?? s.projectId
+    const project = s.threads.find((t) => t.id === threadId)?.profileId ?? s.profileId
     return {
       threads: remaining,
       done: s.done.filter((t) => t.id !== threadId),
@@ -1005,7 +1023,7 @@ function forgetMissingThread(threadId: Id, notify = true) {
         : s.runs,
       view:
         s.view.kind === "thread" && s.view.threadId === threadId
-          ? { kind: "thread", threadId: neighbourOf(threadId, remaining.filter((t) => t.projectId === project)) }
+          ? { kind: "thread", threadId: neighbourOf(threadId, remaining.filter((t) => t.profileId === project)) }
           : s.view,
     }
   })
@@ -1039,9 +1057,9 @@ function dropUnsavedThread(id: Id) {
   }))
 }
 
-/** Makes a Hermes session for a new thread. */
-async function startSession(projectId: Id): Promise<{ id: Id; runtimeId: string; info: any }> {
-  const r = await gw.call<any>("session.create", { profile: projectId })
+/** Makes a Hermes session for a new thread, working in `cwd` (its project's folder) when given. */
+async function startSession(profileId: Id, cwd?: string): Promise<{ id: Id; runtimeId: string; info: any }> {
+  const r = await gw.call<any>("session.create", { profile: profileId, ...(cwd ? { cwd, cwd_explicit: true } : {}) })
   const id = r.stored_session_id as string
   runtimeOf.set(id, r.session_id)
   storedOf.set(r.session_id, id)
@@ -1068,8 +1086,8 @@ function createThread(localId: Id): Promise<Id> {
   let flight = creating.get(localId)
   if (!flight) {
     flight = (async () => {
-      const projectId = store.get().threads.find((t) => t.id === localId)?.projectId ?? profile()
-      const s = await startSession(projectId)
+      const t = store.get().threads.find((x) => x.id === localId)
+      const s = await startSession(t?.profileId ?? profile(), t?.cwd)
       renameThread(localId, s.id)
       // Picked in the composer, or changed while it was being made (see setModel).
       const pick = store.get().threadModels[s.id] ?? null
@@ -1142,7 +1160,7 @@ async function deliver(o: Outgoing): Promise<Id> {
   setPaused(id, false)
   patchThread(id, { status: "working", updatedAt: Date.now() })
   // Who answers: the @mentioned personality, else the thread's host.
-  const cast = await prepareTurn(id, runtimeId, projectOfThread(id), o.text)
+  const cast = await prepareTurn(id, runtimeId, profileOfThread(id), o.text)
   patchThread(id, { cast })
   await attach(runtimeId, o.attachments)
   // A reply that wouldn't stop: Hermes runs this right after it, rather than steering it.
@@ -1176,13 +1194,13 @@ export const backend: Backend = {
     connecting ??= connectOnce().finally(() => (connecting = null))
     return connecting
   },
-  async selectProject(id) {
+  async selectProfile(id) {
     try {
-      platform().storage.set("projectId", id)
+      platform().storage.set("projectId", id) // its old name: see connectOnce
     } catch {}
-    const { projectId: from, view } = store.get()
+    const { profileId: from, view } = store.get()
     const changed = from !== id
-    store.set({ projectId: id })
+    store.set(changed ? { profileId: id, projectId: projects.savedProject(id) } : { profileId: id })
     if (changed) {
       // Coming back to a project reopens the thread you had open there.
       if (from && view.kind === "thread") {
@@ -1191,6 +1209,9 @@ export const backend: Backend = {
       }
       store.go({ kind: "thread", threadId: lastThread.get(id) ?? null })
     }
+    // Projects first: they say which project each thread is in. A profile Hermes can't
+    // list projects for still works, with everything in General.
+    await projects.loadProjects(gw, id).catch((e) => console.warn("[projects]", e))
     await Promise.all([
       loadThreads(id).catch((e) => toast.error(`Threads: ${e.message ?? e}`)),
       loadDone(id).catch(() => {}),
@@ -1200,32 +1221,53 @@ export const backend: Backend = {
     ])
   },
 
-  loadProjectThreads(id) {
-    return loadThreads(id)
+  selectProject(id) {
+    const p = store.get().profileId
+    if (!p) return
+    store.set({ projectId: id })
+    projects.saveProject(p, id)
   },
 
-  async createProject(name) {
-    const id = projectIdFor(name)
+  async createProject(name, folder) {
+    const p = store.get().profileId
+    if (!p) throw new Error("Open a profile first")
+    const project = await projects.createProject(gw, p, name, folder)
+    backend.selectProject(project.id)
+    return project.id
+  },
+
+  async renameProject(id, name) {
+    const p = store.get().profileId
+    if (p) await projects.renameProject(gw, p, id, name)
+  },
+
+  async removeProject(id) {
+    const p = store.get().profileId
+    if (p) await projects.removeProject(gw, p, id)
+  },
+
+  async createProfile(name) {
+    const id = profileIdFor(name)
     if (!id) throw new Error("Use letters or numbers in the name")
-    if (store.get().projects.some((p) => p.id === id)) throw new Error(`A project called ${id} already exists`)
+    if (store.get().profiles.some((p) => p.id === id)) throw new Error(`A project called ${id} already exists`)
     // Cloned from Default so it starts with the same model, keys and skills.
     await gw.call("profiles.create", { name: id, clone_from: "default" })
     const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
     const row = profiles.find((p) => p.name === id)
     store.set((s) => ({
-      projects: [
-        ...s.projects.filter((p) => p.id !== id),
+      profiles: [
+        ...s.profiles.filter((p) => p.id !== id),
         { id, name: (row?.display_name as string) || id, personalityIds: row ? castOf(row) : [] },
       ],
     }))
     // Tells Hermes it's talking through Kitaab in the new project too.
     void syncKitabContext(profiles).catch((e) => console.warn("[kitab-context]", e))
-    await backend.selectProject(id)
+    await backend.selectProfile(id)
     return id
   },
 
-  async setProjectOrder(ids) {
-    await writeProjectOrder(gw, ids)
+  async setProfileOrder(ids) {
+    await writeProfileOrder(gw, ids)
   },
 
   async loadThread(threadId) {
@@ -1250,11 +1292,12 @@ export const backend: Backend = {
     if (!id) {
       // The iPhone shows its own copy of the message until the thread exists, so it waits for Hermes.
       const pick = store.get().draftModel ?? usableMyModel()
-      const s = await startSession(profile())
+      const where = newThreadPlace()
+      const s = await startSession(where.profileId, where.cwd)
       id = s.id
       await applyStartModel(s.id, s.runtimeId, s.info, pick)
       store.set((st) => ({
-        threads: withFirst(st.threads, { id: s.id, projectId: profile(), title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
+        threads: withFirst(st.threads, { id: s.id, ...where, title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
       }))
     }
     const o = begin(id, text, attachments, how, !threadId)
@@ -1281,7 +1324,7 @@ export const backend: Backend = {
     // The composer's pick for this thread, else your default from Settings.
     const pick = store.get().draftModel ?? usableMyModel()
     store.set((s) => ({
-      threads: withFirst(s.threads, { id, projectId: profile(), title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
+      threads: withFirst(s.threads, { id, ...newThreadPlace(), title: titleFor(text, attachments), updatedAt: Date.now(), cast: [], status: "working" }),
       threadModels: pick ? { ...s.threadModels, [id]: pick } : s.threadModels,
     }))
     const o = begin(id, text, attachments, how, true)!
@@ -1403,7 +1446,7 @@ export const backend: Backend = {
 
   async loadRuns(routineId) {
     const routine = store.get().routines.find((r) => r.id === routineId)
-    const p = routine?.projectId ?? profile()
+    const p = routine?.profileId ?? profile()
     const res = await api<{ runs: any[] }>(`/api/cron/jobs/${q(routineId)}/runs?profile=${q(p)}&limit=50`)
     const prev = store.get().runs[routineId] ?? []
     const runs: Run[] = res.runs.map((s) => ({
@@ -1419,7 +1462,7 @@ export const backend: Backend = {
 
   async loadRunReport(routineId, runId) {
     const routine = store.get().routines.find((r) => r.id === routineId)
-    const p = routine?.projectId ?? profile()
+    const p = routine?.profileId ?? profile()
     const res = await api<{ messages: any[] }>(`/api/sessions/${q(runId)}/messages?profile=${q(p)}`)
     const said = res.messages
       .filter((m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim())
@@ -1432,14 +1475,14 @@ export const backend: Backend = {
 
   async replyToRun(routineId, runId, text) {
     const routine = store.get().routines.find((r) => r.id === routineId)
-    const p = routine?.projectId ?? profile()
+    const p = routine?.profileId ?? profile()
     const run = store.get().runs[routineId]?.find((r) => r.id === runId)
     const title = `${routine?.name ?? "Routine"} · ${new Date(run?.startedAt ?? Date.now()).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`
     await saveThreadMeta(p, runId, { run: { routineId, title, updatedAt: Date.now() } })
     store.set((s) => ({
       threads: s.threads.some((t) => t.id === runId)
         ? s.threads
-        : [{ id: runId, projectId: p, title, updatedAt: Date.now(), cast: [], status: "idle", fromRun: { routineId, runId } }, ...s.threads],
+        : [{ id: runId, profileId: p, projectId: GENERAL, title, updatedAt: Date.now(), cast: [], status: "idle", fromRun: { routineId, runId } }, ...s.threads],
       runs: { ...s.runs, [routineId]: (s.runs[routineId] ?? []).map((r) => (r.id === runId ? { ...r, threadId: runId } : r)) },
     }))
     try {
@@ -1457,13 +1500,13 @@ export const backend: Backend = {
     if (isLocalThread(threadId)) return dropUnsavedThread(threadId)
     const st = store.get()
     const thread = (done ? st.threads : st.done).find((t) => t.id === threadId)
-    const p = thread?.projectId ?? runOrigin(threadId)?.projectId ?? profile()
+    const p = thread?.profileId ?? runOrigin(threadId)?.profileId ?? profile()
 
     // Optimistic: move it between the lists right away.
     store.set((s) => {
       const moving = thread ?? s.threads.find((t) => t.id === threadId)
       if (!moving) return {}
-      const others = s.threads.filter((t) => t.projectId === p && t.id !== threadId)
+      const others = s.threads.filter((t) => t.profileId === p && t.id !== threadId)
       const leavingOpen = done && s.view.kind === "thread" && s.view.threadId === threadId
       return {
         threads: done ? s.threads.filter((t) => t.id !== threadId) : withFirst(s.threads, { ...moving, status: "idle" }),

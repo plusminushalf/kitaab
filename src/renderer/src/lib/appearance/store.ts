@@ -7,12 +7,12 @@ import { cssVar, KITAB_FAMILY, type Appearance, type ThemeFamily, type ThemeVari
 
 export type ColorScheme = "system" | "light" | "dark"
 export type ChatWidth = "comfortable" | "wide" | "full"
-/** How the sidebar shows projects: one at a time behind a switcher, or every project as a folder. */
+/** How the sidebar shows the open profile's projects: a plain list ("switcher", its old name), or Dia-style folders. */
 export type SidebarLayout = "switcher" | "folders"
 
 export const THREAD_DETAIL_ITEMS = [
   ["machine", "Machine"],
-  ["project", "Project"],
+  ["project", "Profile and project"],
   ["model", "Model"],
   ["personalities", "Personalities"],
   ["routine", "Routine"],

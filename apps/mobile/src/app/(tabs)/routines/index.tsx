@@ -7,7 +7,7 @@ import type { Routine } from "@kitab/core/model"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
-import { ProjectMenu } from "@/components/project-menu"
+import { ProfileMenu } from "@/components/profile-menu"
 import { StatusMark, stateOf } from "@/components/routine-status"
 import { Empty } from "@/components/ui"
 
@@ -16,30 +16,30 @@ const byNextRun = (a: Routine, b: Routine) => (a.nextRunAt ?? Infinity) - (b.nex
 export default function Routines() {
   const c = useColors()
   const all = useStore((s) => s.routines)
-  const projectId = useStore((s) => s.projectId)
+  const profileId = useStore((s) => s.profileId)
   const personalities = useStore((s) => s.personalities)
   const connected = useStore((s) => s.connection.state === "connected")
   const [refreshing, setRefreshing] = useState(false)
 
   const sections = useMemo(() => {
-    const mine = all.filter((r) => r.projectId === projectId)
+    const mine = all.filter((r) => r.profileId === profileId)
     const active = mine.filter((r) => r.enabled).sort(byNextRun)
     const paused = mine.filter((r) => !r.enabled).sort((a, b) => a.name.localeCompare(b.name))
     return [
       { title: "", data: active },
       ...(paused.length ? [{ title: "Paused", data: paused }] : []),
     ].filter((s) => s.data.length)
-  }, [all, projectId])
+  }, [all, profileId])
 
   async function refresh() {
-    if (!projectId) return
+    if (!profileId) return
     setRefreshing(true)
-    await backend.selectProject(projectId).finally(() => setRefreshing(false))
+    await backend.selectProfile(profileId).finally(() => setRefreshing(false))
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: "Routines", headerLeft: () => <ProjectMenu /> }} />
+      <Stack.Screen options={{ title: "Routines", headerLeft: () => <ProfileMenu /> }} />
       <SectionList
         contentInsetAdjustmentBehavior="automatic"
         sections={sections}

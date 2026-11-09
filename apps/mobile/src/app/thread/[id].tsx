@@ -17,6 +17,7 @@ import { MessageRow } from "@/components/message"
 import { PendingCard } from "@/components/pending"
 import { QueuedCard } from "@/components/queued"
 import { Avatar, Empty, Icon } from "@/components/ui"
+import { NewThreadProjectMenu } from "@/components/profile-menu"
 
 export default function ThreadScreen() {
   const c = useColors()
@@ -28,8 +29,8 @@ export default function ThreadScreen() {
   const isDone = useStore((s) => (id ? !s.threads.some((t) => t.id === id) && s.done.some((t) => t.id === id) : false))
   const detail = useStore((s) => (id ? s.details[id] : undefined))
   const connected = useStore((s) => s.connection.state === "connected")
-  const projectId = useStore((s) => s.projectId)
-  const projects = useStore((s) => s.projects)
+  const profileId = useStore((s) => s.profileId)
+  const profiles = useStore((s) => s.profiles)
   const personalities = useStore((s) => s.personalities)
 
   // The new-thread screen shows what you sent until the thread exists.
@@ -43,10 +44,10 @@ export default function ThreadScreen() {
     if (detail?.missing && router.canGoBack()) router.back()
   }, [detail?.missing])
 
-  const projectCast = useMemo(() => {
-    const ids = projects.find((p) => p.id === (thread?.projectId ?? projectId))?.personalityIds ?? []
+  const profileCast = useMemo(() => {
+    const ids = profiles.find((p) => p.id === (thread?.profileId ?? profileId))?.personalityIds ?? []
     return personalities.filter((p) => ids.includes(p.id))
-  }, [projects, personalities, thread?.projectId, projectId])
+  }, [profiles, personalities, thread?.profileId, profileId])
   // Who a plain reply goes to (the last to answer, else the host), as the core decides it.
   const answers = useMemo(() => {
     const pid = id && thread ? plainReplySpeaker(id, thread.cast) : undefined
@@ -82,7 +83,9 @@ export default function ThreadScreen() {
               <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }} numberOfLines={1}>
                 {thread?.title ?? (id ? "" : "New thread")}
               </Text>
-              {threadCast.length ? (
+              {!id ? (
+                <NewThreadProjectMenu />
+              ) : threadCast.length ? (
                 <Text style={{ color: c.textMuted, fontSize: 12 }} numberOfLines={1}>
                   {threadCast.map((p) => p.name).join(", ")}
                 </Text>
@@ -119,10 +122,10 @@ export default function ThreadScreen() {
           </View>
         ) : !id && !draft ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
-            <Empty icon="sparkles" title="What are we working on?" body={projectCast.length ? "Type @ to hand it to one of the project's personalities." : undefined}>
-              {projectCast.length ? (
+            <Empty icon="sparkles" title="What are we working on?" body={profileCast.length ? "Type @ to hand it to one of the project's personalities." : undefined}>
+              {profileCast.length ? (
                 <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
-                  {projectCast.slice(0, 5).map((p) => (
+                  {profileCast.slice(0, 5).map((p) => (
                     <Avatar key={p.id} name={p.name} size={28} />
                   ))}
                 </View>
@@ -154,7 +157,7 @@ export default function ThreadScreen() {
         <Composer
           threadId={id}
           working={working}
-          cast={projectCast}
+          cast={profileCast}
           placeholder={id ? (answers ? `Reply to ${answers.name}` : "Reply") : "Start a thread"}
           onSend={send}
           onStop={id ? () => void backend.interrupt(id) : undefined}

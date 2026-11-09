@@ -27,38 +27,38 @@ function toSkill(r: any): Skill {
   }
 }
 
-function put(projectId: Id, skills: Skill[]) {
-  store.set((s) => ({ skills: { ...s.skills, [projectId]: skills } }))
+function put(profileId: Id, skills: Skill[]) {
+  store.set((s) => ({ skills: { ...s.skills, [profileId]: skills } }))
 }
 
 /** Reads the skills installed in a project. */
-export async function loadSkills(projectId: Id): Promise<Skill[]> {
-  const rows = await http().get<any[]>(`/api/skills?profile=${q(projectId)}`)
+export async function loadSkills(profileId: Id): Promise<Skill[]> {
+  const rows = await http().get<any[]>(`/api/skills?profile=${q(profileId)}`)
   const skills = (Array.isArray(rows) ? rows : []).filter((r) => r?.name).map(toSkill).sort(byName)
-  put(projectId, skills)
+  put(profileId, skills)
   return skills
 }
 
-export async function setSkillEnabled(projectId: Id, name: string, enabled: boolean) {
-  await http().put(`/api/skills/toggle?profile=${q(projectId)}`, { name, enabled, profile: projectId })
+export async function setSkillEnabled(profileId: Id, name: string, enabled: boolean) {
+  await http().put(`/api/skills/toggle?profile=${q(profileId)}`, { name, enabled, profile: profileId })
   put(
-    projectId,
-    (store.get().skills[projectId] ?? []).map((s) => (s.name === name ? { ...s, enabled } : s)),
+    profileId,
+    (store.get().skills[profileId] ?? []).map((s) => (s.name === name ? { ...s, enabled } : s)),
   )
 }
 
 /** The skill's SKILL.md, frontmatter included. */
-export async function readSkill(projectId: Id, name: string): Promise<string> {
+export async function readSkill(profileId: Id, name: string): Promise<string> {
   const r = await http().get<{ content: string }>(
-    `/api/skills/content?name=${q(name)}&profile=${q(projectId)}`,
+    `/api/skills/content?name=${q(name)}&profile=${q(profileId)}`,
   )
   return r.content
 }
 
 /** Rewrites a skill's SKILL.md. */
-export async function saveSkill(projectId: Id, name: string, content: string) {
-  await http().put(`/api/skills/content?profile=${q(projectId)}`, { name, content, profile: projectId })
-  await loadSkills(projectId).catch(() => {})
+export async function saveSkill(profileId: Id, name: string, content: string) {
+  await http().put(`/api/skills/content?profile=${q(profileId)}`, { name, content, profile: profileId })
+  await loadSkills(profileId).catch(() => {})
 }
 
 /** A skill name Hermes accepts: lowercase letters, digits, and . _ - */
@@ -75,7 +75,7 @@ export function skillSlug(text: string): string {
 export type NewSkill = { name: string; description: string; body: string }
 
 /** Writes a new skill into the project. Resolves to its name. */
-export async function createSkill(projectId: Id, input: NewSkill): Promise<string> {
+export async function createSkill(profileId: Id, input: NewSkill): Promise<string> {
   const name = skillSlug(input.name)
   if (!name) throw new Error("Give it a name")
   const description = input.description.trim()
@@ -83,22 +83,22 @@ export async function createSkill(projectId: Id, input: NewSkill): Promise<strin
   if (!input.body.trim()) throw new Error("Write the steps")
   // JSON strings are valid YAML, so quoting is never a problem.
   const content = `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${input.body.trim()}\n`
-  await post(projectId, name, content)
+  await post(profileId, name, content)
   return name
 }
 
-function post(projectId: Id, name: string, content: string, category?: string) {
-  return http().post(`/api/skills?profile=${q(projectId)}`, {
+function post(profileId: Id, name: string, content: string, category?: string) {
+  return http().post(`/api/skills?profile=${q(profileId)}`, {
     name,
     content,
     category: category ?? null,
-    profile: projectId,
+    profile: profileId,
   })
 }
 
 /** Where else a skill is installed, for one missing from this project. */
 export async function findSkill(name: string, except: Id): Promise<Id | undefined> {
-  const others = store.get().projects.filter((p) => p.id !== except)
+  const others = store.get().profiles.filter((p) => p.id !== except)
   // Check what's already loaded before asking the server.
   const loaded = others.find((p) => store.get().skills[p.id]?.some((s) => s.name === name))
   if (loaded) return loaded.id
@@ -139,11 +139,11 @@ export function noteToolStart(threadId: Id, name: string | undefined, args: any)
  * When a turn ends: skills the answering personality created become its skills.
  * Checks the project first, since a create can fail or be turned down at approval.
  */
-export async function claimCreatedSkills(threadId: Id, projectId: Id, personalityId: Id | undefined) {
+export async function claimCreatedSkills(threadId: Id, profileId: Id, personalityId: Id | undefined) {
   const names = created.get(threadId)
   created.delete(threadId)
   if (!names?.size) return
-  const installed = await loadSkills(projectId).catch(() => null)
+  const installed = await loadSkills(profileId).catch(() => null)
   const p = store.get().personalities.find((x) => x.id === personalityId)
   if (!installed || !p) return
   const fresh = [...names].filter((n) => installed.some((s) => s.name === n) && !p.skills?.includes(n))

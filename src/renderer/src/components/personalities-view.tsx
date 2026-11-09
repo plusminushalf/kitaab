@@ -18,34 +18,34 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
 import { SkillBadges, SkillPicker } from "@/components/skill-picker"
-import type { Personality, Project } from "@kitab/core/model"
-import { deletePersonality, savePersonality, setInProject } from "@kitab/core/personalities"
+import type { Personality, Profile } from "@kitab/core/model"
+import { deletePersonality, savePersonality, setInProfile } from "@kitab/core/personalities"
 import { loadSkills } from "@kitab/core/skills"
 import { useStore } from "@/lib/store"
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** Your library of personalities, and which ones the current project uses. */
+/** Your library of personalities, and which ones the current profile uses. */
 export function PersonalitiesView() {
   const personalities = useStore((s) => s.personalities)
-  const project = useStore((s) => s.projects.find((p) => p.id === s.projectId))
+  const profile = useStore((s) => s.profiles.find((p) => p.id === s.profileId))
   const connected = useStore((s) => s.connection.state === "connected")
   // null: closed · "new": creating · otherwise the personality being edited
   const [editing, setEditing] = useState<Personality | "new" | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const skills = useStore((s) => (project ? s.skills[project.id] : undefined))
+  const skills = useStore((s) => (profile ? s.skills[profile.id] : undefined))
 
-  // Skills are per project: load this one's so each personality's skills show how they stand here.
+  // Skills are per profile: load this one's so each personality's skills show how they stand here.
   useEffect(() => {
-    if (!project || !connected || skills) return
-    loadSkills(project.id).catch(() => {})
-  }, [project?.id, connected])
+    if (!profile || !connected || skills) return
+    loadSkills(profile.id).catch(() => {})
+  }, [profile?.id, connected])
 
   const toggle = async (p: Personality, on: boolean) => {
-    if (!project) return
+    if (!profile) return
     setBusy(p.id)
     try {
-      await setInProject(project.id, p.id, on)
+      await setInProfile(profile.id, p.id, on)
     } catch (e) {
       toast.error(`Couldn't ${on ? "add" : "remove"} ${p.name}: ${message(e)}`)
     } finally {
@@ -55,7 +55,7 @@ export function PersonalitiesView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="Personalities" subtitle={project?.name}>
+      <PageHeader title="Personalities" subtitle={profile?.name}>
         {personalities.length > 0 && (
           <Button
             size="sm"
@@ -76,7 +76,7 @@ export function PersonalitiesView() {
               <EmptyTitle>No personalities yet</EmptyTitle>
               <EmptyDescription>
                 A personality is a character you can bring into a thread with @, like a Designer or a Coach. It brings
-                the craft; the project keeps the facts.
+                the craft; the profile keeps the facts.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -89,11 +89,11 @@ export function PersonalitiesView() {
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
             <p className="text-sm text-muted-foreground">
-              Turn one on to use it in {project?.name ?? "this project"}. In a thread, type @ and its name.
+              Turn one on to use it in {profile?.name ?? "this profile"}. In a thread, type @ and its name.
             </p>
             <ItemGroup className="gap-2">
               {personalities.map((p) => {
-                const inProject = Boolean(project?.personalityIds?.includes(p.id))
+                const inProfile = Boolean(profile?.personalityIds?.includes(p.id))
                 return (
                   <Item key={p.id} variant="outline">
                     <ItemContent>
@@ -116,11 +116,11 @@ export function PersonalitiesView() {
                         <Pencil />
                       </Button>
                       <Switch
-                        checked={inProject}
-                        disabled={!project || !connected || busy === p.id}
+                        checked={inProfile}
+                        disabled={!profile || !connected || busy === p.id}
                         onCheckedChange={(on) => void toggle(p, on)}
-                        aria-label={`Use ${p.name} in ${project?.name ?? "this project"}`}
-                        title={inProject ? `In ${project?.name}` : `Add to ${project?.name}`}
+                        aria-label={`Use ${p.name} in ${profile?.name ?? "this profile"}`}
+                        title={inProfile ? `In ${profile?.name}` : `Add to ${profile?.name}`}
                       />
                     </ItemActions>
                   </Item>
@@ -133,7 +133,7 @@ export function PersonalitiesView() {
       {editing !== null && (
         <PersonalityDialog
           personality={editing === "new" ? null : editing}
-          project={project}
+          profile={profile}
           onClose={() => setEditing(null)}
         />
       )}
@@ -143,14 +143,14 @@ export function PersonalitiesView() {
 
 function PersonalityDialog({
   personality,
-  project,
+  profile,
   onClose,
 }: {
   personality: Personality | null
-  project?: Project
+  profile?: Profile
   onClose: () => void
 }) {
-  const projectSkills = useStore((s) => (project ? s.skills[project.id] : undefined))
+  const profileSkills = useStore((s) => (profile ? s.skills[profile.id] : undefined))
   const [name, setName] = useState(personality?.name ?? "")
   const [description, setDescription] = useState(personality?.description ?? "")
   const [instructions, setInstructions] = useState(personality?.instructions ?? "")
@@ -164,10 +164,10 @@ function PersonalityDialog({
     setSaving(true)
     try {
       const p = await savePersonality({ name, description, instructions, skills }, personality?.id)
-      // A new personality joins the project you made it in.
-      if (isNew && project) {
-        await setInProject(project.id, p.id, true).catch((e) =>
-          toast.error(`Saved, but couldn't add it to ${project.name}: ${message(e)}`),
+      // A new personality joins the profile you made it in.
+      if (isNew && profile) {
+        await setInProfile(profile.id, p.id, true).catch((e) =>
+          toast.error(`Saved, but couldn't add it to ${profile.name}: ${message(e)}`),
         )
       }
       toast.success(isNew ? `Created ${p.name}. Tag it with @${p.id}` : `Saved ${p.name}`)
@@ -202,10 +202,10 @@ function PersonalityDialog({
       }}
     >
       <DialogContent className="sm:max-w-lg">
-        {choosingSkills && project ? (
+        {choosingSkills && profile ? (
           <SkillPicker
             title={name.trim() ? `${name.trim()}'s skills` : "Skills"}
-            project={project}
+            profile={profile}
             initial={skills}
             onCancel={() => setChoosingSkills(false)}
             onDone={(picked) => {
@@ -218,7 +218,7 @@ function PersonalityDialog({
             <DialogHeader>
               <DialogTitle>{isNew ? "New personality" : `Edit ${personality.name}`}</DialogTitle>
               <DialogDescription>
-                Describe who it is and how it works. Keep project facts out; the project keeps those.
+                Describe who it is and how it works. Keep profile facts out; the profile keeps those.
               </DialogDescription>
             </DialogHeader>
             <form
@@ -266,7 +266,7 @@ function PersonalityDialog({
                 <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     {skills.length ? (
-                      <SkillBadges names={skills} skills={projectSkills} />
+                      <SkillBadges names={skills} skills={profileSkills} />
                     ) : (
                       <span className="text-sm text-muted-foreground">No skills yet</span>
                     )}
@@ -275,8 +275,8 @@ function PersonalityDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={!project}
-                    title={project ? undefined : "Open a project to choose from its skills"}
+                    disabled={!profile}
+                    title={profile ? undefined : "Open a profile to choose from its skills"}
                     onClick={() => setChoosingSkills(true)}
                   >
                     Choose skills
@@ -288,7 +288,7 @@ function PersonalityDialog({
                   <span />
                 ) : confirmDelete ? (
                   <Button type="button" variant="destructive" disabled={saving} onClick={() => void remove()}>
-                    Delete from every project
+                    Delete from every profile
                   </Button>
                 ) : (
                   <Button

@@ -7,7 +7,7 @@ import { http, platform, type Platform } from "./platform"
 //
 // Kitaab starts its backend with HERMES_DESKTOP=1, so Hermes treats every Kitaab chat as the
 // official Hermes desktop app and gives the agent that app's paragraph (MEDIA: cards,
-// ::preview widgets…), none of which Kitaab shows. In every project (profile) Kitaab writes:
+// ::preview widgets…), none of which Kitaab shows. In every profile Kitaab writes:
 //   config.yaml  platform_hints.desktop.replace   Kitaab's own paragraph for chats
 //   config.yaml  platform_hints.cron.append       a note for routine runs
 // (platform_hints is a top-level key; Hermes ignores it under agent:)
@@ -74,7 +74,7 @@ async function registerDevice(rows: ProfileRow[]): Promise<DeviceKind[]> {
 
 // ---- the texts ---------------------------------------------------------------------------
 
-type Project = { id: Id; name: string }
+type ProfileInfo = { id: Id; name: string }
 
 function where(kinds: DeviceKind[]): string {
   const mac = kinds.includes("mac")
@@ -103,26 +103,29 @@ function phoneNote(kinds: DeviceKind[]): string {
     : ""
 }
 
-/** Replaces Hermes's "desktop" paragraph in this project's chats. */
-export function chatHint(project: Project, kinds: DeviceKind[]): string {
+/** Replaces Hermes's "desktop" paragraph in this profile's chats. */
+export function chatHint(profile: ProfileInfo, kinds: DeviceKind[]): string {
   return [
     `You're chatting through Kitaab, the user's own app for Hermes (not the official Hermes desktop app). ` +
-      `The user has Kitaab ${where(kinds)}. Every Kitaab app shows the same projects, threads and routines, ` +
+      `The user has Kitaab ${where(kinds)}. Every Kitaab app shows the same profiles, projects, threads and routines, ` +
       `kept in sync through this server, so the user may read your reply on any of them.${phoneNote(kinds)}`,
     RENDERING,
-    `In Kitaab, a Hermes profile is a project, a session is a thread, a cron job is a routine, and each run ` +
-      `of a cron job is a run. This chat is a thread in the project "${project.name}" (profile ` +
-      `\`${project.id}\`). Use Kitaab's words with the user. Before you do anything in Kitaab itself ` +
+    `In Kitaab, a Hermes profile is a profile and holds projects: a Hermes project, with its own folder. A ` +
+      `session is a thread, and it belongs to the project whose folder is its working directory (a thread ` +
+      `with no project folder is in the profile's General project). A cron job is a routine, and each run ` +
+      `of a cron job is a run. This chat is a thread in the profile "${profile.name}" (\`${profile.id}\`); ` +
+      `if your working directory is a project's folder, keep this thread's work and files in it. Use ` +
+      `Kitaab's words with the user. Before you do anything in Kitaab itself ` +
       `(start or hand off to a new thread, link to a thread, routine or run, set up a routine), load the ` +
       `\`${SKILL}\` skill.`,
     SECRETS,
   ].join("\n\n")
 }
 
-/** Added to Hermes's own paragraph for cron runs in this project. */
-export function routineHint(project: Project, kinds: DeviceKind[]): string {
+/** Added to Hermes's own paragraph for cron runs in this profile. */
+export function routineHint(profile: ProfileInfo, kinds: DeviceKind[]): string {
   return [
-    `This cron job is a routine in Kitaab, the user's own app for Hermes, in the project "${project.name}". ` +
+    `This cron job is a routine in Kitaab, the user's own app for Hermes, in the profile "${profile.name}". ` +
       `The user reads each run's final response as its report in Kitaab ${where(kinds)}, under the ` +
       `routine's runs, and can reply to it there.${phoneNote(kinds)}`,
     RENDERING,
@@ -130,8 +133,8 @@ export function routineHint(project: Project, kinds: DeviceKind[]): string {
 }
 
 /** The `kitab` skill: how to do things in Kitaab (threads, links, routines, secrets) and what to leave alone. */
-export function skillText(project: Project, kinds: DeviceKind[]): string {
-  const p = project.id
+export function skillText(profile: ProfileInfo, kinds: DeviceKind[]): string {
+  const p = profile.id
   const description =
     "How to do things in Kitaab: start or hand off to a new thread, link to threads, routines and runs, set up routines, ask for secrets"
   return `---
@@ -142,8 +145,13 @@ description: ${JSON.stringify(description)}
 # Kitaab
 
 Kitaab is the user's own app for Hermes. They have it ${where(kinds)}. Every Kitaab app reads this
-server, so all of them show the same projects, threads, routines and runs. You're in the project
-"${project.name}", which is the Hermes profile \`${p}\`.
+server, so all of them show the same profiles, projects, threads, routines and runs. You're in the
+profile "${profile.name}" (\`${p}\`).
+
+A profile holds the memory, skills, personalities and routines. Inside it, **projects** split the
+work: each is a Hermes project with its own folder on the server, and a thread belongs to the project
+whose folder is its working directory. Threads with no project folder are in **General**. When your
+working directory is a project's folder, keep this thread's work and files in that folder.
 
 This skill is how you do things in Kitaab itself. Kitaab only shows what is on this server, so do
 these through the tools named here, never by editing Hermes's files or databases yourself.
@@ -154,7 +162,8 @@ Use Kitaab's words with the user.
 
 | Hermes | Kitaab |
 |---|---|
-| profile | project |
+| profile | profile |
+| project (projects.db, its folders) | project |
 | session (not from cron) | thread |
 | cron job | routine |
 | the session a cron job ran in | run (its last reply is the run's report) |
@@ -167,8 +176,9 @@ hand something off, to start a new thread for it, or to split a side task out of
 real Kitaab thread, sends your message as its first message, and that thread's agent answers it
 right away. The user sees it in the thread list, on every device.
 
-1. Pick a short \`title\` (a few words) and, only if it belongs elsewhere, a \`project\` (a profile id;
-   leave it out for this project).
+1. Pick a short \`title\` (a few words). The new thread starts in the same project as this one (it
+   works in the same folder). Only if it belongs elsewhere, give a \`profile\` (a profile id) and a
+   \`cwd\` (the folder of the project it belongs in; leave it out for General).
 2. Write the \`message\` as a brief for someone who has never seen this chat, because the new thread
    can't see it:
    - the goal, and why;
@@ -178,12 +188,12 @@ right away. The user sees it in the thread list, on every device.
    - what its first reply should do. If the user has to tell it something first (a story, a choice),
      say "Start by asking the user for …; don't draft anything until they answer."
 3. Tell the user it's started, with the link from the result:
-   \`[Launch post story](kitaab://thread/<id>?project=${p})\`.
+   \`[Launch post story](kitaab://thread/<id>?profile=${p})\`.
 
 Never start a thread with \`hermes chat\`, a script or by editing \`state.db\`: those sessions don't
 show in Kitaab, or show broken. \`start_thread\` and \`request_secret\` come from Kitaab's plugin and
 may not be loaded yet: look them up with \`tool_describe\`. If they don't exist, tell the user to open
-Kitaab so it can set this project up, rather than working around it.
+Kitaab so it can set this profile up, rather than working around it.
 
 Helpers (\`delegate_task\`) are different: they work for this thread and report back to it. Use them
 for work this thread waits on, and \`start_thread\` for work the user carries on in its own thread.
@@ -191,19 +201,19 @@ for work this thread waits on, and \`start_thread\` for work the user carries on
 ## Link to a thread, routine or run
 
 Write these as ordinary markdown links. When the user taps one inside Kitaab, the app opens that
-place, switching project first if needed. Always keep \`?project=\`.
+place, switching profile first if needed. Always keep \`?profile=\`.
 
 | Opens | Link |
 |---|---|
-| a thread | \`kitaab://thread/<session id>?project=${p}\` |
-| a routine | \`kitaab://routine/<cron job id>?project=${p}\` |
-| one run's report | \`kitaab://run/<cron job id>/<run session id>?project=${p}\` |
-| the project's routines | \`kitaab://routines?project=${p}\` |
-| the project's done threads | \`kitaab://done?project=${p}\` |
-| the project's settings | \`kitaab://project?project=${p}\` |
+| a thread | \`kitaab://thread/<session id>?profile=${p}\` |
+| a routine | \`kitaab://routine/<cron job id>?profile=${p}\` |
+| one run's report | \`kitaab://run/<cron job id>/<run session id>?profile=${p}\` |
+| the profile's routines | \`kitaab://routines?profile=${p}\` |
+| the profile's done threads | \`kitaab://done?profile=${p}\` |
+| the profile's settings | \`kitaab://profile?profile=${p}\` |
 | the personality library | \`kitaab://personalities\` |
 
-Example: \`[Open the routine](kitaab://routine/3f9a1c2b?project=${p})\`
+Example: \`[Open the routine](kitaab://routine/3f9a1c2b?profile=${p})\`
 
 Only link to ids you have looked up, never guessed ones:
 - **Cron job ids:** the \`cronjob\` tool with \`action: "list"\`.
@@ -211,7 +221,7 @@ Only link to ids you have looked up, never guessed ones:
   session has the source \`cron\`.
 
 Links only open inside Kitaab. Anywhere else (Telegram, email), describe where to look instead,
-for example "Kitaab → ${project.name} → Routines → Morning brief".
+for example "Kitaab → ${profile.name} → Routines → Morning brief".
 
 ## Set up a routine
 
@@ -235,7 +245,7 @@ Never ask for a secret in the chat, and never print one.
 `
 }
 
-// ---- writing it to every project ---------------------------------------------------------
+// ---- writing it to every profile ---------------------------------------------------------
 
 function hash(s: string): string {
   let h = 5381
@@ -256,7 +266,7 @@ async function upsertSkill(profile: Id, content: string) {
   }
 }
 
-async function writeProject(project: Project, home: string | undefined, kinds: DeviceKind[], stamp: { version: number; hash: string }) {
+async function writeProfile(project: ProfileInfo, home: string | undefined, kinds: DeviceKind[], stamp: { version: number; hash: string }) {
   const chat = chatHint(project, kinds)
   const routine = routineHint(project, kinds)
   // Deep-merged into config.yaml by Hermes; other settings are left alone.
@@ -271,7 +281,7 @@ async function writeProject(project: Project, home: string | undefined, kinds: D
 
 let syncing: Promise<void> | null = null
 
-/** Records this app and brings every project's Kitaab context up to date. Cheap when nothing changed. */
+/** Records this app and brings every profile's Kitaab context up to date. Cheap when nothing changed. */
 export function syncKitabContext(rows: ProfileRow[]): Promise<void> {
   syncing ??= (async () => {
     const kinds = await registerDevice(rows)
@@ -284,11 +294,11 @@ export function syncKitabContext(rows: ProfileRow[]): Promise<void> {
         ),
       }
       const had = row.ui_meta?.[MARKER]
-      // A newer Kitaab manages this project; don't undo its texts.
+      // A newer Kitaab manages this profile; don't undo its texts.
       if (typeof had?.version === "number" && had.version > VERSION) continue
       if (had?.version === stamp.version && had?.hash === stamp.hash) continue
       try {
-        await writeProject(project, row.path, kinds, stamp)
+        await writeProfile(project, row.path, kinds, stamp)
       } catch (e) {
         console.warn(`[kitab-context] couldn't update ${project.id}`, e)
       }

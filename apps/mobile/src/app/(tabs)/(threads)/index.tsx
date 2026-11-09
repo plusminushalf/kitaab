@@ -1,35 +1,43 @@
 import { useMemo, useState } from "react"
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native"
+import { Pressable, RefreshControl, SectionList, Text, View } from "react-native"
 import { router, Stack } from "expo-router"
 import { backend } from "@kitab/core/backend"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
-import { ProjectMenu } from "@/components/project-menu"
+import { ProfileMenu, useProfileProjects } from "@/components/profile-menu"
 import { ThreadRow } from "@/components/thread-row"
 import { Empty, HeaderButton, Icon } from "@/components/ui"
 
 export default function Threads() {
   const c = useColors()
-  const projectId = useStore((s) => s.projectId)
+  const profileId = useStore((s) => s.profileId)
   const all = useStore((s) => s.threads)
   const doneCount = useStore((s) => s.doneCount)
   const connected = useStore((s) => s.connection.state === "connected")
   const [query, setQuery] = useState("")
   const [refreshing, setRefreshing] = useState(false)
 
+  const projects = useProfileProjects()
   const threads = useMemo(() => {
     const q = query.trim().toLowerCase()
     return all
-      .filter((t) => t.projectId === projectId)
+      .filter((t) => t.profileId === profileId)
       .filter((t) => !q || t.title.toLowerCase().includes(q) || t.preview?.toLowerCase().includes(q))
       .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [all, projectId, query])
+  }, [all, profileId, query])
+  // One section per project with threads, General first. Only General: one untitled list.
+  const sections = useMemo(() => {
+    if (projects.length === 1) return threads.length ? [{ key: projects[0].id, title: "", data: threads }] : []
+    return projects
+      .map((p) => ({ key: p.id, title: p.name, data: threads.filter((t) => t.projectId === p.id) }))
+      .filter((sec) => sec.data.length > 0)
+  }, [projects, threads])
 
   async function refresh() {
-    if (!projectId) return void backend.connect()
+    if (!profileId) return void backend.connect()
     setRefreshing(true)
-    await backend.selectProject(projectId).finally(() => setRefreshing(false))
+    await backend.selectProfile(profileId).finally(() => setRefreshing(false))
   }
 
   return (
@@ -37,7 +45,7 @@ export default function Threads() {
       <Stack.Screen
         options={{
           title: "Threads",
-          headerLeft: () => <ProjectMenu />,
+          headerLeft: () => <ProfileMenu />,
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
               <HeaderButton icon="gearshape" label="Settings" onPress={() => router.push("/settings")} />
@@ -47,10 +55,18 @@ export default function Threads() {
           headerSearchBarOptions: { placeholder: "Search threads", onChangeText: (e) => setQuery(e.nativeEvent.text), hideWhenScrolling: true },
         }}
       />
-      <FlatList
+      <SectionList
         contentInsetAdjustmentBehavior="automatic"
-        data={threads}
+        sections={sections}
         keyExtractor={(t) => t.id}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) =>
+          section.title ? (
+            <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "600", paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 }}>
+              {section.title}
+            </Text>
+          ) : null
+        }
         renderItem={({ item }) => <ThreadRow thread={item} action={{ label: "Done", icon: "checkmark", run: () => void backend.setDone(item.id, true) }} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         ListHeaderComponent={<ConnectionBanner />}

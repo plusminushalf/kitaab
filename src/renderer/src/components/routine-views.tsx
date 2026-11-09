@@ -39,12 +39,12 @@ export function StatusMark({ state, className }: { state: RoutineState | Run["st
   )
 }
 
-/** Routines section: every routine in the project, the next to run first. */
+/** Routines section: every routine in the profile, the next to run first. */
 export function RoutinesView() {
   const all = useStore((s) => s.routines)
-  const projectId = useStore((s) => s.projectId)
+  const profileId = useStore((s) => s.profileId)
   const personalities = useStore((s) => s.personalities)
-  const routines = useMemo(() => all.filter((r) => r.projectId === projectId), [all, projectId])
+  const routines = useMemo(() => all.filter((r) => r.profileId === profileId), [all, profileId])
   const active = routines.filter((r) => r.enabled).sort(byNextRun)
   const paused = routines.filter((r) => !r.enabled).sort((a, b) => a.name.localeCompare(b.name))
   const failing = active.filter((r) => r.lastStatus === "failed").length
@@ -291,12 +291,12 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** Every run of every routine in the project, newest first, grouped by day. */
+/** Every run of every routine in the profile, newest first, grouped by day. */
 export function AllRunsView() {
   const all = useStore((s) => s.routines)
-  const projectId = useStore((s) => s.projectId)
+  const profileId = useStore((s) => s.profileId)
   const runsByRoutine = useStore((s) => s.runs)
-  const routines = useMemo(() => all.filter((r) => r.projectId === projectId), [all, projectId])
+  const routines = useMemo(() => all.filter((r) => r.profileId === profileId), [all, profileId])
   const [loading, setLoading] = useState(false)
 
   const ids = routines.map((r) => r.id).join(",")

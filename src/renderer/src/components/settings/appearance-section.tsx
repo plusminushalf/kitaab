@@ -148,7 +148,7 @@ export function AppearanceSection() {
           </SettingRow>
           <SettingRow
             label="Projects in the sidebar"
-            description="A switcher shows one project's threads at a time. Folders list every project, each in its own color, with its threads inside."
+            description="A list shows each project in the open profile under a small heading. Folders show each one as a card in its own color, with its threads inside."
           >
             <ToggleGroup
               variant="outline"
@@ -156,7 +156,7 @@ export function AppearanceSection() {
               value={[settings.sidebarLayout]}
               onValueChange={(v: string[]) => v[0] && set({ sidebarLayout: v[0] as SidebarLayout })}
             >
-              <ToggleGroupItem value="switcher">Switcher</ToggleGroupItem>
+              <ToggleGroupItem value="switcher">List</ToggleGroupItem>
               <ToggleGroupItem value="folders">Folders</ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>

@@ -1,6 +1,6 @@
 import { router } from "expo-router"
 import type { View } from "@kitab/core/store"
-import { enterProject, parseKitabLink } from "@kitab/core/links"
+import { enterProfile, parseKitabLink } from "@kitab/core/links"
 import { toast } from "@kitab/core/platform"
 
 // kitaab:// links in replies (see @kitab/core/links), mapped onto this app's routes.
@@ -18,8 +18,8 @@ function pathFor(view: View): string | null {
       return "/routines"
     case "personalities":
       return "/personalities"
-    case "project":
-      return "/project"
+    case "profile":
+      return "/profile"
     case "done":
       return "/done"
     default:
@@ -31,5 +31,5 @@ export async function openKitabLink(url: string) {
   const link = parseKitabLink(url)
   const path = link && pathFor(link.view)
   if (!link || !path) return void toast.error("Kitaab can't open that link")
-  if (await enterProject(link)) router.push(path as never)
+  if (await enterProfile(link)) router.push(path as never)
 }

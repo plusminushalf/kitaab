@@ -8,8 +8,8 @@ import { Empty } from "@/components/ui"
 /** Threads marked done. Swipe one to bring it back. */
 export default function Done() {
   const all = useStore((s) => s.done)
-  const projectId = useStore((s) => s.projectId)
-  const done = useMemo(() => all.filter((t) => t.projectId === projectId), [all, projectId])
+  const profileId = useStore((s) => s.profileId)
+  const done = useMemo(() => all.filter((t) => t.profileId === profileId), [all, profileId])
   return (
     <FlatList
       contentInsetAdjustmentBehavior="automatic"

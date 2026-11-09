@@ -54,7 +54,7 @@ export function resolveDefault() {
   const s = store.get()
   const mine = usableMyModel()
   store.set({
-    defaultModel: mine ? { ...mine, effort: mine.effort ?? s.projectEffort } : s.projectModel,
-    defaultEffort: mine?.effort ?? s.projectEffort,
+    defaultModel: mine ? { ...mine, effort: mine.effort ?? s.profileEffort } : s.profileModel,
+    defaultEffort: mine?.effort ?? s.profileEffort,
   })
 }

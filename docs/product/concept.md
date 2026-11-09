@@ -6,14 +6,17 @@ Status: agreed direction, 2026-11-02. This is the vocabulary the whole app uses.
 
 ```
 Server  (your Hermes, running somewhere; the app only connects to it)
- └─ Project  "Pit Wall"            ← memory · skills · files
-     ├─ Personalities  (the project's cast, added from your library)
+ └─ Profile  "Work"                ← memory · skills · model  (a Hermes profile)
+     ├─ Personalities  (the profile's cast, added from your library)
      │    Designer · Developer · X-searcher · X-poster
      │
-     ├─ Threads  (where you think: parallel lines of work)
-     │    ├─ "How do we find good posts?"   👤 X-searcher
-     │    ├─ "Develop the app"              👤 Developer + Designer
-     │    └─ "Find new leads"               👤 Lead-finder
+     ├─ Projects  (lines of work, each with its own folder on the server)
+     │    ├─ General                         ← threads with no project folder
+     │    ├─ Pit Wall    ~/kitaab/work/pit-wall
+     │    │    ├─ "How do we find good posts?"   👤 X-searcher
+     │    │    └─ "Find new leads"               👤 Lead-finder
+     │    └─ Kitaab      ~/dev/kitaab
+     │         └─ "Develop the app"              👤 Developer + Designer
      │
      └─ Routines  (repeat work you've handed over)
           └─ "Find sideline posts"
@@ -24,14 +27,16 @@ Server  (your Hermes, running somewhere; the app only connects to it)
                                  and that conversation becomes a thread
 ```
 
-The same shape for a personal project:
+The same shape for a personal profile:
 
 ```
-Project "Healthy life"             ← memory: goals, allergies, what you like eating
+Profile "Healthy life"             ← memory: goals, allergies, what you like eating
  ├─ Personalities:  Nutritionist · Coach · Chef
- ├─ Threads
- │    ├─ "This week's meals"   👤 Chef + Nutritionist
- │    └─ "Marathon training"   👤 Coach
+ ├─ Projects
+ │    ├─ General
+ │    │    └─ "This week's meals"   👤 Chef + Nutritionist
+ │    └─ Marathon   ~/kitaab/healthy-life/marathon
+ │         └─ "Training plan"       👤 Coach
  └─ Routines
       └─ "Plan groceries", Sundays 18:00, Chef
 ```
@@ -44,29 +49,38 @@ Project "Healthy life"             ← memory: goals, allergies, what you like e
 - **Over SSH it runs its own private backend, the way the official Hermes app does** (decided 2026-11-04). It starts `hermes serve --isolated` on the server, bound to loopback, with a session token it mints. It reaches that backend through an SSH tunnel and reuses it on every launch. No login is needed, because SSH access is the credential.
 - Without SSH it can use an existing dashboard URL, signing in through the browser if that dashboard requires it.
 - **The Mac and the iPhone share that backend** (decided 2026-11-04). Whichever device connects first starts it; the others find it on the server and join it, so live replies and approvals show up everywhere. The iPhone reaches the server over SSH from inside the app, with its own key.
-- **Nothing that matters lives on one device.** Kitaab's own additions (a thread's personalities, who answered each turn, which runs became threads) are stored on the server in the project's profile. Only per-device conveniences, like window sizes or the theme, stay local.
+- **Nothing that matters lives on one device.** Kitaab's own additions (a thread's personalities, who answered each turn, which runs became threads) are stored on the server in the thread's profile. Only per-device conveniences, like window sizes or the theme, stay local.
 - v1 supports one server. The data model should still allow more later.
 
+### Profile
+- The top-level container: one area of your life or work, such as "Work" or "Healthy life". It is a Hermes profile.
+- **It owns the knowledge:** memory, skills, the model, the cast of personalities and the routines.
+- Everything inside a profile shares that knowledge. Profile facts never leak into other profiles. Only personality craft and your preferences travel between profiles.
+- (Until 2026-11-09 a profile was what Kitaab called a project. Old `kitaab://…?project=<profile>` links still work.)
+
 ### Project
-- The top-level container: one area of your life or work, such as "Pit Wall" or "Healthy life".
-- **It owns the knowledge:** memory, skills, files.
-- Everything inside a project shares that knowledge. Project facts never leak into other projects. Only personality craft and your preferences travel between projects.
+- **One line of work inside a profile** (decided 2026-11-09), such as "Pit Wall" or "Kitaab". It is a Hermes project (the profile's `projects.db`).
+- **It owns a folder on the server.** You pick one (a repo, say), or Kitaab makes `~/kitaab/<profile>/<project>`. A new thread in the project starts with that folder as its working directory, so Hermes, its terminal and its files all work there.
+- **A thread belongs to the project whose folder it works in.** Threads with no project folder, and every thread from before projects, are in **General**, which every profile has and which isn't stored in Hermes.
+- Projects share the profile's memory, skills and personalities. They split the threads and the files, not the knowledge.
+- Removing a project archives it in Hermes: its folder and threads stay, and the threads show in General.
+- Routines stay at the profile level for now.
 
 ### Personality
 - A named character: Designer, Coach, X-poster…
-- **Personalities live in your library and you add them to projects,** like a freelancer working for several clients. The project supplies the facts and the personality supplies the skill.
+- **Personalities live in your library and you add them to profiles,** like a freelancer working for several clients. The profile supplies the facts and the personality supplies the skill.
 - **It owns behaviour:**
   - identity: personality, tone, role, opinions;
-  - **craft notes:** how to do this job well, learned from your feedback, carried to every project;
+  - **craft notes:** how to do this job well, learned from your feedback, carried to every profile;
   - its own tools and skills;
-  - its **lens**: which project sections it reads first.
-- **It never keeps private facts about a project.** Project facts go in the project.
+  - its **lens**: which profile sections it reads first.
+- **It never keeps private facts about a profile.** Profile facts go in the profile.
 
 ### Thread
 - One conversation, one line of work. You run several in parallel.
 - **Every thread has at least one personality.**
   - The first one is the **host** and answers by default.
-  - If you don't pick one, the host is the project's general assistant.
+  - If you don't pick one, the host is the profile's general assistant.
 - **You can add personalities to a thread at any time.** A thread with several personalities works like a group chat:
   - A message with no @mention → the host answers.
   - `@Designer …` → that personality answers.
@@ -82,15 +96,15 @@ Project "Healthy life"             ← memory: goals, allergies, what you like e
 - **When:** the schedule.
 - **Runs:** one compact report per run, listed on the routine. A run starts as a report, not a thread.
 - **Talking about a run turns it into a thread.** Open any run and reply to it. That conversation becomes a thread you can come back to and keep talking in. Each run you discuss gets its own thread.
-- **Where routines live:** a project has a **Routines** section. Click it to see the routines, then click a routine to see all its runs. Routine results never show up in a project-wide feed (decided 2026-11-03).
+- **Where routines live:** a profile has a **Routines** section. Click it to see the routines, then click a routine to see all its runs. Routine results never show up in a profile-wide feed (decided 2026-11-03).
 
 ## Memory
 
 ### Four layers
 ```
 You                   ← your taste & preferences, follow you everywhere ("no purple")
- ├─ Personality       ← CRAFT: how to do this job well; portable across projects
- └─ Project           ← FACTS, DECISIONS, STANDARDS: the company wiki
+ ├─ Personality       ← CRAFT: how to do this job well; portable across profiles
+ └─ Profile           ← FACTS, DECISIONS, STANDARDS: the company wiki
       ├─ General          what it is, goals, people, decisions
       ├─ Design standards ← stewarded by Designer, readable by all
       ├─ Eng standards    ← stewarded by Developer, readable by all
@@ -100,12 +114,12 @@ You                   ← your taste & preferences, follow you everywhere ("no p
 
 ### The test
 **If this personality were replaced tomorrow, should the knowledge stay?**
-- **It stays → the project.** For example, "Pit Wall headings are sentence case".
+- **It stays → the profile.** For example, "Pit Wall headings are sentence case".
 - **It leaves with the personality → craft notes.** For example, "Designer, you're too wordy".
 - **It's about you everywhere → your preferences.**
 
 ### Stewards
-- Project memory is split into **discipline sections**.
+- Profile memory is split into **discipline sections**.
 - A personality **stewards** its section: it reads that section first and proposes changes to it. Everyone can read every section.
 - One shared section can't contradict itself, the way private per-agent memories can.
 
@@ -122,27 +136,27 @@ Personality  X-poster
  ├─ Craft skills    write-punchy-post · structure-a-thread   ← travel with it
  └─ Tools allowed   web search · image gen · post to X
 
-Project  Pit Wall
- ├─ Project skills  pit-wall-voice-on-x · accounts-to-never-reply-to   ← stay with the project
- ├─ Connections     Pit Wall's X account, Drive…   ← the project's accounts
- └─ Routines        playbook = a project skill that runs on a schedule
+Profile  Work
+ ├─ Profile skills  pit-wall-voice-on-x · accounts-to-never-reply-to   ← stay with the profile
+ ├─ Connections     Pit Wall's X account, Drive…   ← the profile's accounts
+ └─ Routines        playbook = a profile skill that runs on a schedule
 ```
 
 - **Craft skills** belong to the personality.
-- **Project skills** belong to the project. Any personality working there can use them, and the steward proposes changes.
-- **Accounts** belong to the project. A personality is *allowed* to use a tool; the project decides *which account* it uses.
-- **At work,** a personality sees the names of its craft skills plus the project's skills, and opens only the ones the task needs.
+- **Profile skills** belong to the profile. Any personality working there can use them, and the steward proposes changes.
+- **Accounts** belong to the profile. A personality is *allowed* to use a tool; the profile decides *which account* it uses.
+- **At work,** a personality sees the names of its craft skills plus the profile's skills, and opens only the ones the task needs.
 
 ### How personalities behave differently on shared memory
 - An agent carries nothing between turns. Each time a personality speaks, its context is assembled fresh from a recipe:
   1. identity;
   2. craft notes;
-  3. tools, its craft skills, and the project's skills;
-  4. project memory, through its lens;
+  3. tools, its craft skills, and the profile's skills;
+  4. profile memory, through its lens;
   5. your preferences;
   6. the thread so far.
 - **Same model, different recipe → different behaviour.**
-- Project memory is the bookshelf. The personality is who reads it and what they reach for.
+- Profile memory is the bookshelf. The personality is who reads it and what they reach for.
 
 ## The routine loop
 
@@ -163,25 +177,25 @@ Project  Pit Wall
 ```
 
 1. **A routine is born from a thread.** Once you've worked something out, "make this a routine" drafts the playbook from the conversation. Then you pick who runs it and when.
-2. **Runs produce reports.** You find them under Routines → the routine → its list of runs, not in a project-wide feed. You get notified when a run finds something worth seeing, or when it fails.
+2. **Runs produce reports.** You find them under Routines → the routine → its list of runs, not in a profile-wide feed. You get notified when a run finds something worth seeing, or when it fails.
 3. **Reply to a run and it becomes a thread.** The run stays at the top as context. The thread is a normal thread, so you can return to it later and keep going.
 4. **Improvements are proposed edits to the playbook.** You see exactly what changes and accept or decline. The routine never changes its own playbook without your approval.
 5. **Optional quick feedback:** 👍/👎 on single items in a run, folded in the next time you discuss a run.
 
 ## Rules
 - **Threads are for thinking. Routines are for repeat work.** Personalities are the cast for both.
-- **Facts belong to the project. Craft and behaviour belong to the personality. Taste belongs to you.**
+- **Facts belong to the profile. Craft and behaviour belong to the personality. Taste belongs to you.**
 - **Personalities answer you, not each other** (v1). No personality-to-personality chatter unless you ask for it.
 - **Playbook changes always go through you.**
 
 ## Decided defaults (revisit if they chafe)
-- **Default host:** the project's general assistant when you don't pick a personality.
-- **Personalities live in your library** and are added to projects (decided 2026-11-03).
+- **Default host:** the profile's general assistant when you don't pick a personality.
+- **Personalities live in your library** and are added to profiles (decided 2026-11-03).
 - **Memory writes are proposals:**
-  - Project facts are proposed by the conversation you're in, into the right discipline section.
+  - Profile facts are proposed by the conversation you're in, into the right discipline section.
   - Craft notes come from your feedback about how a personality works.
 
 ## Open questions
-- **Run threads in the sidebar:** does a run's thread also appear in the project's Threads list, or only under its run in the Routines section?
+- **Run threads in the sidebar:** does a run's thread also appear in its project's Threads list, or only under its run in the Routines section?
 - **Proposed memory writes:** does every one need your approval, or can low-stakes ones be saved automatically and shown so you can undo them?
 - **Not in v1:** messaging channels (Telegram, …), personalities talking to each other, and multiple servers.

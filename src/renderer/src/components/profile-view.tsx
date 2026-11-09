@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { Check, ChevronDown, Plus, Search } from "lucide-react"
+import { Check, ChevronDown, FolderClosed, Plus, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
 import { NewSkillForm } from "@/components/skill-picker"
-import type { Id, Personality, Project, Skill } from "@kitab/core/model"
+import { GENERAL, type Id, type Personality, type Profile, type Skill } from "@kitab/core/model"
+import { confirmRemoveProject, openNewProject, openRenameProject, useProfileProjects } from "@/components/project-menu"
 import { setPersonalitySkills } from "@kitab/core/personalities"
 import { loadSkills, readSkill, saveSkill, setSkillEnabled } from "@kitab/core/skills"
 import { useStore } from "@/lib/store"
@@ -19,19 +20,19 @@ import { cn } from "@/lib/utils"
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const GROUPS: { source: Skill["source"]; title: string }[] = [
-  { source: "made", title: "Made in this project" },
+  { source: "made", title: "Made in this profile" },
   { source: "installed", title: "Installed" },
   { source: "shared", title: "Shared folders" },
   { source: "builtin", title: "Built into Hermes" },
 ]
 
-/** The current project's settings: the skills installed in it. */
-export function ProjectView() {
-  const project = useStore((s) => s.projects.find((p) => p.id === s.projectId))
+/** The current profile's settings: its projects and the skills installed in it. */
+export function ProfileView() {
+  const profile = useStore((s) => s.profiles.find((p) => p.id === s.profileId))
   const connected = useStore((s) => s.connection.state === "connected")
-  const skills = useStore((s) => (project ? s.skills[project.id] : undefined))
+  const skills = useStore((s) => (profile ? s.skills[profile.id] : undefined))
   const library = useStore((s) => s.personalities)
-  const cast = useMemo(() => library.filter((p) => project?.personalityIds?.includes(p.id)), [library, project])
+  const cast = useMemo(() => library.filter((p) => profile?.personalityIds?.includes(p.id)), [library, profile])
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState("")
   const [showBuiltin, setShowBuiltin] = useState(false)
@@ -39,12 +40,12 @@ export function ProjectView() {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    if (!project || !connected) return
+    if (!profile || !connected) return
     setLoading(true)
-    loadSkills(project.id)
+    loadSkills(profile.id)
       .catch((e) => toast.error(`Couldn't load skills: ${message(e)}`))
       .finally(() => setLoading(false))
-  }, [project?.id, connected])
+  }, [profile?.id, connected])
 
   /** Skill name → the cast members who reach for it. */
   const usedBy = useMemo(() => {
@@ -59,16 +60,16 @@ export function ProjectView() {
     return t ? list.filter((s) => s.name.includes(t) || s.description.toLowerCase().includes(t)) : list
   }, [skills, query])
 
-  if (!project)
+  if (!profile)
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <PageHeader title="Project settings" />
+        <PageHeader title="Profile settings" />
       </div>
     )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader title="Project settings" subtitle={project.name}>
+      <PageHeader title="Profile settings" subtitle={profile.name}>
         <Button size="sm" variant="ghost" className="app-no-drag" disabled={!connected} onClick={() => setCreating(true)}>
           <Plus />
           New skill
@@ -76,6 +77,9 @@ export function ProjectView() {
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col p-6">
+          <ProjectsSection />
+
+          <h2 className="mb-2 px-1 text-xs font-medium text-muted-foreground">Skills</h2>
           <div className="mb-3 flex items-center gap-2 rounded-lg border px-2.5">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <input
@@ -89,7 +93,7 @@ export function ProjectView() {
 
           {skills && shown.length === 0 && (
             <p className="px-1 pb-8 text-sm text-muted-foreground">
-              {query.trim() ? "No matching skills." : "No skills in this project yet."}
+              {query.trim() ? "No matching skills." : "No skills in this profile yet."}
             </p>
           )}
 
@@ -119,7 +123,7 @@ export function ProjectView() {
                     <SkillRow
                       key={s.name}
                       skill={s}
-                      projectId={project.id}
+                      profileId={profile.id}
                       usedBy={usedBy.get(s.name)}
                       disabled={!connected}
                       onOpen={() => setViewing(s.name)}
@@ -134,7 +138,7 @@ export function ProjectView() {
       {viewing && (
         <SkillSheet
           name={viewing}
-          project={project}
+          profile={profile}
           cast={cast}
           onClose={() => setViewing(null)}
         />
@@ -142,11 +146,52 @@ export function ProjectView() {
       {creating && (
         <Dialog open onOpenChange={(open) => !open && setCreating(false)}>
           <DialogContent className="sm:max-w-lg">
-            <NewSkillForm project={project} giveTo={cast} onDone={() => setCreating(false)} />
+            <NewSkillForm profile={profile} giveTo={cast} onDone={() => setCreating(false)} />
           </DialogContent>
         </Dialog>
       )}
     </div>
+  )
+}
+
+/** The profile's projects, each with its folder. */
+function ProjectsSection() {
+  const projects = useProfileProjects()
+  const connected = useStore((s) => s.connection.state === "connected")
+  return (
+    <Section
+      title="Projects"
+      count={projects.length}
+      hint="Each project has its own folder on the server, where its threads work. They all share this profile's memory, skills and personalities."
+      action={
+        <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50" disabled={!connected} onClick={openNewProject}>
+          <Plus className="size-3" />
+          New project
+        </button>
+      }
+    >
+      {projects.map((p) => (
+        <div key={p.id} className="flex items-center gap-3 px-3 py-2.5">
+          <FolderClosed className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm">{p.name}</div>
+            <div className="truncate font-mono text-xs text-muted-foreground">
+              {p.id === GENERAL ? "Threads with no project folder" : p.folder}
+            </div>
+          </div>
+          {p.id !== GENERAL && (
+            <div className="flex shrink-0 gap-1">
+              <Button size="xs" variant="ghost" disabled={!connected} onClick={() => openRenameProject(p)}>
+                Rename
+              </Button>
+              <Button size="xs" variant="ghost" disabled={!connected} onClick={() => void confirmRemoveProject(p)}>
+                Remove
+              </Button>
+            </div>
+          )}
+        </div>
+      ))}
+    </Section>
   )
 }
 
@@ -179,13 +224,13 @@ function Section({
 
 function SkillRow({
   skill: s,
-  projectId,
+  profileId,
   usedBy,
   disabled,
   onOpen,
 }: {
   skill: Skill
-  projectId: Id
+  profileId: Id
   usedBy?: Personality[]
   disabled: boolean
   onOpen: () => void
@@ -194,7 +239,7 @@ function SkillRow({
   const toggle = async (on: boolean) => {
     setBusy(true)
     try {
-      await setSkillEnabled(projectId, s.name, on)
+      await setSkillEnabled(profileId, s.name, on)
     } catch (e) {
       toast.error(`Couldn't turn ${s.name} ${on ? "on" : "off"}: ${message(e)}`)
     } finally {
@@ -219,15 +264,15 @@ function SkillRow({
         disabled={disabled || busy}
         onCheckedChange={(on) => void toggle(on)}
         aria-label={`${s.enabled ? "Turn off" : "Turn on"} ${s.name}`}
-        title={s.enabled ? "On in this project" : "Off in this project"}
+        title={s.enabled ? "On in this profile" : "Off in this profile"}
       />
     </div>
   )
 }
 
 /** One skill: what it says (editable when it was made here) and who reaches for it. */
-function SkillSheet({ name, project, cast, onClose }: { name: string; project: Project; cast: Personality[]; onClose: () => void }) {
-  const skill = useStore((s) => s.skills[project.id]?.find((x) => x.name === name))
+function SkillSheet({ name, profile, cast, onClose }: { name: string; profile: Profile; cast: Personality[]; onClose: () => void }) {
+  const skill = useStore((s) => s.skills[profile.id]?.find((x) => x.name === name))
   const [content, setContent] = useState<string | null>(null)
   const [draft, setDraft] = useState("")
   const [saving, setSaving] = useState(false)
@@ -235,7 +280,7 @@ function SkillSheet({ name, project, cast, onClose }: { name: string; project: P
 
   useEffect(() => {
     let live = true
-    readSkill(project.id, name)
+    readSkill(profile.id, name)
       .then((c) => {
         if (!live) return
         setContent(c)
@@ -245,12 +290,12 @@ function SkillSheet({ name, project, cast, onClose }: { name: string; project: P
     return () => {
       live = false
     }
-  }, [project.id, name])
+  }, [profile.id, name])
 
   const save = async () => {
     setSaving(true)
     try {
-      await saveSkill(project.id, name, draft)
+      await saveSkill(profile.id, name, draft)
       setContent(draft)
       toast.success(`Saved ${name}`)
     } catch (e) {

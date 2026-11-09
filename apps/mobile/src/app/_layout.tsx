@@ -57,7 +57,7 @@ export default function Root() {
             <Stack.Screen name="done" options={{ title: "Done" }} />
             <Stack.Screen name="routine/[id]" options={{ title: "" }} />
             <Stack.Screen name="run/[routineId]/[runId]" options={{ title: "" }} />
-            <Stack.Screen name="project" options={{ title: "Project", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised } }} />
+            <Stack.Screen name="profile" options={{ title: "Profile", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised } }} />
             <Stack.Screen name="personality/[id]" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "" }} />
             <Stack.Screen name="settings" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "Settings" }} />
           </Stack>

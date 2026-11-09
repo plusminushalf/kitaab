@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/app-sidebar"
 import { PersonalitiesView } from "@/components/personalities-view"
-import { ProjectView } from "@/components/project-view"
+import { ProfileView } from "@/components/profile-view"
 import { DoneView } from "@/components/done-view"
 import { AllRunsView, RoutinesView, RoutineView, RunView } from "@/components/routine-views"
 import { SettingsOverlay } from "@/components/settings/settings-page"
@@ -17,6 +17,7 @@ import { SwipeIndicator } from "@/components/swipe-indicator"
 import { backend, clearUndoableDone, hasUndoableDone, undoLastDone, viewIdentity } from "@kitab/core/backend"
 import { store, useStore } from "@/lib/store"
 import { draftKey } from "@/lib/composer-drafts"
+import { ProjectDialogHost } from "@/components/project-menu"
 import { checkForUpdatesLoudly, useUpdateState } from "@/lib/updates"
 
 export function App() {
@@ -41,6 +42,7 @@ export function App() {
 
 function Shell() {
   const view = useStore((s) => s.view)
+  const profileId = useStore((s) => s.profileId)
   const projectId = useStore((s) => s.projectId)
   const connection = useStore((s) => s.connection)
   const blocked = connection.state === "error" && connection.needsSignIn
@@ -72,16 +74,16 @@ function Shell() {
     }
   }, [])
 
-  // ⌘1–⌘9 switch to the nth project, in the project picker's order.
+  // ⌘1–⌘9 switch to the nth profile, in the profile picker's order.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey || e.shiftKey || e.altKey || e.ctrlKey) return
       const n = /^Digit([1-9])$/.exec(e.code)?.[1]
       if (!n) return
       e.preventDefault()
-      const { projects, projectId } = store.get()
-      const target = projects[Number(n) - 1]
-      if (target && target.id !== projectId) void backend.selectProject(target.id)
+      const { profiles, profileId } = store.get()
+      const target = profiles[Number(n) - 1]
+      if (target && target.id !== profileId) void backend.selectProfile(target.id)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -105,8 +107,8 @@ function Shell() {
             return store.go({ kind: "routines" })
           case "go-personalities":
             return store.go({ kind: "personalities" })
-          case "go-project":
-            return store.go({ kind: "project" })
+          case "go-profile":
+            return store.go({ kind: "profile" })
           case "mark-done": {
             const v = store.get().view
             if (v.kind !== "thread" || !v.threadId) return
@@ -132,17 +134,18 @@ function Shell() {
         {blocked && <ConnectionView onOpenSettings={() => openSettings()} />}
         {/* Keyed by the id the thread was first shown under, so a new thread getting its real id doesn't remount it. */}
         {!blocked && view.kind === "thread" && (
-          <ThreadView key={draftKey(view.threadId && viewIdentity(view.threadId), projectId)} threadId={view.threadId} />
+          <ThreadView key={draftKey(view.threadId && viewIdentity(view.threadId), profileId, projectId)} threadId={view.threadId} />
         )}
         {!blocked && view.kind === "routines" && <RoutinesView />}
         {!blocked && view.kind === "runs" && <AllRunsView />}
         {!blocked && view.kind === "routine" && <RoutineView routineId={view.routineId} />}
         {!blocked && view.kind === "run" && <RunView routineId={view.routineId} runId={view.runId} />}
         {!blocked && view.kind === "personalities" && <PersonalitiesView />}
-        {!blocked && view.kind === "project" && <ProjectView />}
+        {!blocked && view.kind === "profile" && <ProfileView />}
         {!blocked && view.kind === "done" && <DoneView />}
       </SidebarInset>
       <SettingsOverlay />
+      <ProjectDialogHost />
       {editing && (
         <ThemeEditor
           target={editing}

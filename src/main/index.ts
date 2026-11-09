@@ -202,11 +202,12 @@ ipcMain.handle("api:get", async (_e, path: string) => {
   return (await authedFetch(t.server, t.baseUrl, path)).json()
 })
 
-// Authenticated REST writes, kept to an allowlist: config saves, a project's skills, and
-// installing Kitaab's own Hermes plugin (packages/core/src/kitaab-plugin.ts).
+// Authenticated REST writes, kept to an allowlist: config saves, a profile's skills,
+// installing Kitaab's own Hermes plugin (packages/core/src/kitaab-plugin.ts), and making a
+// new project's folder (packages/core/src/projects.ts; mkdir only ever adds a directory).
 const WRITABLE: Record<"PUT" | "POST", RegExp> = {
   PUT: /^\/api\/(config|skills\/toggle|skills\/content)(\?|$)/,
-  POST: /^\/api\/(skills|files\/upload|dashboard\/agent-plugins\/activate)(\?|$)/,
+  POST: /^\/api\/(skills|files\/upload|files\/mkdir|dashboard\/agent-plugins\/activate)(\?|$)/,
 }
 /** File uploads may only write the Kitaab plugin's own files. */
 const PLUGIN_FILE = /^\/[^\0]*\/plugins\/kitaab\/(plugin\.yaml|__init__\.py)$/

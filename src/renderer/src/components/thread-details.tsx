@@ -14,6 +14,7 @@ import {
   Server,
   Undo2,
   Users,
+  FolderClosed,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -142,7 +143,8 @@ function DetailsBody({ threadId }: { threadId: Id }) {
   const isDone = useStore((s) => !s.threads.some((t) => t.id === threadId) && s.done.some((t) => t.id === threadId))
   const messages = useStore((s) => s.details[threadId]?.messages)
   const connection = useStore((s) => s.connection)
-  const project = useStore((s) => s.projects.find((p) => p.id === thread?.projectId))
+  const profile = useStore((s) => s.profiles.find((p) => p.id === thread?.profileId))
+  const project = useStore((s) => (thread ? s.projects[thread.profileId]?.find((p) => p.id === thread.projectId) : undefined))
   const personalities = useStore((s) => s.personalities)
   const model = useStore((s) => s.threadModels[threadId] ?? s.defaultModel)
   const defaultEffort = useStore((s) => s.defaultEffort)
@@ -167,9 +169,15 @@ function DetailsBody({ threadId }: { threadId: Id }) {
             {connection.state === "connected" ? connection.server : "Not connected"}
           </Row>
         )}
-        {show.project && project && (
-          <Row icon={() => <ProjectBadge name={project.name} className="size-4.5 text-[0.55rem]" />}>
-            {project.name}
+        {show.project && profile && (
+          <Row icon={() => <ProjectBadge name={profile.name} className="size-4.5 text-[0.55rem]" />}>
+            {profile.name}
+            <span className="text-muted-foreground"> · {project?.name ?? "General"}</span>
+          </Row>
+        )}
+        {show.project && (project?.folder || thread.cwd) && (
+          <Row icon={FolderClosed}>
+            <span className="font-mono text-xs break-all">{thread.cwd ?? project?.folder}</span>
           </Row>
         )}
         {show.model && model && (

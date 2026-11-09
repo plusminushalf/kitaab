@@ -4,14 +4,16 @@ import { toast } from "./platform"
 import { store, type View } from "./store"
 
 // kitaab:// links, which the agent writes into replies (see the `kitab` skill in kitab-context.ts):
-//   kitaab://thread/<session id>?project=<profile>
-//   kitaab://routine/<cron job id>?project=<profile>
-//   kitaab://run/<cron job id>/<run session id>?project=<profile>
-//   kitaab://routines | done | project ?project=<profile>
+//   kitaab://thread/<session id>?profile=<profile>
+//   kitaab://routine/<cron job id>?profile=<profile>
+//   kitaab://run/<cron job id>/<run session id>?profile=<profile>
+//   kitaab://routines | done | profile ?profile=<profile>
 //   kitaab://personalities
+// Links from before profiles held projects say ?project=<profile> and kitaab://project (the
+// profile's settings); both still work.
 // Parsed by hand: React Native's URL has no reliable searchParams.
 
-export type KitabLink = { projectId?: Id; view: View }
+export type KitabLink = { profileId?: Id; view: View }
 
 export const isKitabLink = (url: string | undefined): url is string => !!url && /^kitaa?b:\/\//i.test(url)
 
@@ -25,10 +27,10 @@ export function parseKitabLink(url: string): KitabLink | null {
       return s
     }
   })
-  let projectId: Id | undefined
+  let profileId: Id | undefined
   for (const pair of query.split("&")) {
     const [k, v = ""] = pair.split("=")
-    if (k === "project" && v) projectId = decodeURIComponent(v)
+    if ((k === "profile" || (k === "project" && !profileId)) && v) profileId = decodeURIComponent(v)
   }
   const [kind, a, b] = parts
   const view: View | null =
@@ -37,21 +39,21 @@ export function parseKitabLink(url: string): KitabLink | null {
     : kind === "run" && a && b ? { kind: "run", routineId: a, runId: b }
     : kind === "routines" ? { kind: "routines" }
     : kind === "done" ? { kind: "done" }
-    : kind === "project" ? { kind: "project" }
+    : kind === "profile" || kind === "project" ? { kind: "profile" }
     : kind === "personalities" ? { kind: "personalities" }
     : null
-  return view ? { projectId, view } : null
+  return view ? { profileId, view } : null
 }
 
-/** Switches to the link's project if it names another one. False when that project doesn't exist. */
-export async function enterProject(link: KitabLink): Promise<boolean> {
-  const { projectId } = link
-  if (!projectId || projectId === store.get().projectId) return true
-  if (!store.get().projects.some((p) => p.id === projectId)) {
-    toast.error(`There's no project called ${projectId}`)
+/** Switches to the link's profile if it names another one. False when that profile doesn't exist. */
+export async function enterProfile(link: KitabLink): Promise<boolean> {
+  const { profileId } = link
+  if (!profileId || profileId === store.get().profileId) return true
+  if (!store.get().profiles.some((p) => p.id === profileId)) {
+    toast.error(`There's no profile called ${profileId}`)
     return false
   }
-  await backend.selectProject(projectId)
+  await backend.selectProfile(profileId)
   return true
 }
 
@@ -59,5 +61,5 @@ export async function enterProject(link: KitabLink): Promise<boolean> {
 export async function openKitabLink(url: string) {
   const link = parseKitabLink(url)
   if (!link) return void toast.error("Kitaab can't open that link")
-  if (await enterProject(link)) store.go(link.view)
+  if (await enterProfile(link)) store.go(link.view)
 }

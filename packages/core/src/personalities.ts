@@ -2,7 +2,7 @@ import { http, toast } from "./platform"
 import { gw } from "./backend"
 import type { Id, Message, Personality } from "./model"
 import { store } from "./store"
-import { metaProject, saveThreadMeta, threadMeta } from "./thread-meta"
+import { metaProfile, saveThreadMeta, threadMeta } from "./thread-meta"
 
 // Personalities, in Hermes terms:
 //   library            → ui_meta["kitab.personality.<id>"] on the default profile
@@ -47,9 +47,9 @@ export function castOf(row: ProfileRow): Id[] {
 const byName = (a: Personality, b: Personality) => a.name.localeCompare(b.name)
 
 /** Personalities added to a project, in library order. */
-export function projectPersonalities(projectId: Id | null | undefined): Personality[] {
+export function profilePersonalities(profileId: Id | null | undefined): Personality[] {
   const s = store.get()
-  const ids = s.projects.find((p) => p.id === projectId)?.personalityIds ?? []
+  const ids = s.profiles.find((p) => p.id === profileId)?.personalityIds ?? []
   return s.personalities.filter((p) => ids.includes(p.id))
 }
 
@@ -80,10 +80,10 @@ function preset(p: Personality) {
 }
 
 /** Writes the personality into the project's config so Hermes can switch to it. */
-function writePreset(projectId: Id, p: Personality) {
-  return http().put(`/api/config?profile=${q(projectId)}`, {
+function writePreset(profileId: Id, p: Personality) {
+  return http().put(`/api/config?profile=${q(profileId)}`, {
     config: { agent: { personalities: { [p.id]: preset(p) } } },
-    profile: projectId,
+    profile: profileId,
   })
 }
 
@@ -135,7 +135,7 @@ export async function savePersonality(input: PersonalityInput, id?: Id): Promise
   })
   store.set((st) => ({ personalities: [...st.personalities.filter((x) => x.id !== finalId), p].sort(byName) }))
 
-  const using = store.get().projects.filter((pr) => pr.personalityIds?.includes(finalId))
+  const using = store.get().profiles.filter((pr) => pr.personalityIds?.includes(finalId))
   const failed: string[] = []
   await Promise.all(using.map((pr) => writePreset(pr.id, p).catch(() => failed.push(pr.name))))
   if (failed.length) toast.warning(`Saved, but couldn't update ${p.name} in ${failed.join(", ")}`)
@@ -143,18 +143,18 @@ export async function savePersonality(input: PersonalityInput, id?: Id): Promise
 }
 
 /** Adds a personality to a project's cast, or takes it out. */
-export async function setInProject(projectId: Id, personalityId: Id, on: boolean) {
+export async function setInProfile(profileId: Id, personalityId: Id, on: boolean) {
   const s = store.get()
-  const project = s.projects.find((p) => p.id === projectId)
+  const project = s.profiles.find((p) => p.id === profileId)
   const p = s.personalities.find((x) => x.id === personalityId)
   if (!project || !p) return
   const current = project.personalityIds ?? []
   const next = on ? [...new Set([...current, personalityId])] : current.filter((x) => x !== personalityId)
   // The preset first: a cast entry Hermes can't switch to would fail on the first @mention.
   // Taking one out leaves its preset in config.yaml (a merge can't delete keys); nothing points at it.
-  if (on) await writePreset(projectId, p)
-  await writeMeta(projectId, { [CAST]: next })
-  store.set((st) => ({ projects: st.projects.map((pr) => (pr.id === projectId ? { ...pr, personalityIds: next } : pr)) }))
+  if (on) await writePreset(profileId, p)
+  await writeMeta(profileId, { [CAST]: next })
+  store.set((st) => ({ profiles: st.profiles.map((pr) => (pr.id === profileId ? { ...pr, personalityIds: next } : pr)) }))
 }
 
 /** Replaces the skills a personality reaches for, everywhere it works. */
@@ -165,8 +165,8 @@ export function setPersonalitySkills(personalityId: Id, skills: string[]) {
 }
 
 export async function deletePersonality(personalityId: Id) {
-  for (const pr of store.get().projects) {
-    if (pr.personalityIds?.includes(personalityId)) await setInProject(pr.id, personalityId, false)
+  for (const pr of store.get().profiles) {
+    if (pr.personalityIds?.includes(personalityId)) await setInProfile(pr.id, personalityId, false)
   }
   await writeMeta(libraryProfile, { [PREFIX + personalityId]: null })
   store.set((st) => ({ personalities: st.personalities.filter((x) => x.id !== personalityId) }))
@@ -235,13 +235,13 @@ export function forgetSessions() {
 }
 export const speakerFor = (threadId: Id) => speaking.get(threadId)
 
-async function projectDefault(projectId: Id): Promise<string> {
-  const r = await gw.call<{ value?: string }>("config.get", { key: "personality", profile: projectId })
+async function profileDefault(profileId: Id): Promise<string> {
+  const r = await gw.call<{ value?: string }>("config.get", { key: "personality", profile: profileId })
   return norm(r?.value)
 }
 
 /** Puts the session on `want` ("" = project default) without changing the project's default. */
-async function switchSession(runtimeId: string, projectId: Id, want: string, fallback: string) {
+async function switchSession(runtimeId: string, profileId: Id, want: string, fallback: string) {
   const setIt = () => gw.call("config.set", { session_id: runtimeId, key: "personality", value: want || "none" })
   try {
     await setIt()
@@ -249,15 +249,15 @@ async function switchSession(runtimeId: string, projectId: Id, want: string, fal
     // The preset may be missing from this project's config (added on another Mac, or a failed sync).
     const p = store.get().personalities.find((x) => x.id === want)
     if (!p) throw e
-    await writePreset(projectId, p)
+    await writePreset(profileId, p)
     await setIt()
   }
   sessionPersonality.set(runtimeId, want)
   // config.set also saves the choice as the project's default. Put the default back.
   if (want !== fallback) {
-    await http().put(`/api/config?profile=${q(projectId)}`, {
+    await http().put(`/api/config?profile=${q(profileId)}`, {
       config: { display: { personality: fallback } },
-      profile: projectId,
+      profile: profileId,
     })
   }
 }
@@ -267,9 +267,9 @@ async function switchSession(runtimeId: string, projectId: Id, want: string, fal
  * thread's host), switches the session to them, and remembers it for this turn.
  * Returns the thread's cast so the caller can show it.
  */
-export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id, text: string): Promise<Id[]> {
+export async function prepareTurn(threadId: Id, runtimeId: string, profileId: Id, text: string): Promise<Id[]> {
   const meta = threadMeta(threadId)
-  const available = projectPersonalities(projectId)
+  const available = profilePersonalities(profileId)
   const mentioned = mentionsIn(text, available)
   const tagged = mentioned[0]
   let cast = meta.cast.filter((id) => available.some((p) => p.id === id))
@@ -284,9 +284,9 @@ export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id
   // Nobody in the thread and nobody tagged: whatever the project uses answers.
   if (speaker || meta.cast.length) {
     try {
-      const fallback = await projectDefault(projectId)
+      const fallback = await profileDefault(profileId)
       const want = speaker ?? fallback
-      if ((sessionPersonality.get(runtimeId) ?? fallback) !== want) await switchSession(runtimeId, projectId, want, fallback)
+      if ((sessionPersonality.get(runtimeId) ?? fallback) !== want) await switchSession(runtimeId, profileId, want, fallback)
     } catch (e) {
       const name = available.find((p) => p.id === speaker)?.name ?? "the project default"
       toast.error(`Couldn't hand this to ${name}: ${e instanceof Error ? e.message : e}`)
@@ -299,7 +299,7 @@ export async function prepareTurn(threadId: Id, runtimeId: string, projectId: Id
   if (speaker) turns[userTurns - 1] = speaker
   const run = meta.run ? { ...meta.run, updatedAt: Date.now() } : undefined
   // Saved before the turn goes out, so another device opening the thread mid-reply sees who's answering.
-  await saveThreadMeta(metaProject(threadId) ?? projectId, threadId, { cast, turns, run }).catch((e) =>
+  await saveThreadMeta(metaProfile(threadId) ?? profileId, threadId, { cast, turns, run }).catch((e) =>
     console.warn("[thread-meta]", e),
   )
   speaking.set(threadId, speaker)

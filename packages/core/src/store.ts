@@ -1,4 +1,5 @@
-import type { Attachment, Id, Message, PendingQuestion, Personality, Project, Routine, Run, Skill, Subagent, Thread } from "./model"
+import { GENERAL } from "./model"
+import type { Attachment, Id, Message, PendingQuestion, Personality, Profile, Project, Routine, Run, Skill, Subagent, Thread } from "./model"
 
 export type Connection =
   | { state: "idle" }
@@ -27,7 +28,7 @@ export type View =
   | { kind: "routine"; routineId: Id }
   | { kind: "run"; routineId: Id; runId: Id }
   | { kind: "personalities" }
-  | { kind: "project" }
+  | { kind: "profile" }
   | { kind: "done" }
 
 export type SettingsSection = "general" | "threads" | "appearance"
@@ -46,10 +47,14 @@ export type Queue = { items: QueuedMessage[]; paused: boolean }
 
 export type State = {
   connection: Connection
-  projects: Project[]
-  projectId: Id | null
+  profiles: Profile[]
+  profileId: Id | null
+  /** Each profile's projects (General not included), once loaded, in Hermes's order. */
+  projects: Record<Id, Project[]>
+  /** The project new threads start in, in the open profile. GENERAL when none is picked. */
+  projectId: Id
   personalities: Personality[]
-  /** Each project's installed skills, once loaded. */
+  /** Each profile's installed skills, once loaded. */
   skills: Record<Id, Skill[]>
   threads: Thread[]
   /** Threads marked done (Hermes "archived"), newest first. */
@@ -62,8 +67,8 @@ export type State = {
   /** Reasoning effort new threads start with, the same way. */
   defaultEffort: string
   /** The model set in the project's own Hermes config. */
-  projectModel: ModelChoice | null
-  projectEffort: string
+  profileModel: ModelChoice | null
+  profileEffort: string
   /** Your default for new threads in every project, from Settings (shared by all your devices). */
   myModel: ModelChoice | null
   /** Model picked for the next new thread. */
@@ -87,13 +92,21 @@ export type State = {
 /** What the UI needs from a backend. The Hermes adapter implements it. */
 export interface Backend {
   connect(): Promise<void>
-  selectProject(id: Id): Promise<void>
-  /** Creates a project (a Hermes profile set up like Default) and switches to it. Resolves to its id. */
-  createProject(name: string): Promise<Id>
-  /** Saves the order projects are listed in (and ⌘1–⌘9 follow), for every device. */
-  setProjectOrder(ids: Id[]): Promise<void>
-  /** Loads a project's threads without switching to it (the sidebar's project folders). */
-  loadProjectThreads(id: Id): Promise<void>
+  selectProfile(id: Id): Promise<void>
+  /** Creates a Hermes profile set up like Default and switches to it. Resolves to its id. */
+  createProfile(name: string): Promise<Id>
+  /** Saves the order profiles are listed in (and ⌘1–⌘9 follow), for every device. */
+  setProfileOrder(ids: Id[]): Promise<void>
+  /** The project new threads start in (in the open profile). */
+  selectProject(id: Id): void
+  /**
+   * Makes a project in the open profile and picks it. `folder` is a folder on the server to
+   * work in; without one, Kitaab makes ~/kitaab/<profile>/<project>. Resolves to its id.
+   */
+  createProject(name: string, folder?: string): Promise<Id>
+  renameProject(id: Id, name: string): Promise<void>
+  /** Takes a project off the list (Hermes archives it). Its threads show in General; nothing is deleted. */
+  removeProject(id: Id): Promise<void>
   loadThread(threadId: Id): Promise<void>
   /**
    * Starts a new thread when threadId is null. Resolves to the thread id. While a reply is
@@ -140,8 +153,10 @@ export interface Backend {
 
 const initial: State = {
   connection: { state: "idle" },
-  projects: [],
-  projectId: null,
+  profiles: [],
+  profileId: null,
+  projects: {},
+  projectId: GENERAL,
   personalities: [],
   skills: {},
   threads: [],
@@ -150,8 +165,8 @@ const initial: State = {
   models: [],
   defaultModel: null,
   defaultEffort: "medium",
-  projectModel: null,
-  projectEffort: "medium",
+  profileModel: null,
+  profileEffort: "medium",
   myModel: null,
   draftModel: null,
   threadModels: {},

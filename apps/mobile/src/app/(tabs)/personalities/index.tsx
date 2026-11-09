@@ -1,20 +1,20 @@
 import { FlatList, Pressable, StyleSheet, Switch, Text, View } from "react-native"
 import { router, Stack } from "expo-router"
 import * as Haptics from "expo-haptics"
-import { setInProject } from "@kitab/core/personalities"
+import { setInProfile } from "@kitab/core/personalities"
 import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
-import { ProjectMenu } from "@/components/project-menu"
+import { ProfileMenu } from "@/components/profile-menu"
 import { Avatar, Empty, HeaderButton } from "@/components/ui"
 
-/** Your library. The switch adds a personality to the current project's cast. */
+/** Your library. The switch adds a personality to the current profile's cast. */
 export default function Personalities() {
   const c = useColors()
   const library = useStore((s) => s.personalities)
-  const projectId = useStore((s) => s.projectId)
-  const project = useStore((s) => s.projects.find((p) => p.id === s.projectId))
+  const profileId = useStore((s) => s.profileId)
+  const profile = useStore((s) => s.profiles.find((p) => p.id === s.profileId))
   const connected = useStore((s) => s.connection.state === "connected")
 
   return (
@@ -22,7 +22,7 @@ export default function Personalities() {
       <Stack.Screen
         options={{
           title: "Personalities",
-          headerLeft: () => <ProjectMenu />,
+          headerLeft: () => <ProfileMenu />,
           headerRight: () => <HeaderButton icon="plus" label="New personality" onPress={() => router.push("/personality/new")} />,
         }}
       />
@@ -33,16 +33,16 @@ export default function Personalities() {
         ListHeaderComponent={
           <>
             <ConnectionBanner />
-            {library.length && project ? (
-              <Text style={{ color: c.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 }}>Switch one on to add it to {project.name}.</Text>
+            {library.length && profile ? (
+              <Text style={{ color: c.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 }}>Switch one on to add it to {profile.name}.</Text>
             ) : null}
           </>
         }
         ListEmptyComponent={
-          connected ? <Empty icon="person.2" title="No personalities yet" body="A personality is a named character with its own way of working: Designer, Coach, Researcher. Make one and add it to projects." /> : undefined
+          connected ? <Empty icon="person.2" title="No personalities yet" body="A personality is a named character with its own way of working: Designer, Coach, Researcher. Make one and add it to profiles." /> : undefined
         }
         renderItem={({ item: p }) => {
-          const on = Boolean(project?.personalityIds?.includes(p.id))
+          const on = Boolean(profile?.personalityIds?.includes(p.id))
           return (
             <Pressable onPress={() => router.push(`/personality/${encodeURIComponent(p.id)}`)} style={({ pressed }) => ({ backgroundColor: pressed ? c.secondary : c.canvas })}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
@@ -53,12 +53,12 @@ export default function Personalities() {
                     {p.description || `@${p.id}`}
                   </Text>
                 </View>
-                {projectId ? (
+                {profileId ? (
                   <Switch
                     value={on}
                     onValueChange={(v) => {
                       void Haptics.selectionAsync()
-                      setInProject(projectId, p.id, v).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+                      setInProfile(profileId, p.id, v).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
                     }}
                   />
                 ) : null}

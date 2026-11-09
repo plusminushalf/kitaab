@@ -16,7 +16,8 @@ import { PinnedThreadDetails, ThreadDetails, useDetailsPinned } from "@/componen
 import { useSubagentPolling } from "@/components/thread-agents"
 import { backend, isLocalThread, viewIdentity } from "@kitab/core/backend"
 import { plainReplySpeaker } from "@kitab/core/personalities"
-import type { Attachment, Id, PendingQuestion } from "@kitab/core/model"
+import { GENERAL, type Attachment, type Id, type PendingQuestion } from "@kitab/core/model"
+import { NewThreadPlace } from "@/components/project-menu"
 import { store, useStore, type SendMode } from "@/lib/store"
 import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
 
@@ -24,8 +25,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
   const thread = useStore((s) => s.threads.find((t) => t.id === threadId))
   const detail = useStore((s) => (threadId ? s.details[threadId] : undefined))
   const personalities = useStore((s) => s.personalities)
+  const profileId = useStore((s) => thread?.profileId ?? s.profileId)
+  // A new thread goes in the picked project; a thread stays in its own.
   const projectId = useStore((s) => thread?.projectId ?? s.projectId)
-  const castIds = useStore((s) => s.projects.find((p) => p.id === projectId)?.personalityIds)
+  const castIds = useStore((s) => s.profiles.find((p) => p.id === profileId)?.personalityIds)
   const mentionables = useMemo(() => personalities.filter((p) => castIds?.includes(p.id)), [personalities, castIds])
   // Who a plain reply goes to (the last to answer, else the host), as the core decides it.
   const answers = useMemo(() => {
@@ -33,7 +36,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     return id ? personalities.find((p) => p.id === id) : undefined
   }, [thread, threadId, personalities])
   // Mounted per thread (App keys it), so the key is fixed for this view's life.
-  const key = draftKey(threadId, projectId)
+  const key = draftKey(threadId, profileId, projectId)
   const [drafts, setDrafts] = useState<Draft[]>(() => readDraft(key).drafts)
   const [citations, setCitations] = useState<Citation[]>(() => readDraft(key).citations)
   const scrollRoot = useRef<HTMLDivElement>(null)
@@ -100,7 +103,7 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     const restored = back.attachments.map(attachmentToDraft)
     // A thread that never got made went with it: edit it as a new thread again.
     if (!store.get().threads.some((t) => t.id === threadId)) {
-      const target = draftKey(null, projectId)
+      const target = draftKey(null, profileId, projectId)
       const prev = readDraft(target)
       writeDraft(target, { text: joinText(back.text, prev.text), drafts: [...restored, ...prev.drafts] })
       store.go({ kind: "thread", threadId: null })
@@ -111,7 +114,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
     setComposerEpoch((n) => n + 1)
   }
 
-  const project = useStore((s) => s.projects.find((p) => p.id === (thread?.projectId ?? s.projectId)))
+  const profileName = useStore((s) => s.profiles.find((p) => p.id === profileId)?.name)
+  const projectName = useStore((s) =>
+    projectId === GENERAL ? "General" : profileId ? s.projects[profileId]?.find((p) => p.id === projectId)?.name : undefined,
+  )
   // A reply is running. While Hermes asks a question, your next message answers it instead.
   const answering = detail?.pending.some((q) => q.kind === "clarify")
   const busy = thread?.status === "working" || (thread?.status === "needs-you" && !answering)
@@ -135,7 +141,10 @@ export function ThreadView({ threadId }: { threadId: Id | null }) {
         }}
         onDrop={onDrop}
       >
-        <PageHeader title={thread?.title ?? "New thread"} subtitle={project?.name}>
+        <PageHeader
+          title={thread?.title ?? "New thread"}
+          subtitle={!threadId ? <NewThreadPlace /> : [profileName, projectName].filter(Boolean).join(" · ")}
+        >
           {loading && detail?.messages.length ? (
             <Spinner className="size-3.5 text-muted-foreground" aria-label="Bringing it up to date" />
           ) : null}

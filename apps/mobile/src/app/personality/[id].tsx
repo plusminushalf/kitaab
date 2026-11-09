@@ -8,14 +8,14 @@ import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Button, HeaderTextButton, Section } from "@/components/ui"
 
-/** Create or edit a library personality. Changes reach every project it's in, on every device. */
+/** Create or edit a library personality. Changes reach every profile it's in, on every device. */
 export default function PersonalityEditor() {
   const c = useColors()
   const raw = useLocalSearchParams<{ id: string }>().id
   const id = raw === "new" ? undefined : decodeURIComponent(raw)
   const existing = useStore((s) => (id ? s.personalities.find((p) => p.id === id) : undefined))
-  const projects = useStore((s) => s.projects)
-  const usedIn = projects.filter((p) => id && p.personalityIds?.includes(id))
+  const profiles = useStore((s) => s.profiles)
+  const usedIn = profiles.filter((p) => id && p.personalityIds?.includes(id))
 
   const [name, setName] = useState(existing?.name ?? "")
   const [description, setDescription] = useState(existing?.description ?? "")
@@ -68,7 +68,7 @@ export default function PersonalityEditor() {
         <Section title="What it's for">
           <TextInput value={description} onChangeText={setDescription} placeholder="Reviews screens and suggests fixes" placeholderTextColor={c.textMuted} style={input} />
         </Section>
-        <Section title="How it works" footer="Identity, tone and craft. Facts about a project belong in the project, not here.">
+        <Section title="How it works" footer="Identity, tone and craft. Facts about a profile belong in the profile, not here.">
           <TextInput
             value={instructions}
             onChangeText={setInstructions}

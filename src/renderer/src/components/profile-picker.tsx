@@ -3,19 +3,19 @@ import { Check, Loader2, Plus, Search, Settings } from "lucide-react"
 import { toast } from "sonner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { aggregateStatus, ProjectBadge, StatusPill } from "@/components/project-badge"
-import { backend, projectIdFor } from "@kitab/core/backend"
+import { backend, profileIdFor } from "@kitab/core/backend"
 import { shownStatus } from "@kitab/core/subagents"
 import { store, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 /**
- * T3-style project switcher: a search field over the project list, each with its
- * badge and what its threads are up to. Arrow keys move, Enter switches. "New project"
+ * T3-style profile switcher: a search field over the profile list, each with its
+ * badge and what its threads are up to. Arrow keys move, Enter switches. "New profile"
  * turns the search field into a name field; Escape goes back to the list. Drag a row,
  * or press ⌥↑/⌥↓, to change the order (⌘1–⌘9 follow it). With `create`, it opens on the
- * new project's name.
+ * new profile's name.
  */
-export function ProjectPicker({
+export function ProfilePicker({
   render,
   children,
   align = "start",
@@ -26,37 +26,37 @@ export function ProjectPicker({
   align?: "start" | "center" | "end"
   create?: boolean
 }) {
-  const projects = useStore((s) => s.projects)
-  const projectId = useStore((s) => s.projectId)
+  const profiles = useStore((s) => s.profiles)
+  const profileId = useStore((s) => s.profileId)
   const threads = useStore((s) => s.threads)
   const subagents = useStore((s) => s.subagents)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
-  /** The new project's name while creating one; null shows the list. */
+  /** The new profile's name while creating one; null shows the list. */
   const [draft, setDraft] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** The project being dragged, and where it would land (an index in the full list). */
+  /** The profile being dragged, and where it would land (an index in the full list). */
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return q ? projects.filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)) : projects
-  }, [projects, query])
+    return q ? profiles.filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)) : profiles
+  }, [profiles, query])
 
   // Reordering a filtered list would be ambiguous.
   const reorderable = !query.trim()
 
-  /** Moves a project so it sits before what is now at index `to` (projects.length = last). */
+  /** Moves a profile so it sits before what is now at index `to` (profiles.length = last). */
   const move = (id: string, to: number) => {
-    const from = projects.findIndex((p) => p.id === id)
+    const from = profiles.findIndex((p) => p.id === id)
     if (from < 0 || to === from || to === from + 1) return
-    const ids = projects.map((p) => p.id)
+    const ids = profiles.map((p) => p.id)
     ids.splice(from, 1)
     ids.splice(to > from ? to - 1 : to, 0, id)
-    backend.setProjectOrder(ids).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
+    backend.setProfileOrder(ids).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
   }
 
   const endDrag = () => {
@@ -66,18 +66,18 @@ export function ProjectPicker({
 
   const pick = (id: string) => {
     setOpen(false)
-    if (id !== projectId) void backend.selectProject(id)
+    if (id !== profileId) void backend.selectProfile(id)
   }
 
-  /** Opens a project's settings, switching to it first. */
+  /** Opens a profile's settings, switching to it first. */
   const openSettings = (id: string) => {
     setOpen(false)
-    if (id !== projectId) void backend.selectProject(id)
-    store.go({ kind: "project" })
+    if (id !== profileId) void backend.selectProfile(id)
+    store.go({ kind: "profile" })
   }
 
   const onOpenChange = (next: boolean, details?: { reason: string; cancel: () => void }) => {
-    // Escape while naming a new project goes back to the list rather than closing.
+    // Escape while naming a new profile goes back to the list rather than closing.
     if (!next && draft !== null && details?.reason === "escape-key") {
       details.cancel()
       if (!creating) setDraft(null)
@@ -91,7 +91,7 @@ export function ProjectPicker({
       setActive(
         Math.max(
           0,
-          projects.findIndex((p) => p.id === projectId),
+          profiles.findIndex((p) => p.id === profileId),
         ),
       )
     }
@@ -100,19 +100,19 @@ export function ProjectPicker({
   const startCreating = () => {
     // A search with no exact match is probably the name you want.
     const q = query.trim()
-    setDraft(q && !projects.some((p) => p.name.toLowerCase() === q.toLowerCase()) ? q : "")
+    setDraft(q && !profiles.some((p) => p.name.toLowerCase() === q.toLowerCase()) ? q : "")
     setError(null)
   }
 
-  const draftId = projectIdFor(draft ?? "")
-  const taken = !!draftId && projects.some((p) => p.id === draftId)
+  const draftId = profileIdFor(draft ?? "")
+  const taken = !!draftId && profiles.some((p) => p.id === draftId)
 
   const create = async () => {
     if (creating || !draftId || taken) return
     setCreating(true)
     setError(null)
     try {
-      await backend.createProject(draft!)
+      await backend.createProfile(draft!)
       setOpen(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -124,7 +124,7 @@ export function ProjectPicker({
   const hint = error
     ? error
     : taken
-      ? `A project called ${draftId} already exists`
+      ? `A profile called ${draftId} already exists`
       : draftId && draftId !== draft?.trim()
         ? `Will be called ${draftId}. Starts with Default's model, keys and skills.`
         : "Starts with Default's model, keys and skills."
@@ -141,8 +141,8 @@ export function ProjectPicker({
                 autoFocus
                 value={draft}
                 disabled={creating}
-                placeholder="New project name"
-                aria-label="New project name"
+                placeholder="New profile name"
+                aria-label="New profile name"
                 className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
                 onChange={(e) => {
                   setDraft(e.target.value)
@@ -175,7 +175,7 @@ export function ProjectPicker({
                 className="flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 {creating && <Loader2 className="size-3 animate-spin" />}
-                {creating ? "Creating…" : "Create project"}
+                {creating ? "Creating…" : "Create profile"}
               </button>
             </div>
           </>
@@ -186,7 +186,7 @@ export function ProjectPicker({
               <input
                 autoFocus
                 value={query}
-                placeholder="Search projects…"
+                placeholder="Search profiles…"
                 className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
                 onChange={(e) => {
                   setQuery(e.target.value)
@@ -194,12 +194,12 @@ export function ProjectPicker({
                 }}
                 onKeyDown={(e) => {
                   if (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                    // ⌥↑/⌥↓ move the highlighted project; the highlight goes with it.
+                    // ⌥↑/⌥↓ move the highlighted profile; the highlight goes with it.
                     e.preventDefault()
                     const p = shown[active]
                     if (!reorderable || !p) return
                     const next = e.key === "ArrowUp" ? active - 1 : active + 1
-                    if (next < 0 || next >= projects.length) return
+                    if (next < 0 || next >= profiles.length) return
                     move(p.id, e.key === "ArrowUp" ? active - 1 : active + 2)
                     setActive(next)
                   } else if (e.key === "ArrowDown") {
@@ -221,15 +221,15 @@ export function ProjectPicker({
             <div role="listbox" className="max-h-80 overflow-y-auto p-1">
               {shown.length === 0 && (
                 <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-                  {projects.length ? "No matching projects" : "No projects"}
+                  {profiles.length ? "No matching profiles" : "No profiles"}
                 </div>
               )}
               {shown.map((p, i) => {
-                const own = threads.filter((t) => t.projectId === p.id).map((t) => ({ ...t, status: shownStatus(t, subagents) }))
+                const own = threads.filter((t) => t.profileId === p.id).map((t) => ({ ...t, status: shownStatus(t, subagents) }))
                 const status = own.length ? aggregateStatus(own) : "idle"
-                const n = projects.indexOf(p) + 1
+                const n = profiles.indexOf(p) + 1
                 // Only where the drop would change something.
-                const from = dragId ? projects.findIndex((x) => x.id === dragId) : -1
+                const from = dragId ? profiles.findIndex((x) => x.id === dragId) : -1
                 const moves = dropAt !== null && dropAt !== from && dropAt !== from + 1
                 const lineAbove = moves && dropAt === i
                 const lineBelow = moves && dropAt === shown.length && i === shown.length - 1
@@ -237,7 +237,7 @@ export function ProjectPicker({
                   <div
                     key={p.id}
                     role="option"
-                    aria-selected={p.id === projectId}
+                    aria-selected={p.id === profileId}
                     draggable={reorderable}
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move"
@@ -282,7 +282,7 @@ export function ProjectPicker({
                         ⌘{n}
                       </kbd>
                     )}
-                    {p.id === projectId ? <Check className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
+                    {p.id === profileId ? <Check className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
                     <button
                       type="button"
                       title={`${p.name} settings`}
@@ -309,7 +309,7 @@ export function ProjectPicker({
                   <Plus className="size-3.5" />
                 </span>
                 <span className="min-w-0 flex-1 truncate">
-                  {query.trim() && shown.length === 0 ? `New project “${query.trim()}”` : "New project"}
+                  {query.trim() && shown.length === 0 ? `New profile “${query.trim()}”` : "New profile"}
                 </span>
               </button>
             </div>

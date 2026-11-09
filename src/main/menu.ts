@@ -74,7 +74,7 @@ export function installMenu(send: Send) {
         { label: "Threads", accelerator: "Cmd+Alt+1", click: cmd("go-threads") },
         { label: "Routines", accelerator: "Cmd+Alt+2", click: cmd("go-routines") },
         { label: "Personalities", accelerator: "Cmd+Alt+3", click: cmd("go-personalities") },
-        { label: "Project Settings", accelerator: "Cmd+Alt+4", click: cmd("go-project") },
+        { label: "Profile Settings", accelerator: "Cmd+Alt+4", click: cmd("go-profile") },
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },

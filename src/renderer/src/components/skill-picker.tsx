@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { Id, Personality, Project, Skill } from "@kitab/core/model"
+import type { Id, Personality, Profile, Skill } from "@kitab/core/model"
 import { setPersonalitySkills } from "@kitab/core/personalities"
 import { copySkill, createSkill, DESCRIPTION_LIMIT, findSkill, loadSkills, skillSlug } from "@kitab/core/skills"
 import { store, useStore } from "@/lib/store"
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** A personality's skills, each marked by how it stands in the project. */
+/** A personality's skills, each marked by how it stands in the profile. */
 export function SkillBadges({ names, skills }: { names: string[]; skills?: Skill[] }) {
   return (
     <div className="flex flex-wrap gap-1">
@@ -29,7 +29,7 @@ export function SkillBadges({ names, skills }: { names: string[]; skills?: Skill
             variant={state === "ok" || state === "loading" ? "secondary" : "outline"}
             className={cn("font-normal", (state === "missing" || state === "off") && "text-muted-foreground")}
             title={
-              state === "missing" ? "Not installed in this project" : state === "off" ? "Turned off in this project" : s?.description
+              state === "missing" ? "Not installed in this profile" : state === "off" ? "Turned off in this profile" : s?.description
             }
           >
             {n}
@@ -43,43 +43,43 @@ export function SkillBadges({ names, skills }: { names: string[]; skills?: Skill
 }
 
 /**
- * Pick skills from what's in the project, copy in ones it's missing, or write a new one.
+ * Pick skills from what's in the profile, copy in ones it's missing, or write a new one.
  * Renders inside a DialogContent; hands the picked names back on Done.
  */
 export function SkillPicker({
   title,
-  project,
+  profile,
   initial,
   onDone,
   onCancel,
 }: {
   title: string
-  project: Project
+  profile: Profile
   initial: string[]
   onDone: (picked: string[]) => void
   onCancel: () => void
 }) {
-  const skills = useStore((s) => s.skills[project.id])
-  const projects = useStore((s) => s.projects)
+  const skills = useStore((s) => s.skills[profile.id])
+  const profiles = useStore((s) => s.profiles)
   const [picked, setPicked] = useState<string[]>(initial)
   const [query, setQuery] = useState("")
   const [mode, setMode] = useState<"pick" | "new">("pick")
-  /** Missing skill → the project it can be copied from (null: nowhere). */
+  /** Missing skill → the profile it can be copied from (null: nowhere). */
   const [elsewhere, setElsewhere] = useState<Record<string, Id | null>>({})
 
   useEffect(() => {
     if (skills) return
-    loadSkills(project.id).catch((e) => toast.error(`Couldn't load skills: ${message(e)}`))
-  }, [project.id, Boolean(skills)])
+    loadSkills(profile.id).catch((e) => toast.error(`Couldn't load skills: ${message(e)}`))
+  }, [profile.id, Boolean(skills)])
 
   const missing = picked.filter((n) => skills && !skills.some((s) => s.name === n))
   const missingKey = missing.join(",")
   useEffect(() => {
     for (const n of missingKey ? missingKey.split(",") : []) {
       if (n in elsewhere) continue
-      void findSkill(n, project.id).then((from) => setElsewhere((m) => ({ ...m, [n]: from ?? null })))
+      void findSkill(n, profile.id).then((from) => setElsewhere((m) => ({ ...m, [n]: from ?? null })))
     }
-  }, [missingKey, project.id])
+  }, [missingKey, profile.id])
 
   const list = useMemo(() => {
     const t = query.trim().toLowerCase()
@@ -94,8 +94,8 @@ export function SkillPicker({
 
   const copyHere = async (n: string, from: Id) => {
     try {
-      await copySkill(n, from, project.id)
-      toast.success(`Copied ${n} into ${project.name}`)
+      await copySkill(n, from, profile.id)
+      toast.success(`Copied ${n} into ${profile.name}`)
     } catch (e) {
       toast.error(`Couldn't copy ${n}: ${message(e)}`)
     }
@@ -104,7 +104,7 @@ export function SkillPicker({
   if (mode === "new")
     return (
       <NewSkillForm
-        project={project}
+        profile={profile}
         cancelLabel="Back"
         onDone={(created) => {
           if (created) setPicked((cur) => [...new Set([...cur, created])])
@@ -117,14 +117,14 @@ export function SkillPicker({
     <>
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>It reaches for these when a task fits. They go with it to every project it joins.</DialogDescription>
+        <DialogDescription>It reaches for these when a task fits. They go with it to every profile it joins.</DialogDescription>
       </DialogHeader>
       {missing.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-lg border border-dashed p-2.5">
-          <span className="text-xs text-muted-foreground">Not installed in {project.name}</span>
+          <span className="text-xs text-muted-foreground">Not installed in {profile.name}</span>
           {missing.map((n) => {
             const from = elsewhere[n]
-            const fromName = projects.find((x) => x.id === from)?.name
+            const fromName = profiles.find((x) => x.id === from)?.name
             return (
               <div key={n} className="flex items-center gap-2 text-sm">
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">{n}</span>
@@ -153,7 +153,7 @@ export function SkillPicker({
         <input
           autoFocus
           value={query}
-          placeholder={`Search skills in ${project.name}…`}
+          placeholder={`Search skills in ${profile.name}…`}
           className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -166,7 +166,7 @@ export function SkillPicker({
         )}
         {skills && list.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            {query.trim() ? "No matching skills." : `No skills in ${project.name} yet.`}
+            {query.trim() ? "No matching skills." : `No skills in ${profile.name} yet.`}
           </p>
         )}
         {list.map((s) => {
@@ -218,16 +218,16 @@ export function SkillPicker({
 }
 
 /**
- * Writes a new skill into the project. Offers to hand it to `giveTo` personalities;
+ * Writes a new skill into the profile. Offers to hand it to `giveTo` personalities;
  * leave that out when the caller takes the new name from onDone.
  */
 export function NewSkillForm({
-  project,
+  profile,
   giveTo = [],
   cancelLabel = "Cancel",
   onDone,
 }: {
-  project: Project
+  profile: Profile
   giveTo?: Personality[]
   cancelLabel?: string
   onDone: (created?: string) => void
@@ -244,13 +244,13 @@ export function NewSkillForm({
   const submit = async () => {
     setSaving(true)
     try {
-      const created = await createSkill(project.id, { name, description, body })
+      const created = await createSkill(profile.id, { name, description, body })
       for (const id of givenTo) {
         const p = store.get().personalities.find((x) => x.id === id)
         if (p) await setPersonalitySkills(id, [...(p.skills ?? []), created])
       }
-      await loadSkills(project.id).catch(() => {})
-      toast.success(`Added ${created} to ${project.name}`)
+      await loadSkills(profile.id).catch(() => {})
+      toast.success(`Added ${created} to ${profile.name}`)
       onDone(created)
     } catch (e) {
       toast.error(message(e))
@@ -263,7 +263,7 @@ export function NewSkillForm({
       <DialogHeader>
         <DialogTitle>New skill</DialogTitle>
         <DialogDescription>
-          A skill is a written procedure: how to do one thing well. It's saved in {project.name}.
+          A skill is a written procedure: how to do one thing well. It's saved in {profile.name}.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -303,7 +303,7 @@ export function NewSkillForm({
             value={body}
             rows={8}
             className="max-h-[40vh] min-h-40"
-            placeholder={"1. Check the screen against the project's design standards.\n2. List what to cut, most important first.\n3. Suggest at most three changes."}
+            placeholder={"1. Check the screen against the profile's design standards.\n2. List what to cut, most important first.\n3. Suggest at most three changes."}
             onChange={(e) => setBody(e.target.value)}
           />
         </div>
