@@ -146,12 +146,16 @@ function DetailsBody({ threadId }: { threadId: Id }) {
   const profile = useStore((s) => s.profiles.find((p) => p.id === thread?.profileId))
   const project = useStore((s) => (thread ? s.projects[thread.profileId]?.find((p) => p.id === thread.projectId) : undefined))
   const personalities = useStore((s) => s.personalities)
-  const model = useStore((s) => s.threadModels[threadId] ?? s.defaultModel)
+  const picked = useStore((s) => s.threadModels[threadId])
+  const defaultModel = useStore((s) => s.defaultModel)
   const defaultEffort = useStore((s) => s.defaultEffort)
   const show = useAppearance((s) => s.settings.threadDetails)
   const agents = useSubagents(threadId)
 
   if (!thread) return null
+  // Picked in this app, else what Hermes's list says it last ran on (a done thread you're only
+  // reading isn't resumed, so nothing is picked), else the default for new threads.
+  const model = picked ?? (thread.model ? { model: thread.model, provider: thread.provider ?? "" } : defaultModel)
   const cast = thread.cast.map((id) => personalities.find((p) => p.id === id)?.name ?? id)
   const startedAt = messages?.[0]?.createdAt
   const effort = model?.effort ?? defaultEffort
