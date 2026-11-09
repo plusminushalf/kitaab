@@ -159,6 +159,12 @@ function SidebarProvider({
     },
     []
   )
+  const fittedWidth = `${fitWidth(width, windowWidth)}px`
+  // Also on the root, for what renders in portals outside the wrapper (a dialog's
+  // overlay paints the sidebar column to match it).
+  React.useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", fittedWidth)
+  }, [fittedWidth])
   const resetWidth = React.useCallback(() => {
     _setWidth(SIDEBAR_WIDTH_DEFAULT)
     try {
@@ -190,7 +196,7 @@ function SidebarProvider({
         data-resizing={resizing ? "" : undefined}
         style={
           {
-            "--sidebar-width": `${fitWidth(width, windowWidth)}px`,
+            "--sidebar-width": fittedWidth,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
           } as React.CSSProperties

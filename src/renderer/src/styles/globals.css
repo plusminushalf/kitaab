@@ -206,8 +206,8 @@ body {
 :root[data-native="true"]:has([data-slot="sidebar"][data-state="expanded"]) [data-slot="dialog-overlay"] {
   background-image: linear-gradient(
     to right,
-    color-mix(in oklab, var(--background) 64%, var(--app-theme-surface-overlay)) 16rem,
-    transparent 16rem
+    color-mix(in oklab, var(--background) 64%, var(--app-theme-surface-overlay)) var(--sidebar-width, 16rem),
+    transparent var(--sidebar-width, 16rem)
   );
 }
 
