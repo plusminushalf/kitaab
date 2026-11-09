@@ -22,7 +22,9 @@ import { store, useStore, type SendMode } from "@/lib/store"
 import { draftKey, readDraft, writeDraft } from "@/lib/composer-drafts"
 
 export function ThreadView({ threadId }: { threadId: Id | null }) {
-  const thread = useStore((s) => s.threads.find((t) => t.id === threadId))
+  // A done thread is opened from the Done list, so look there too: without it the header fell
+  // back to "New thread" in whichever project was open.
+  const thread = useStore((s) => s.threads.find((t) => t.id === threadId) ?? s.done.find((t) => t.id === threadId))
   const detail = useStore((s) => (threadId ? s.details[threadId] : undefined))
   const personalities = useStore((s) => s.personalities)
   const profileId = useStore((s) => thread?.profileId ?? s.profileId)
