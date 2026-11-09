@@ -58,6 +58,10 @@ export default function Root() {
             <Stack.Screen name="routine/[id]" options={{ title: "" }} />
             <Stack.Screen name="run/[routineId]/[runId]" options={{ title: "" }} />
             <Stack.Screen name="profile" options={{ title: "Profile", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised } }} />
+            <Stack.Screen
+              name="new-thread"
+              options={{ presentation: "formSheet", sheetAllowedDetents: [0.6, 1], sheetGrabberVisible: true, headerShown: false, contentStyle: { backgroundColor: c.surfaceRaised } }}
+            />
             <Stack.Screen name="project/[id]" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "" }} />
             <Stack.Screen name="personality/[id]" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "" }} />
             <Stack.Screen name="settings" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "Settings" }} />

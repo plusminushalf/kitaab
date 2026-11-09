@@ -2,20 +2,9 @@ import { CircleCheck } from "lucide-react"
 import { cn } from "cn"
 import { Spinner } from "@/components/ui/spinner"
 import type { Thread } from "@kitab/core/model"
+import { hue, initials } from "@kitab/core/project-color"
 
-/** "hermes-desktop" → "HD", "notes" → "NO". */
-export function initials(name: string): string {
-  const words = name.split(/[\s._-]+/).filter(Boolean)
-  const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2)
-  return letters.toUpperCase()
-}
-
-/** The hue a project is tinted with, from its name; the same everywhere it shows. */
-export function hue(name: string): number {
-  let h = 0
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360
-  return h
-}
+export { hue, initials }
 
 /** A project's colored initials, tinted from a hue derived from its name (T3-style). */
 export function ProjectBadge({ name, className }: { name: string; className?: string }) {

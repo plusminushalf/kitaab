@@ -1,54 +1,96 @@
-import { useMemo, useState } from "react"
-import { Pressable, RefreshControl, SectionList, Text, View } from "react-native"
+import { useEffect, useMemo, useState } from "react"
+import { FlatList, Pressable, RefreshControl, Text, View } from "react-native"
 import { router, Stack } from "expo-router"
-import { backend } from "@kitab/core/backend"
-import { homePath } from "@kitab/core/format"
-import { GENERAL, NO_PROJECT, type Project } from "@kitab/core/model"
 import { MenuView } from "@expo/ui/community/menu"
+import * as Haptics from "expo-haptics"
+import { backend } from "@kitab/core/backend"
+import { GENERAL, NO_PROJECT, type Thread } from "@kitab/core/model"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
+import { adoptUnknown, setPrefs, sortThreads, toggleCollapsed, usePrefs, type ThreadSort } from "@/lib/prefs"
 import { ConnectionBanner } from "@/components/connection-banner"
-import { ProfileMenu, promptNewProject, useProfileProjects } from "@/components/profile-menu"
-import { ThreadRow } from "@/components/thread-row"
+import { ProfileMenu, promptNewProject, startNewThread, useProfileProjects } from "@/components/profile-menu"
+import { ProjectFolder } from "@/components/project-folder"
+import { ThreadCard, ThreadRow, type RowAction } from "@/components/thread-row"
 import { Empty, HeaderButton, Icon } from "@/components/ui"
 
+const SORTS: { id: ThreadSort; title: string }[] = [
+  { id: "activity", title: "Last activity" },
+  { id: "status", title: "Status" },
+  { id: "title", title: "Title" },
+]
+
+const doneAction = (t: Thread): RowAction => ({ label: "Done", icon: "checkmark", run: () => void backend.setDone(t.id, true) })
+
+/**
+ * The open profile's threads, laid out as on the Mac (Settings → Threads list): one list of
+ * cards across every project, each saying where it lives, or Dia-style project folders. A
+ * profile with only General has no projects to show, so it's a plain list either way.
+ */
 export default function Threads() {
   const c = useColors()
   const profileId = useStore((s) => s.profileId)
   const all = useStore((s) => s.threads)
   const doneCount = useStore((s) => s.doneCount)
   const connected = useStore((s) => s.connection.state === "connected")
+  const { layout, sort, collapsed } = usePrefs()
   const [query, setQuery] = useState("")
   const [refreshing, setRefreshing] = useState(false)
 
   const projects = useProfileProjects()
-  const threads = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return all
-      .filter((t) => t.profileId === profileId)
-      .filter((t) => !q || t.title.toLowerCase().includes(q) || t.preview?.toLowerCase().includes(q))
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-  }, [all, profileId, query])
-  // One section per project, General first. Only General: one untitled list. A project with
-  // no threads still shows (so a new one is there to start in), except while searching.
-  const searching = query.trim().length > 0
-  const sections = useMemo(() => {
-    if (projects.length === 1) return threads.length ? [{ project: projects[0], title: "", data: threads }] : []
-    return projects
-      .map((p) => ({ project: p, title: p.name, data: threads.filter((t) => t.projectId === p.id) }))
-      .filter((sec) => sec.data.length > 0 || (!searching && sec.project.id !== GENERAL))
-  }, [projects, threads, searching])
+  const profileThreads = useMemo(() => all.filter((t) => t.profileId === profileId), [all, profileId])
+  // Threads seen for the first time count as read, so only later replies show as new.
+  useEffect(() => adoptUnknown(profileThreads), [profileThreads])
 
-  /** A new thread in `projectId`: it becomes the picked project first. */
-  function newThreadIn(projectId: string) {
-    backend.selectProject(projectId)
-    router.push("/thread/new")
-  }
+  const q = query.trim().toLowerCase()
+  const searching = q.length > 0
+  const threads = useMemo(
+    () => sortThreads(searching ? profileThreads.filter((t) => t.title.toLowerCase().includes(q) || t.preview?.toLowerCase().includes(q)) : profileThreads, sort),
+    [profileThreads, q, searching, sort],
+  )
+  const flat = projects.length === 1
+  const folders = !flat && layout === "folders"
+  const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
+
+  // Each project with its threads, General first. Searching hides projects with no match and
+  // opens the rest; an empty General folder is left out.
+  const shut = useMemo(() => new Set(profileId ? (collapsed[profileId] ?? []) : []), [collapsed, profileId])
+  const groups = useMemo(
+    () =>
+      folders
+        ? projects
+            .map((p) => ({ project: p, all: profileThreads.filter((t) => t.projectId === p.id), threads: threads.filter((t) => t.projectId === p.id) }))
+            .filter((g) => (searching ? g.threads.length > 0 : g.project.id !== GENERAL || g.all.length > 0))
+        : [],
+    [folders, projects, profileThreads, threads, searching],
+  )
 
   async function refresh() {
     if (!profileId) return void backend.connect()
     setRefreshing(true)
     await backend.selectProfile(profileId).finally(() => setRefreshing(false))
+  }
+
+  const common = {
+    contentInsetAdjustmentBehavior: "automatic" as const,
+    refreshControl: <RefreshControl refreshing={refreshing} onRefresh={refresh} />,
+    ListHeaderComponent: <ConnectionBanner />,
+    ListEmptyComponent: connected ? (
+      <Empty
+        icon="bubble.left.and.bubble.right"
+        title={searching ? "No matching threads" : "No threads yet"}
+        body={searching ? undefined : "Start one with the compose button. Threads you start on the Mac show up here too."}
+      />
+    ) : undefined,
+    ListFooterComponent:
+      doneCount > 0 && !searching ? (
+        <Pressable onPress={() => router.push("/done")} style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 16, marginTop: folders ? 8 : 0 }}>
+          <Icon name="checkmark.circle" size={16} color={c.textMuted} />
+          <Text style={{ flex: 1, color: c.textMuted, fontSize: 15 }}>Done</Text>
+          <Text style={{ color: c.textMuted, fontSize: 15 }}>{doneCount}</Text>
+          <Icon name="chevron.right" size={12} color={c.textMuted} />
+        </Pressable>
+      ) : undefined,
   }
 
   return (
@@ -59,71 +101,70 @@ export default function Threads() {
           headerLeft: () => <ProfileMenu />,
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
+              <ListMenu sort={sort} connected={connected} />
               <HeaderButton icon="gearshape" label="Settings" onPress={() => router.push("/settings")} />
-              <HeaderButton icon="square.and.pencil" label="New thread" onPress={() => router.push("/thread/new")} />
+              <HeaderButton icon="square.and.pencil" label="New thread" onPress={startNewThread} />
             </View>
           ),
           headerSearchBarOptions: { placeholder: "Search threads", onChangeText: (e) => setQuery(e.nativeEvent.text), hideWhenScrolling: true },
         }}
       />
-      <SectionList
-        contentInsetAdjustmentBehavior="automatic"
-        sections={sections}
-        keyExtractor={(t) => t.id}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => (section.title ? <ProjectHeader project={section.project} onNewThread={() => newThreadIn(section.project.id)} /> : null)}
-        renderSectionFooter={({ section }) =>
-          section.title && !section.data.length ? <Text style={{ color: c.textMuted, fontSize: 14, paddingHorizontal: 16, paddingVertical: 8 }}>No threads yet</Text> : null
-        }
-        renderItem={({ item }) => <ThreadRow thread={item} action={{ label: "Done", icon: "checkmark", run: () => void backend.setDone(item.id, true) }} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-        ListHeaderComponent={<ConnectionBanner />}
-        ListEmptyComponent={
-          connected ? (
-            <Empty icon="bubble.left.and.bubble.right" title={query ? "No matching threads" : "No threads yet"} body={query ? undefined : "Start one with the compose button. Threads you start on the Mac show up here too."} />
-          ) : undefined
-        }
-        ListFooterComponent={
-          doneCount > 0 && !query ? (
-            <Pressable onPress={() => router.push("/done")} style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 16 }}>
-              <Icon name="checkmark.circle" size={16} color={c.textMuted} />
-              <Text style={{ flex: 1, color: c.textMuted, fontSize: 15 }}>Done</Text>
-              <Text style={{ color: c.textMuted, fontSize: 15 }}>{doneCount}</Text>
-              <Icon name="chevron.right" size={12} color={c.textMuted} />
-            </Pressable>
-          ) : undefined
-        }
-      />
+      {folders ? (
+        <FlatList
+          key="folders"
+          {...common}
+          data={groups}
+          keyExtractor={(g) => g.project.id}
+          renderItem={({ item: g }) => (
+            <ProjectFolder
+              project={g.project}
+              threads={g.threads}
+              allThreads={g.all}
+              open={searching || !shut.has(g.project.id)}
+              onToggle={() => profileId && toggleCollapsed(profileId, g.project.id)}
+              showEmpty={connected}
+            />
+          )}
+        />
+      ) : (
+        <FlatList
+          key={flat ? "flat" : "cards"}
+          {...common}
+          data={threads}
+          keyExtractor={(t) => t.id}
+          renderItem={({ item }) =>
+            flat ? <ThreadRow thread={item} action={doneAction(item)} /> : <ThreadCard thread={item} project={projectNames.get(item.projectId) ?? NO_PROJECT} action={doneAction(item)} />
+          }
+        />
+      )}
     </>
   )
 }
 
-/** A project's name over its threads. Tap for a new thread in it, or to edit the project. */
-function ProjectHeader({ project, onNewThread }: { project: Project; onNewThread: () => void }) {
-  const c = useColors()
-  const general = project.id === GENERAL
+/** The list's options: how threads are sorted, and adding a project. */
+function ListMenu({ sort, connected }: { sort: ThreadSort; connected: boolean }) {
   return (
     <MenuView
-      title={general ? NO_PROJECT : project.folder && homePath(project.folder)}
       actions={[
-        { id: "new-thread", title: "New thread here", image: "square.and.pencil" },
-        general
-          ? { id: "new-project", title: "New project…", image: "folder.badge.plus" }
-          : { id: "edit", title: "Rename or remove…", image: "pencil" },
+        {
+          id: "sort",
+          title: "Sort threads by",
+          displayInline: true,
+          subactions: SORTS.map((s) => ({ id: `sort:${s.id}`, title: s.title, state: s.id === sort ? ("on" as const) : ("off" as const) })),
+        },
+        { id: "new-project", title: "Add project…", image: "folder.badge.plus", attributes: { disabled: !connected } },
       ]}
       onPressAction={({ nativeEvent }) => {
         const id = nativeEvent.event
-        if (id === "new-thread") onNewThread()
-        else if (id === "new-project") promptNewProject(true)
-        else if (id === "edit") router.push(`/project/${encodeURIComponent(project.id)}`)
+        if (id === "new-project") return promptNewProject(true)
+        if (id.startsWith("sort:")) {
+          void Haptics.selectionAsync()
+          setPrefs({ sort: id.slice(5) as ThreadSort })
+        }
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 }}>
-        <Icon name={general ? "tray" : "folder"} size={13} color={c.textMuted} />
-        <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "600" }} numberOfLines={1}>
-          {project.name}
-        </Text>
-        <Icon name="chevron.down" size={9} weight="semibold" color={c.textMuted} />
+      <View style={{ padding: 4 }} accessibilityLabel="Sort and add project">
+        <Icon name="line.3.horizontal.decrease" size={20} />
       </View>
     </MenuView>
   )

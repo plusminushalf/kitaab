@@ -1,11 +1,12 @@
 import { useMemo } from "react"
-import { Text, View } from "react-native"
+import { Alert, Text, View } from "react-native"
 import { router } from "expo-router"
 import { MenuView } from "@expo/ui/community/menu"
 import * as Haptics from "expo-haptics"
 import { backend } from "@kitab/core/backend"
+import { toast } from "@kitab/core/platform"
 import { GENERAL, NO_PROJECT, type Project } from "@kitab/core/model"
-import { useStore } from "@/lib/store"
+import { store, useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Icon } from "./ui"
 
@@ -56,6 +57,41 @@ export function promptNewProject(thenThread = false) {
   router.push(thenThread ? "/project/new?then=thread" : "/project/new")
 }
 
+/**
+ * The compose button: asks which project the thread goes in (as ⌘N does on the Mac). A
+ * profile with only General has nothing to ask, so it goes straight to the new thread.
+ */
+export function startNewThread() {
+  const s = store.get()
+  const projects = s.profileId ? (s.projects[s.profileId] ?? []) : []
+  router.push(projects.length ? "/new-thread" : "/thread/new")
+}
+
+/** A new thread in `projectId`: it becomes the picked project first. */
+export function newThreadIn(projectId: string) {
+  backend.selectProject(projectId)
+  router.push("/thread/new")
+}
+
+/** Takes a project off the list, after asking. Its threads stay, with no project. */
+export function confirmRemoveProject(project: Project, then?: () => void) {
+  Alert.alert(`Remove ${project.name}?`, "Its threads stay, with no project. Its folder and threads stay on the server.", [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Remove",
+      style: "destructive",
+      onPress: () =>
+        backend.removeProject(project.id).then(
+          () => {
+            toast(`Removed ${project.name}`)
+            then?.()
+          },
+          (e) => toast.error(`Couldn't remove it: ${e instanceof Error ? e.message : String(e)}`),
+        ),
+    },
+  ])
+}
+
 /** "in General ▾" under a new thread's title: which project it starts in, and changing that. */
 export function NewThreadProjectMenu() {
   const c = useColors()
@@ -80,7 +116,7 @@ export function NewThreadProjectMenu() {
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
         <Text style={{ color: c.textMuted, fontSize: 12 }} numberOfLines={1}>
-          in {current.name}
+          {current.id === GENERAL ? NO_PROJECT : `in ${current.name}`}
         </Text>
         <Icon name="chevron.down" size={9} weight="semibold" color={c.textMuted} />
       </View>

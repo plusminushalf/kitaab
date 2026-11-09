@@ -1,7 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps, type ViewStyle } from "react-native"
 import { SymbolView, type SymbolViewProps } from "expo-symbols"
 import * as Haptics from "expo-haptics"
+import { initials } from "@kitab/core/project-color"
 import { useColors } from "@/lib/theme"
+import { useProjectTint } from "@/lib/tint"
 
 export function Icon({ name, size = 20, color, weight }: { name: SymbolViewProps["name"]; size?: number; color?: string; weight?: SymbolViewProps["weight"] }) {
   const c = useColors()
@@ -142,4 +144,32 @@ export function HeaderTextButton({ title, onPress, bold, disabled }: { title: st
       <Text style={{ color: disabled ? c.textMuted : c.text, fontSize: 17, fontWeight: bold ? "600" : "400" }}>{title}</Text>
     </Pressable>
   )
+}
+
+/** A project's colored initials, tinted from its name (as on the Mac). */
+export function ProjectBadge({ name, size = 20 }: { name: string; size?: number }) {
+  const tint = useProjectTint(name)
+  return (
+    <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: tint.badge, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ fontSize: size * 0.48, fontWeight: "700", letterSpacing: -0.3, color: tint.badgeText }}>{initials(name)}</Text>
+    </View>
+  )
+}
+
+/** A project's name as a small tag in its color (a routine's project, say). */
+export function ProjectTag({ name }: { name: string }) {
+  const tint = useProjectTint(name)
+  return (
+    <View style={{ backgroundColor: tint.badge, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, flexShrink: 0, maxWidth: 120 }}>
+      <Text style={{ color: tint.badgeText, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>
+        {name}
+      </Text>
+    </View>
+  )
+}
+
+/** A project's folder icon in its color. */
+export function FolderIcon({ name, size = 17 }: { name: string; size?: number }) {
+  const tint = useProjectTint(name)
+  return <Icon name="folder.fill" size={size} color={tint.icon} />
 }

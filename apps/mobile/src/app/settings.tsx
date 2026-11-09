@@ -11,13 +11,15 @@ import Ssh from "../../modules/kitab-ssh/src/KitabSshModule"
 import { restartServer } from "@/lib/platform"
 import { serverSettings, useServerSettings } from "@/lib/settings"
 import { store, useStore } from "@/lib/store"
+import { setPrefs, usePrefs, type ThreadsLayout } from "@/lib/prefs"
 import { mono, useColors } from "@/lib/theme"
-import { Button, HeaderTextButton, Row, Section } from "@/components/ui"
+import { Button, HeaderTextButton, Icon, Row, Section } from "@/components/ui"
 
 export default function Settings() {
   const c = useColors()
   const saved = useServerSettings()
   const conn = useStore((s) => s.connection)
+  const { layout } = usePrefs()
   const [host, setHost] = useState(saved.host)
   const [user, setUser] = useState(saved.user)
   const [port, setPort] = useState(String(saved.port || 22))
@@ -131,6 +133,26 @@ export default function Settings() {
             />
           </Section>
         ) : null}
+
+        <Section title="Project layout" footer="How the Threads tab shows a profile's projects. List: one list across projects, each thread saying where it lives. Folders: a folder per project, in its color.">
+          {(
+            [
+              { id: "list", title: "List" },
+              { id: "folders", title: "Folders" },
+            ] as { id: ThreadsLayout; title: string }[]
+          ).map((o, i) => (
+            <Row
+              key={o.id}
+              title={o.title}
+              last={i === 1}
+              onPress={() => {
+                void Haptics.selectionAsync()
+                setPrefs({ layout: o.id })
+              }}
+              right={layout === o.id ? <Icon name="checkmark" size={15} weight="semibold" /> : undefined}
+            />
+          ))}
+        </Section>
 
         {saved.host ? (
           <Section title="Server" footer="Restarting stops Kitaab's Hermes backend on the host for every device. The next connection starts a fresh one.">

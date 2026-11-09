@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
-import { ActivityIndicator, Text, View } from "react-native"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { ActivityIndicator, AppState, Pressable, Text, View } from "react-native"
 import { LegendList } from "@legendapp/list/react-native"
-import { router, Stack, useLocalSearchParams } from "expo-router"
+import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router"
 import Animated, { useAnimatedStyle } from "react-native-reanimated"
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -17,8 +17,9 @@ import { Composer } from "@/components/composer"
 import { MessageRow } from "@/components/message"
 import { PendingCard } from "@/components/pending"
 import { QueuedCard } from "@/components/queued"
-import { Avatar, Empty, Icon } from "@/components/ui"
+import { Avatar, Icon } from "@/components/ui"
 import { NewThreadProjectMenu } from "@/components/profile-menu"
+import { markSeen } from "@/lib/prefs"
 
 export default function ThreadScreen() {
   const c = useColors()
@@ -45,6 +46,23 @@ export default function ThreadScreen() {
     const s = store.get()
     if (thread.profileId === s.profileId && thread.projectId !== s.projectId) backend.selectProject(thread.projectId)
   }, [thread?.id, thread?.projectId])
+
+  // The open thread counts as read whenever it moves while it's on screen, and again when
+  // you come back to it (or to the app). Read as of now: Hermes's list can later report a
+  // last-active a little after the live one for the same reply.
+  const updatedAt = thread?.updatedAt
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || updatedAt === undefined) return
+      const mark = () => markSeen(id, Math.max(updatedAt, Date.now()))
+      if (AppState.currentState === "active") mark()
+      const sub = AppState.addEventListener("change", (state) => state === "active" && mark())
+      return () => {
+        sub.remove()
+        if (AppState.currentState === "active") mark()
+      }
+    }, [id, updatedAt]),
+  )
 
   // The new-thread screen shows what you sent until the thread exists.
   const [draft, setDraft] = useState<Message | null>(null)
@@ -141,17 +159,7 @@ export default function ThreadScreen() {
             <ActivityIndicator />
           </View>
         ) : !id && !draft ? (
-          <View style={{ flex: 1, justifyContent: "center" }}>
-            <Empty icon="sparkles" title="What are we working on?" body={profileCast.length ? "Type @ to hand it to one of the profile's personalities." : undefined}>
-              {profileCast.length ? (
-                <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
-                  {profileCast.slice(0, 5).map((p) => (
-                    <Avatar key={p.id} name={p.name} size={28} />
-                  ))}
-                </View>
-              ) : null}
-            </Empty>
-          </View>
+          <NewThreadPrompt cast={profileCast.map((p) => p.name)} />
         ) : (
           // Not inverted: content sits at the bottom and follows new replies, and iOS's
           // glass header and scroll-edge effects work the way they expect.
@@ -184,5 +192,51 @@ export default function ThreadScreen() {
         />
       </Animated.View>
     </>
+  )
+}
+
+/**
+ * A new thread's empty view, as on the Mac (after T3's): what you're starting, and where. In a
+ * project it offers a way out of it; with no project it offers the project picker, when there's
+ * one to pick.
+ */
+function NewThreadPrompt({ cast }: { cast: string[] }) {
+  const c = useColors()
+  const projectId = useStore((s) => s.projectId)
+  const projectName = useStore((s) => (s.profileId ? s.projects[s.profileId]?.find((p) => p.id === projectId)?.name : undefined))
+  const hasProjects = useStore((s) => !!s.profileId && (s.projects[s.profileId]?.length ?? 0) > 0)
+  const inProject = projectId !== GENERAL && !!projectName
+  const link = { color: c.textMuted, fontSize: 15, paddingHorizontal: 8, paddingVertical: 4 }
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32, gap: 10 }}>
+      <Text style={{ fontSize: 22, textAlign: "center", color: inProject ? c.textMuted : c.text, lineHeight: 28 }}>
+        {inProject ? (
+          <>
+            What should we work on in <Text style={{ color: c.text, fontWeight: "600" }}>{projectName}</Text>?
+          </>
+        ) : (
+          "What should we work on?"
+        )}
+      </Text>
+      {inProject ? (
+        <Pressable onPress={() => backend.selectProject(GENERAL)} hitSlop={6}>
+          {({ pressed }) => <Text style={{ ...link, opacity: pressed ? 0.5 : 1 }}>or start without a project</Text>}
+        </Pressable>
+      ) : hasProjects ? (
+        <Pressable onPress={() => router.push("/new-thread?here=1")} hitSlop={6}>
+          {({ pressed }) => <Text style={{ ...link, opacity: pressed ? 0.5 : 1 }}>or pick a project</Text>}
+        </Pressable>
+      ) : null}
+      {cast.length ? (
+        <View style={{ alignItems: "center", gap: 8, marginTop: 18 }}>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {cast.slice(0, 5).map((name) => (
+              <Avatar key={name} name={name} size={28} />
+            ))}
+          </View>
+          <Text style={{ color: c.textMuted, fontSize: 14, textAlign: "center" }}>Type @ to hand it to one of the profile's personalities.</Text>
+        </View>
+      ) : null}
+    </View>
   )
 }

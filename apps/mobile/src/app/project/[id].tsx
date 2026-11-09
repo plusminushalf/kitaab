@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Alert, Text, TextInput } from "react-native"
+import { Text, TextInput } from "react-native"
 import { router, Stack, useLocalSearchParams } from "expo-router"
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller"
 import * as Clipboard from "expo-clipboard"
@@ -10,6 +10,7 @@ import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { HeaderTextButton, Row, Section } from "@/components/ui"
+import { confirmRemoveProject } from "@/components/profile-menu"
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -53,19 +54,7 @@ export default function ProjectEditor() {
   }
 
   function remove() {
-    if (!id || !existing) return
-    Alert.alert(`Remove ${existing.name}?`, "Its threads move to General. Its folder and threads stay on the server.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () =>
-          backend.removeProject(id).then(
-            () => router.back(),
-            (e) => toast.error(`Couldn't remove it: ${message(e)}`),
-          ),
-      },
-    ])
+    if (existing) confirmRemoveProject(existing, () => router.back())
   }
 
   // Removed on another device while open.

@@ -9,7 +9,7 @@ import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
 import { ProfileMenu } from "@/components/profile-menu"
 import { StatusMark, stateOf } from "@/components/routine-status"
-import { Empty } from "@/components/ui"
+import { Empty, ProjectTag } from "@/components/ui"
 
 const byNextRun = (a: Routine, b: Routine) => (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity)
 
@@ -55,7 +55,7 @@ export default function Routines() {
         }
         renderItem={({ item: r }) => {
           const who = r.personalityId ? personalities.find((p) => p.id === r.personalityId)?.name : undefined
-          // The project it's filed under; General goes unsaid.
+          // The project it's filed under, as a tag in its color; General goes unsaid.
           const project = r.projectId !== GENERAL ? projects?.find((p) => p.id === r.projectId)?.name : undefined
           const state = stateOf(r)
           return (
@@ -65,11 +65,14 @@ export default function Routines() {
                   <StatusMark state={state} />
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ color: c.text, fontSize: 16, fontWeight: "500" }} numberOfLines={1}>
-                    {r.name}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ flexShrink: 1, color: state === "paused" ? c.textMuted : c.text, fontSize: 16, fontWeight: "500" }} numberOfLines={1}>
+                      {r.name}
+                    </Text>
+                    {project ? <ProjectTag name={project} /> : null}
+                  </View>
                   <Text style={{ color: c.textMuted, fontSize: 14 }} numberOfLines={1}>
-                    {[project, r.schedule, who].filter(Boolean).join(" · ")}
+                    {[r.schedule, who].filter(Boolean).join(" · ")}
                   </Text>
                   {state === "failed" && r.lastError ? (
                     <Text style={{ color: c.error, fontSize: 13 }} numberOfLines={2}>

@@ -19,6 +19,8 @@ export type Colors = {
   errorSurface: string
   warning: string
   warningSurface: string
+  /** Warning as text ("Awaiting you"), dark enough to read. */
+  warningText: string
   working: string
   done: string
 }
@@ -39,6 +41,7 @@ const light: Colors = {
   errorSurface: "#fef2f2",
   warning: "#f59e0b",
   warningSurface: "#fffbeb",
+  warningText: "#b45309",
   working: "#3b82f6",
   done: "#16a34a",
 }
@@ -59,6 +62,7 @@ const dark: Colors = {
   errorSurface: "#3b0a0a",
   warning: "#f59e0b",
   warningSurface: "#3a2306",
+  warningText: "#fbbf24",
   working: "#60a5fa",
   done: "#4ade80",
 }
