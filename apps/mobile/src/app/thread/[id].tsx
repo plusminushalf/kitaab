@@ -6,11 +6,12 @@ import Animated, { useAnimatedStyle } from "react-native-reanimated"
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { MenuView } from "@expo/ui/community/menu"
-import type { Attachment, Message } from "@kitab/core/model"
+import * as Clipboard from "expo-clipboard"
+import { GENERAL, type Attachment, type Message } from "@kitab/core/model"
 import { backend } from "@kitab/core/backend"
 import { plainReplySpeaker } from "@kitab/core/personalities"
 import { toast } from "@kitab/core/platform"
-import { useStore } from "@/lib/store"
+import { store, useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Composer } from "@/components/composer"
 import { MessageRow } from "@/components/message"
@@ -32,6 +33,18 @@ export default function ThreadScreen() {
   const profileId = useStore((s) => s.profileId)
   const profiles = useStore((s) => s.profiles)
   const personalities = useStore((s) => s.personalities)
+
+  // Which project it's in, named only when the profile has projects besides General.
+  const project = useStore((s) => (thread ? s.projects[thread.profileId]?.find((p) => p.id === thread.projectId) : undefined))
+  const hasProjects = useStore((s) => (s.projects[thread?.profileId ?? s.profileId ?? ""]?.length ?? 0) > 0)
+  const folder = thread?.cwd ?? project?.folder
+
+  // The open thread's project is where the next new thread goes (as on the Mac).
+  useEffect(() => {
+    if (!thread || thread.fromRun) return
+    const s = store.get()
+    if (thread.profileId === s.profileId && thread.projectId !== s.projectId) backend.selectProject(thread.projectId)
+  }, [thread?.id, thread?.projectId])
 
   // The new-thread screen shows what you sent until the thread exists.
   const [draft, setDraft] = useState<Message | null>(null)
@@ -85,9 +98,11 @@ export default function ThreadScreen() {
               </Text>
               {!id ? (
                 <NewThreadProjectMenu />
-              ) : threadCast.length ? (
+              ) : threadCast.length || (hasProjects && thread && !thread.fromRun) ? (
                 <Text style={{ color: c.textMuted, fontSize: 12 }} numberOfLines={1}>
-                  {threadCast.map((p) => p.name).join(", ")}
+                  {[hasProjects && thread && !thread.fromRun ? (project?.name ?? (thread.projectId === GENERAL ? "General" : undefined)) : undefined, threadCast.map((p) => p.name).join(", ")]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Text>
               ) : null}
             </View>
@@ -99,12 +114,17 @@ export default function ThreadScreen() {
                     isDone
                       ? { id: "restore", title: "Bring back", image: "arrow.uturn.backward" }
                       : { id: "done", title: "Mark as done", image: "checkmark.circle" },
+                    ...(folder ? [{ id: "copy-folder", title: "Copy folder path", image: "folder" as const }] : []),
                   ]}
                   onPressAction={({ nativeEvent }) => {
                     if (nativeEvent.event === "done") {
                       void backend.setDone(id, true)
                       router.back()
                     } else if (nativeEvent.event === "restore") void backend.setDone(id, false)
+                    else if (nativeEvent.event === "copy-folder" && folder) {
+                      void Clipboard.setStringAsync(folder)
+                      toast(`Copied ${folder}`)
+                    }
                   }}
                 >
                   <View style={{ padding: 4 }}>
@@ -122,7 +142,7 @@ export default function ThreadScreen() {
           </View>
         ) : !id && !draft ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
-            <Empty icon="sparkles" title="What are we working on?" body={profileCast.length ? "Type @ to hand it to one of the project's personalities." : undefined}>
+            <Empty icon="sparkles" title="What are we working on?" body={profileCast.length ? "Type @ to hand it to one of the profile's personalities." : undefined}>
               {profileCast.length ? (
                 <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
                   {profileCast.slice(0, 5).map((p) => (

@@ -1,11 +1,10 @@
 import { useMemo } from "react"
-import { Alert, Text, View } from "react-native"
+import { Text, View } from "react-native"
 import { router } from "expo-router"
 import { MenuView } from "@expo/ui/community/menu"
 import * as Haptics from "expo-haptics"
 import { backend } from "@kitab/core/backend"
 import { GENERAL, type Project } from "@kitab/core/model"
-import { toast } from "@kitab/core/platform"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { Icon } from "./ui"
@@ -28,7 +27,7 @@ export function ProfileMenu() {
       onPressAction={({ nativeEvent }) => {
         const id = nativeEvent.event
         if (id === "settings") return router.push("/profile")
-        if (id === "new-project") return promptNewProject()
+        if (id === "new-project") return promptNewProject(true)
         if (id.startsWith("profile:")) {
           void Haptics.selectionAsync()
           void backend.selectProfile(id.slice(8))
@@ -52,18 +51,9 @@ export function useProfileProjects(): Project[] {
   return useMemo(() => [{ id: GENERAL, profileId: profileId ?? "", name: "General", folders: [] }, ...(projects ?? [])], [profileId, projects])
 }
 
-/** Asks for a name and makes a project in the open profile (it gets ~/kitaab/<profile>/<name>). */
-export function promptNewProject() {
-  Alert.prompt("New project", "It gets its own folder on the server. Its threads work there and share the profile's memory and skills.", [
-    { text: "Cancel", style: "cancel" },
-    {
-      text: "Create",
-      onPress: (name?: string) => {
-        if (!name?.trim()) return
-        backend.createProject(name).catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
-      },
-    },
-  ])
+/** Opens the new-project form. `thenThread` opens a new thread in the project once it's made. */
+export function promptNewProject(thenThread = false) {
+  router.push(thenThread ? "/project/new?then=thread" : "/project/new")
 }
 
 /** "in General ▾" under a new thread's title: which project it starts in, and changing that. */

@@ -2,10 +2,12 @@ import { useMemo, useState } from "react"
 import { Pressable, RefreshControl, SectionList, Text, View } from "react-native"
 import { router, Stack } from "expo-router"
 import { backend } from "@kitab/core/backend"
+import { GENERAL, type Project } from "@kitab/core/model"
+import { MenuView } from "@expo/ui/community/menu"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { ConnectionBanner } from "@/components/connection-banner"
-import { ProfileMenu, useProfileProjects } from "@/components/profile-menu"
+import { ProfileMenu, promptNewProject, useProfileProjects } from "@/components/profile-menu"
 import { ThreadRow } from "@/components/thread-row"
 import { Empty, HeaderButton, Icon } from "@/components/ui"
 
@@ -26,13 +28,21 @@ export default function Threads() {
       .filter((t) => !q || t.title.toLowerCase().includes(q) || t.preview?.toLowerCase().includes(q))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }, [all, profileId, query])
-  // One section per project with threads, General first. Only General: one untitled list.
+  // One section per project, General first. Only General: one untitled list. A project with
+  // no threads still shows (so a new one is there to start in), except while searching.
+  const searching = query.trim().length > 0
   const sections = useMemo(() => {
-    if (projects.length === 1) return threads.length ? [{ key: projects[0].id, title: "", data: threads }] : []
+    if (projects.length === 1) return threads.length ? [{ project: projects[0], title: "", data: threads }] : []
     return projects
-      .map((p) => ({ key: p.id, title: p.name, data: threads.filter((t) => t.projectId === p.id) }))
-      .filter((sec) => sec.data.length > 0)
-  }, [projects, threads])
+      .map((p) => ({ project: p, title: p.name, data: threads.filter((t) => t.projectId === p.id) }))
+      .filter((sec) => sec.data.length > 0 || (!searching && sec.project.id !== GENERAL))
+  }, [projects, threads, searching])
+
+  /** A new thread in `projectId`: it becomes the picked project first. */
+  function newThreadIn(projectId: string) {
+    backend.selectProject(projectId)
+    router.push("/thread/new")
+  }
 
   async function refresh() {
     if (!profileId) return void backend.connect()
@@ -60,12 +70,9 @@ export default function Threads() {
         sections={sections}
         keyExtractor={(t) => t.id}
         stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) =>
-          section.title ? (
-            <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "600", paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 }}>
-              {section.title}
-            </Text>
-          ) : null
+        renderSectionHeader={({ section }) => (section.title ? <ProjectHeader project={section.project} onNewThread={() => newThreadIn(section.project.id)} /> : null)}
+        renderSectionFooter={({ section }) =>
+          section.title && !section.data.length ? <Text style={{ color: c.textMuted, fontSize: 14, paddingHorizontal: 16, paddingVertical: 8 }}>No threads yet</Text> : null
         }
         renderItem={({ item }) => <ThreadRow thread={item} action={{ label: "Done", icon: "checkmark", run: () => void backend.setDone(item.id, true) }} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -87,5 +94,36 @@ export default function Threads() {
         }
       />
     </>
+  )
+}
+
+/** A project's name over its threads. Tap for a new thread in it, or to edit the project. */
+function ProjectHeader({ project, onNewThread }: { project: Project; onNewThread: () => void }) {
+  const c = useColors()
+  const general = project.id === GENERAL
+  return (
+    <MenuView
+      title={general ? "General" : project.folder}
+      actions={[
+        { id: "new-thread", title: "New thread here", image: "square.and.pencil" },
+        general
+          ? { id: "new-project", title: "New project…", image: "folder.badge.plus" }
+          : { id: "edit", title: "Rename or remove…", image: "pencil" },
+      ]}
+      onPressAction={({ nativeEvent }) => {
+        const id = nativeEvent.event
+        if (id === "new-thread") onNewThread()
+        else if (id === "new-project") promptNewProject(true)
+        else if (id === "edit") router.push(`/project/${encodeURIComponent(project.id)}`)
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 }}>
+        <Icon name={general ? "tray" : "folder"} size={13} color={c.textMuted} />
+        <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "600" }} numberOfLines={1}>
+          {project.name}
+        </Text>
+        <Icon name="chevron.down" size={9} weight="semibold" color={c.textMuted} />
+      </View>
+    </MenuView>
   )
 }

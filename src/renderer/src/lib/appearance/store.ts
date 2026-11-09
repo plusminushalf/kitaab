@@ -43,6 +43,8 @@ export type AppearanceSettings = {
   panelAnimationMs: number
   chatWidth: ChatWidth
   sidebarLayout: SidebarLayout
+  /** True once you've picked a layout yourself. Until then the default applies, even if an older Kitaab saved one. */
+  sidebarLayoutPicked: boolean
   wordWrap: boolean
   threadDetails: Record<ThreadDetailItem, boolean>
 }
@@ -62,7 +64,8 @@ export const DEFAULTS: AppearanceSettings = {
   fontSmoothing: true,
   panelAnimationMs: 200,
   chatWidth: "comfortable",
-  sidebarLayout: "switcher",
+  sidebarLayout: "folders",
+  sidebarLayoutPicked: false,
   wordWrap: true,
   threadDetails: {
     machine: true,
@@ -107,6 +110,9 @@ type State = {
 }
 
 const stored = read<Partial<AppearanceSettings>>(SETTINGS_KEY, {})
+// Every save stored the whole settings object, so a layout from before folders were the
+// default (2026-11-09) is only kept if you picked it.
+if (!stored.sidebarLayoutPicked) delete stored.sidebarLayout
 let state: State = {
   settings: { ...DEFAULTS, ...stored, threadDetails: { ...DEFAULTS.threadDetails, ...stored.threadDetails } },
   custom: read<ThemeFamily[]>(THEMES_KEY, []),
@@ -131,6 +137,7 @@ export const appearance = {
     return () => void listeners.delete(l)
   },
   update(patch: Partial<AppearanceSettings>) {
+    if (patch.sidebarLayout && patch.sidebarLayoutPicked === undefined) patch = { ...patch, sidebarLayoutPicked: true }
     const settings = { ...state.settings, ...patch }
     write(SETTINGS_KEY, settings)
     set({ settings })
