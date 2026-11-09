@@ -465,8 +465,8 @@ function TileStatus({ status, stopping, unseen }: { status: Thread["status"]; st
     )
   if (unseen)
     return (
-      <span className="flex shrink-0 items-center gap-1.5 font-medium text-sidebar-foreground">
-        <span className="size-1.5 rounded-full bg-primary" />
+      <span className="flex shrink-0 items-center gap-1.5 font-semibold text-blue-600 dark:text-blue-400">
+        <span className="size-2 rounded-full bg-blue-500" />
         New reply
       </span>
     )

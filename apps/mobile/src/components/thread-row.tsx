@@ -160,8 +160,8 @@ function CardStatus({ status, stopping, unseen }: { status: Thread["status"]; st
   if (unseen)
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }} />
-        <Text style={{ ...label, color: c.text }}>New reply</Text>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.unread }} />
+        <Text style={{ ...label, fontWeight: "600", color: c.unreadText }}>New reply</Text>
       </View>
     )
   return null

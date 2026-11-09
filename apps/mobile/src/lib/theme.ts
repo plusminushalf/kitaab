@@ -22,6 +22,9 @@ export type Colors = {
   /** Warning as text ("Awaiting you"), dark enough to read. */
   warningText: string
   working: string
+  /** "New reply": the dot, and its label. */
+  unread: string
+  unreadText: string
   done: string
 }
 
@@ -43,6 +46,8 @@ const light: Colors = {
   warningSurface: "#fffbeb",
   warningText: "#b45309",
   working: "#3b82f6",
+  unread: "#3b82f6",
+  unreadText: "#2563eb",
   done: "#16a34a",
 }
 
@@ -64,6 +69,8 @@ const dark: Colors = {
   warningSurface: "#3a2306",
   warningText: "#fbbf24",
   working: "#60a5fa",
+  unread: "#3b82f6",
+  unreadText: "#60a5fa",
   done: "#4ade80",
 }
 
