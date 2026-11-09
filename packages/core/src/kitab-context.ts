@@ -11,8 +11,8 @@ import { http, platform, type Platform } from "./platform"
 //   config.yaml  platform_hints.desktop.replace   Kitaab's own paragraph for chats
 //   config.yaml  platform_hints.cron.append       a note for routine runs
 // (platform_hints is a top-level key; Hermes ignores it under agent:)
-//   skill        kitab                                  words and kitaab:// links, read on demand
-//   plugin       plugins/kitaab                         the request_secret tool (kitaab-plugin.ts)
+//   skill        kitab                                  how to do things in Kitaab, read on demand
+//   plugin       plugins/kitaab                         start_thread and request_secret (kitaab-plugin.ts)
 //   ui_meta      kitab.context                          what was written, so it's written once
 //
 // Which apps the user has is kept on the default profile, one key per install:
@@ -21,7 +21,7 @@ import { http, platform, type Platform } from "./platform"
 export type DeviceKind = Platform["kind"]
 
 /** Bump when the texts change in a way older apps shouldn't undo. */
-const VERSION = 5
+const VERSION = 6
 const DEVICE = "kitab.device."
 const MARKER = "kitab.context"
 const SKILL = "kitab"
@@ -112,8 +112,9 @@ export function chatHint(project: Project, kinds: DeviceKind[]): string {
     RENDERING,
     `In Kitaab, a Hermes profile is a project, a session is a thread, a cron job is a routine, and each run ` +
       `of a cron job is a run. This chat is a thread in the project "${project.name}" (profile ` +
-      `\`${project.id}\`). Use Kitaab's words with the user. For links that open a thread, routine or run ` +
-      `inside Kitaab, and what you can change there, load the \`${SKILL}\` skill.`,
+      `\`${project.id}\`). Use Kitaab's words with the user. Before you do anything in Kitaab itself ` +
+      `(start or hand off to a new thread, link to a thread, routine or run, set up a routine), load the ` +
+      `\`${SKILL}\` skill.`,
     SECRETS,
   ].join("\n\n")
 }
@@ -128,10 +129,11 @@ export function routineHint(project: Project, kinds: DeviceKind[]): string {
   ].join("\n\n")
 }
 
-/** The `kitab` skill: Kitaab's words, links into the app, and what the agent may change. */
+/** The `kitab` skill: how to do things in Kitaab (threads, links, routines, secrets) and what to leave alone. */
 export function skillText(project: Project, kinds: DeviceKind[]): string {
   const p = project.id
-  const description = "Links that open threads, routines and runs in Kitaab"
+  const description =
+    "How to do things in Kitaab: start or hand off to a new thread, link to threads, routines and runs, set up routines, ask for secrets"
   return `---
 name: ${SKILL}
 description: ${JSON.stringify(description)}
@@ -143,7 +145,12 @@ Kitaab is the user's own app for Hermes. They have it ${where(kinds)}. Every Kit
 server, so all of them show the same projects, threads, routines and runs. You're in the project
 "${project.name}", which is the Hermes profile \`${p}\`.
 
+This skill is how you do things in Kitaab itself. Kitaab only shows what is on this server, so do
+these through the tools named here, never by editing Hermes's files or databases yourself.
+
 ## Kitaab's words
+
+Use Kitaab's words with the user.
 
 | Hermes | Kitaab |
 |---|---|
@@ -153,10 +160,35 @@ server, so all of them show the same projects, threads, routines and runs. You'r
 | the session a cron job ran in | run (its last reply is the run's report) |
 | archived session | done thread |
 
-Personalities are Kitaab's own: characters (Designer, Coach…) the user adds to a project and to
-threads. Kitaab manages them; don't edit them yourself.
+## Start a new thread
 
-## Links into Kitaab
+Use the \`start_thread\` tool when work should carry on in a thread of its own: the user asks you to
+hand something off, to start a new thread for it, or to split a side task out of this one. It makes a
+real Kitaab thread, sends your message as its first message, and that thread's agent answers it
+right away. The user sees it in the thread list, on every device.
+
+1. Pick a short \`title\` (a few words) and, only if it belongs elsewhere, a \`project\` (a profile id;
+   leave it out for this project).
+2. Write the \`message\` as a brief for someone who has never seen this chat, because the new thread
+   can't see it:
+   - the goal, and why;
+   - what is already known or decided, so it doesn't ask again;
+   - full paths of the files, and the links, it should read;
+   - the user's preferences that matter for this work;
+   - what its first reply should do. If the user has to tell it something first (a story, a choice),
+     say "Start by asking the user for …; don't draft anything until they answer."
+3. Tell the user it's started, with the link from the result:
+   \`[Launch post story](kitaab://thread/<id>?project=${p})\`.
+
+Never start a thread with \`hermes chat\`, a script or by editing \`state.db\`: those sessions don't
+show in Kitaab, or show broken. \`start_thread\` and \`request_secret\` come from Kitaab's plugin and
+may not be loaded yet: look them up with \`tool_describe\`. If they don't exist, tell the user to open
+Kitaab so it can set this project up, rather than working around it.
+
+Helpers (\`delegate_task\`) are different: they work for this thread and report back to it. Use them
+for work this thread waits on, and \`start_thread\` for work the user carries on in its own thread.
+
+## Link to a thread, routine or run
 
 Write these as ordinary markdown links. When the user taps one inside Kitaab, the app opens that
 place, switching project first if needed. Always keep \`?project=\`.
@@ -175,19 +207,31 @@ Example: \`[Open the routine](kitaab://routine/3f9a1c2b?project=${p})\`
 
 Only link to ids you have looked up, never guessed ones:
 - **Cron job ids:** the \`cronjob\` tool with \`action: "list"\`.
-- **Session ids** (threads and runs): \`session_search\`. A run's session has the source \`cron\`.
+- **Session ids** (threads and runs): \`session_search\`, or the id \`start_thread\` returned. A run's
+  session has the source \`cron\`.
 
 Links only open inside Kitaab. Anywhere else (Telegram, email), describe where to look instead,
 for example "Kitaab → ${project.name} → Routines → Morning brief".
 
-## What you can change in Kitaab
+## Set up a routine
 
-Kitaab shows what is on this server, so these show up in the app:
-- Creating, editing, pausing or removing a cron job (the \`cronjob\` tool) changes the project's routines.
-- Creating or editing a skill changes the project's skills.
+A routine is a cron job; the \`cronjob\` tool creates, edits, pauses and removes them, and Kitaab's
+Routines list follows. Each run starts with no memory of this chat, so write its prompt as a full
+brief, like a \`start_thread\` message. The run's last reply is the report the user reads, so ask
+for the report you want them to see. After creating one, link to it.
 
-Kitaab keeps its own data in each profile's \`profile.yaml\` under \`ui_meta\` keys starting with
-\`kitab.\`. Never edit those, or this skill: Kitaab rewrites the skill when it changes.
+## Ask for a secret
+
+Call \`request_secret\` for an API key, token or password. Kitaab shows the user a masked field and
+the value goes straight to the .env file, private file or Hermes setting you name; you never see it.
+Never ask for a secret in the chat, and never print one.
+
+## Leave these alone
+
+- **Personalities** (Designer, Coach…) are Kitaab's own; the user manages them in Kitaab.
+- **Kitaab's data:** \`ui_meta\` keys starting with \`kitab.\` in each profile's \`profile.yaml\`, the
+  \`kitaab\` plugin under \`plugins/\`, and this skill. Kitaab rewrites them, so edits are lost.
+- **\`state.db\`**: never write to it. Use the tools above.
 `
 }
 

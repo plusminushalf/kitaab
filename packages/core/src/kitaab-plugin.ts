@@ -3,7 +3,9 @@ import { http } from "./platform"
 
 // Kitaab's own Hermes plugin, installed into every project (profile) by syncKitabContext.
 //
-// It adds the request_secret tool: the agent names a secret it needs and where it goes (a key
+// It adds two tools. start_thread makes a new thread (a hand-off, a side task) the way Kitaab
+// does, through session.create and prompt.submit inside the server, and sends its first message.
+// request_secret: the agent names a secret it needs and where it goes (a key
 // in a .env file, a private file, or Hermes's own .env), Hermes sends the app a `secret`
 // request, Kitaab shows a masked field, and the plugin writes the answer straight to its
 // destination. The tool result only says where the value went, and the plugin adds the value
@@ -19,11 +21,12 @@ export const PLUGIN = "kitaab"
 
 const PLUGIN_YAML = String.raw`name: kitaab
 version: 1.0.0
-description: "Kitaab's tools: request_secret asks the user for a secret through Kitaab and saves it without the agent seeing it."
+description: "Kitaab's tools: request_secret asks the user for a secret through Kitaab and saves it without the agent seeing it; start_thread starts a new Kitaab thread with a first message."
 author: Kitaab
 kind: standalone
 provides_tools:
   - request_secret
+  - start_thread
 provides_hooks:
   - transform_tool_result
 `
@@ -339,6 +342,98 @@ def _scrub(result=None, **_kw):
     return cleaned if cleaned != result else None
 
 
+# ---- start_thread ------------------------------------------------------------------------------
+
+START_DESCRIPTION = (
+    "Start a new Kitaab thread and send its first message, so the work carries on in a thread of its "
+    "own: a hand-off, a side task split out of this one, or a fresh start. The new thread shows up in "
+    "Kitaab's thread list and its agent answers the message right away, as if the user had sent it. "
+    "It can't see this chat, so write the message as a full brief: the goal, what is already known or "
+    "decided, the files and links it needs, the user's preferences that matter, and what its first reply "
+    "should do (for example: ask the user one question, and don't draft anything yet). Returns the new "
+    "thread's id and a kitaab:// link; give the user that link. This is the only way to make a thread: "
+    "never start one with the hermes CLI or by editing state.db."
+)
+
+START_SCHEMA = {
+    "name": "start_thread",
+    "description": START_DESCRIPTION,
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "The thread's title in Kitaab's list, a few words, e.g. 'Launch post story'.",
+            },
+            "message": {
+                "type": "string",
+                "description": "The first message: the full brief the new thread starts from (markdown).",
+            },
+            "project": {
+                "type": "string",
+                "description": "The project (Hermes profile id) to start it in. Leave out for this project.",
+            },
+        },
+        "required": ["title", "message"],
+        "additionalProperties": False,
+    },
+}
+
+_RID = "kitaab-start-thread"
+
+
+def _error_text(reply: dict) -> str:
+    err = reply.get("error") or {}
+    return str(err.get("message") or err) if err else "unknown error"
+
+
+def start_thread(args: dict, **_kw) -> str:
+    title = " ".join(str(args.get("title") or "").split())[:120]
+    message = str(args.get("message") or "").strip()
+    project = str(args.get("project") or "").strip()
+    if not title:
+        return _fail("title is required")
+    if not message:
+        return _fail("message is required")
+    try:
+        from hermes_constants import get_hermes_home, profile_name_for_home
+        from tui_gateway import server as gateway
+        from tui_gateway.transport import bind_transport, reset_transport
+    except Exception:
+        logger.debug("start_thread: not running under Hermes's app gateway", exc_info=True)
+        return _fail("Threads can only be started from inside Kitaab's Hermes server.")
+    create = gateway._methods.get("session.create")
+    submit = gateway._methods.get("prompt.submit")
+    if create is None or submit is None:
+        return _fail("This Hermes server can't start threads (no session.create).")
+    project = project or profile_name_for_home(get_hermes_home()) or "default"
+
+    # No app is watching the new thread yet. The detached sink keeps it resumable: events are
+    # dropped, and when the user opens it Kitaab resumes it and gets the rest live.
+    token = bind_transport(gateway._detached_ws_transport)
+    try:
+        created = create(_RID, {"profile": project, "source": "desktop", "title": title})
+        if "error" in created:
+            return _fail(f"couldn't make the thread: {_error_text(created)}")
+        made = created["result"]
+        sent = submit(_RID, {"session_id": made["session_id"], "text": message})
+    finally:
+        reset_transport(token)
+    thread = made["stored_session_id"]
+    link = f"kitaab://thread/{thread}?project={project}"
+    if "error" in sent:
+        return _fail(f"the thread was made but its first message didn't go: {_error_text(sent)}")
+    return _result(
+        started=True,
+        thread_id=thread,
+        project=project,
+        title=title,
+        link=link,
+        note="The new thread is answering its first message now. Tell the user with a markdown link to "
+             "it, e.g. [" + title + "](" + link + ").",
+    )
+
+
 def register(ctx) -> None:
     ctx.register_tool(
         name="request_secret",
@@ -347,6 +442,14 @@ def register(ctx) -> None:
         handler=request_secret,
         description="Ask the user for a secret and save it without seeing it",
         emoji="\U0001F511",
+    )
+    ctx.register_tool(
+        name="start_thread",
+        toolset="kitaab",
+        schema=START_SCHEMA,
+        handler=start_thread,
+        description="Start a new Kitaab thread with a first message",
+        emoji="\U0001F9F5",
     )
     ctx.register_hook("transform_tool_result", _scrub)
 `
