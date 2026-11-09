@@ -26,6 +26,23 @@ for c in "$(command -v hermes 2>/dev/null)" "$HOME/.local/bin/hermes" "$("\${SHE
 done`
 
 /**
+ * Defines `kitab_lock <dir> <pid> <port> <nonce> <token> <hermes> <startedAt>`, which writes
+ * <dir>/backend.lock.json in the official Hermes app's format (schema 2). Whenever any `hermes
+ * serve` starts on the host, Hermes kills every detached loopback `serve --port 0` it takes for a
+ * crashed app's leftover, unless a valid lockfile claims its pid. Our backend is detached on
+ * purpose, so without this file a second backend starting (another device, an agent's demo
+ * server) killed it mid-turn. The nonce must be the one the backend was started with: Hermes
+ * also retires a backend once its lockfile names another spawn.
+ */
+const WRITE_LOCK = `kitab_lock() {
+  fp=$(printf '%s' "$5" | { sha256sum 2>/dev/null || shasum -a 256 2>/dev/null; } | cut -c1-32)
+  case "$fp" in ""|*[!0-9a-f]*) return 0;; esac
+  [ \${#fp} -eq 32 ] || return 0
+  esc() { printf '%s' "$1" | sed 's/[\\\\"]/\\\\&/g'; }
+  printf '{"schemaVersion":2,"protocolVersion":1,"ownershipId":"%s","spawnNonce":"%s","tokenFingerprint":"%s","pid":%s,"port":%s,"profile":"default","hermesPath":"%s","hermesHome":"%s","logPath":"%s","startedAt":"%s"}' "\${1##*/}" "$4" "$fp" "$2" "$3" "$(esc "$6")" "$(esc "\${HERMES_HOME:-$HOME/.hermes}")" "$(esc "$1/$4.log")" "$7" > "$1/backend.lock.json.tmp" && mv -f "$1/backend.lock.json.tmp" "$1/backend.lock.json"
+}`
+
+/**
  * Looks for Hermes the way spawnScript does, for a setup check. Prints `NOHERMES`, or
  * `HERMES <path>` and `SERVE ok` or `SERVE old` (no SSH session support). Not `hermes --version`:
  * it checks for updates and can take most of a minute.
@@ -45,11 +62,18 @@ export function parseFindHermes(out: string): { path: string; serves: boolean } 
   return { path, serves: /^SERVE ok$/m.test(out) }
 }
 
-/** Lists every live Kitaab backend on the host. One `LIVE …` line each. */
+/**
+ * Lists every live Kitaab backend on the host. One `LIVE …` line each. Also writes Hermes's
+ * lockfile (see WRITE_LOCK) for a backend that has none, or whose lockfile names an earlier
+ * spawn (an older Kitaab build started it): a stale one makes Hermes retire the live backend.
+ * Only after checking that the backend runs with the nonce it records.
+ */
 export function discoverScript(): string {
   return `
+umask 077
 root=${ROOT}
 [ -d "$root" ] || exit 0
+${WRITE_LOCK}
 for d in "$root"/*/; do
   d="\${d%/}"
   [ -f "$d/kitab-token" ] && [ -f "$d/hermes-desktop.json" ] || continue
@@ -58,6 +82,13 @@ for d in "$root"/*/; do
   port=$(printf '%s' "$lock" | sed -n 's/.*"port":\\([0-9]*\\).*/\\1/p')
   started=$(printf '%s' "$lock" | sed -n 's/.*"startedAt":"\\([^"]*\\)".*/\\1/p')
   [ -n "$pid" ] && [ -n "$port" ] && kill -0 "$pid" 2>/dev/null || continue
+  nonce=$(printf '%s' "$lock" | sed -n 's/.*"nonce":"\\([0-9a-f]\\{16\\}\\)".*/\\1/p')
+  if [ -n "$nonce" ] && ! grep -q "\\"spawnNonce\\":\\"$nonce\\"" "$d/backend.lock.json" 2>/dev/null; then
+    rm -f "$d/backend.lock.json"
+    if ps -o args= -p "$pid" 2>/dev/null | grep -q -- "--ssh-owner-nonce $nonce"; then
+      kitab_lock "$d" "$pid" "$port" "$nonce" "$(cat "$d/kitab-token")" "$(command -v hermes 2>/dev/null)" "\${started:-}"
+    fi
+  fi
   printf 'LIVE %s %s %s %s %s\\n' "\${d##*/}" "$pid" "$port" "$(cat "$d/kitab-token")" "\${started:--}"
 done
 `
@@ -80,7 +111,7 @@ export function adoptScript(ownershipId: string, token: string): string {
 
 /** Stops this device's own backend (shared or from before tokens were shared) and clears its lockfile. */
 export function retireScript(ownershipId: string): string {
-  return `d=${ROOT}/${hex(ownershipId, 32)}; f="$d/hermes-desktop.json"; [ -f "$f" ] && pid=$(sed -n 's/.*"pid":\\([0-9]*\\).*/\\1/p' "$f") && [ -n "$pid" ] && kill "$pid" 2>/dev/null; rm -f "$f" "$d/kitab-token"; true`
+  return `d=${ROOT}/${hex(ownershipId, 32)}; f="$d/hermes-desktop.json"; [ -f "$f" ] && pid=$(sed -n 's/.*"pid":\\([0-9]*\\).*/\\1/p' "$f") && [ -n "$pid" ] && kill "$pid" 2>/dev/null; rm -f "$f" "$d/kitab-token" "$d/backend.lock.json"; true`
 }
 
 /** Starts a fresh backend. Prints `READY <pid> <port>` or a failure with the log's tail. */
@@ -94,11 +125,12 @@ umask 077
 root=${ROOT}
 dir="$root/${ownershipId}"
 mkdir -p "$dir" && chmod 700 "$dir" || { echo "ERR cannot create $dir"; exit 1; }
-rm -f "$dir"/*.log.old 2>/dev/null
+rm -f "$dir"/*.log.old "$dir/backend.lock.json" 2>/dev/null
 for f in "$dir"/*.log; do [ -f "$f" ] && mv -f "$f" "$f.old"; done 2>/dev/null
 
 ${FIND_HERMES}
 [ -n "$hermes" ] || { echo "ERR hermes not found on PATH"; exit 1; }
+${WRITE_LOCK}
 
 token_file="$dir/${nonce}.token"
 log="$dir/${nonce}.log"
@@ -112,7 +144,9 @@ i=0
 while [ $i -lt 200 ]; do
   port=$(grep -oE 'HERMES_(DASHBOARD|BACKEND)_READY port=[0-9]+' "$log" 2>/dev/null | tail -n 1 | sed 's/.*=//')
   if [ -n "$port" ]; then
-    printf '{"pid":%s,"port":%s,"nonce":"%s","startedAt":"%s"}' "$child" "$port" '${nonce}' "$(date -u +%FT%TZ)" > "$dir/hermes-desktop.json"
+    started=$(date -u +%FT%TZ)
+    printf '{"pid":%s,"port":%s,"nonce":"%s","startedAt":"%s"}' "$child" "$port" '${nonce}' "$started" > "$dir/hermes-desktop.json"
+    kitab_lock "$dir" "$child" "$port" '${nonce}' '${token}' "$hermes" "$started"
     echo "READY $child $port"
     exit 0
   fi
@@ -144,7 +178,7 @@ for d in "$root"/*/; do
   [ -f "$d/kitab-token" ] || continue
   f="$d/hermes-desktop.json"
   [ -f "$f" ] && pid=$(sed -n 's/.*"pid":\\([0-9]*\\).*/\\1/p' "$f") && [ -n "$pid" ] && kill "$pid" 2>/dev/null
-  rm -f "$f" "$d/kitab-token"
+  rm -f "$f" "$d/kitab-token" "$d/backend.lock.json"
 done
 true
 `
