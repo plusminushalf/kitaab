@@ -6,21 +6,24 @@
 
 <p align="center">A small macOS and iPhone client for a <a href="https://hermes-agent.nousresearch.com/docs">Hermes Agent</a> server.</p>
 
-Kitaab connects to a Hermes install on another machine, usually over SSH, and organizes your work into **projects**, **threads**, **routines** and **personalities**. It never installs or updates Hermes; it only talks to it.
+Kitaab connects to a Hermes install on another machine, usually over SSH, and organizes your work into **profiles**, **projects**, **threads**, **routines** and **personalities**. It never installs or updates Hermes; it only talks to it.
 
 ## How it's organized
 
 ```
 Server   your Hermes, running somewhere
- └─ Project        memory · skills · files          (a Hermes profile)
-     ├─ Threads        parallel conversations          (Hermes sessions)
-     ├─ Routines       scheduled work, one report per run (Hermes cron jobs)
+ └─ Profile          memory · skills · model                    (a Hermes profile)
+     ├─ Projects       one line of work, one folder on the server (Hermes projects)
+     │    └─ Threads   parallel conversations                     (Hermes sessions)
+     ├─ Routines       scheduled work, one report per run         (Hermes cron jobs)
      └─ Personalities  the cast you talk to
 ```
 
+- **Profiles** are areas of your life or work. Everything in a profile shares its memory and skills, and nothing leaks into other profiles.
+- **Projects** are lines of work inside a profile. Each one has a folder on the server, and a thread in it works in that folder. Threads with no folder go in General.
 - **Threads** are for thinking: one conversation, one line of work. Run several in parallel.
-- **Routines** are for repeat work. Each run produces a report. Reply to a run and it becomes a thread you can come back to.
-- **Facts belong to the project, craft belongs to the personality.**
+- **Routines** are for repeat work. Each run produces a report. Reply to a run and it becomes a thread you can come back to. Each routine is filed under the project it was made in.
+- **Facts belong to the profile, craft belongs to the personality.**
 
 See [`docs/product/concept.md`](docs/product/concept.md) for the full model.
 
@@ -35,13 +38,13 @@ Open **Settings** (`⌘,`) and pick one of two ways in:
 
 **Dashboard URL.** Leave the SSH host empty and point Kitaab at an existing Hermes dashboard, such as `http://127.0.0.1:9119`. If the dashboard requires login, Kitaab opens your browser to sign in (OAuth with PKCE) and never sees your password.
 
-**The Mac and the iPhone share one backend.** Kitaab keeps a private copy of the backend's session token next to its lockfile on the server (`~/.hermes/desktop-ssh/<id>/kitab-token`, mode 600), so whichever device connects next finds the running backend and joins it instead of starting another. Every device picks the oldest live one, so they converge, and a device that joins someone else's backend stops the one it left behind. Because they share a backend, a reply streaming on one device streams on the other, and approvals show up on both. What Kitaab adds on top of Hermes (which personalities are in a thread, who answered each turn, which routine runs became threads) is saved on the server in each project's profile, never on one device.
+**The Mac and the iPhone share one backend.** Kitaab keeps a private copy of the backend's session token next to its lockfile on the server (`~/.hermes/desktop-ssh/<id>/kitab-token`, mode 600), so whichever device connects next finds the running backend and joins it instead of starting another. Every device picks the oldest live one, so they converge, and a device that joins someone else's backend stops the one it left behind. Because they share a backend, a reply streaming on one device streams on the other, and approvals show up on both. What Kitaab adds on top of Hermes (which personalities are in a thread, who answered each turn, which routine runs became threads) is saved on the server in the thread's profile, never on one device.
 
 Tokens are stored encrypted with the macOS keychain. Kitaab keeps its settings in `~/Library/Application Support/hermes-desktop`, separate from the official Hermes app.
 
 ## iPhone
 
-The iPhone app (`apps/mobile`) has the same projects, threads, routines and personalities, and connects the same way, over SSH, from inside the app:
+The iPhone app (`apps/mobile`) has the same profiles, projects, threads, routines and personalities, and connects the same way, over SSH, from inside the app:
 
 1. Open **Settings** in the app and enter the host, your user name and the port. Use an address the phone can reach, such as a Tailscale name.
 2. Copy **This iPhone's key** (an Ed25519 key made on the phone and kept in its Keychain) and add it to `~/.ssh/authorized_keys` on the host.
@@ -149,13 +152,14 @@ To sign and notarize the app with Apple, so it opens on any Mac with no Gatekeep
 
 | | |
 |---|---|
-| `⌘N` | New thread |
+| `⌘N` | New thread (pick its project) |
+| `⌘K` | Commands |
 | `⌘⇧S` | Mark thread as done |
 | `⌘F` | Find in thread (`⌘G` / `⌘⇧G` for next / previous match) |
 | `⌃Tab` `⌃⇧Tab` | Next / previous thread in the sidebar |
 | `⌘B` | Toggle sidebar |
-| `⌘1`–`⌘9` | Switch project |
-| `⌥⌘1`–`⌥⌘4` | Threads, Routines, Personalities, Project settings |
+| `⌘1`–`⌘9` | Switch profile |
+| `⌥⌘1`–`⌥⌘4` | Threads, Routines, Personalities, Profile settings |
 | `⌘[` `⌘]` | Back, forward |
 | `⌘,` | Settings |
 
