@@ -86,6 +86,7 @@ const api: HermesBridge = {
     badge: (count: number) => ipcRenderer.send("app:badge", count),
     bounce: () => ipcRenderer.send("app:bounce"),
   },
+  app: { info: () => ipcRenderer.invoke("app:info") },
   /** Absolute path of a dropped File (Electron removed File.path). */
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   updates: {

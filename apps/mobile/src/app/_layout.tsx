@@ -1,5 +1,6 @@
 // Hooks the shared core up to this phone before anything uses it.
 import "@/lib/platform"
+import { startAnalytics } from "@/lib/analytics"
 import { useEffect } from "react"
 import { AppState, useColorScheme } from "react-native"
 import { Stack } from "expo-router"
@@ -12,6 +13,8 @@ import { store } from "@/lib/store"
 import { serverSettings } from "@/lib/settings"
 import { useColors } from "@/lib/theme"
 import { Toasts } from "@/components/toasts"
+
+startAnalytics()
 
 // Links straight to a thread or settings still get the tabs underneath, so Back works.
 export const unstable_settings = { initialRouteName: "(tabs)" }

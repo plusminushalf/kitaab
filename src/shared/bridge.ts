@@ -164,6 +164,8 @@ export type HermesBridge = {
     badge(count: number): void
     bounce(): void
   }
+  /** The running app: its version, and whether it's an installed build (not run from source). */
+  app: { info(): Promise<{ version: string; packaged: boolean }> }
   /** Absolute path of a dropped File (Electron removed File.path). */
   pathForFile(file: File): string
   updates: {

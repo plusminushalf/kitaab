@@ -281,6 +281,7 @@ ipcMain.handle("connection:close", () => tunnel.close())
 ipcMain.handle("window:isFullscreen", (e) => BrowserWindow.fromWebContents(e.sender)?.isFullScreen() ?? false)
 ipcMain.on("app:badge", (_e, count: number) => app.dock?.setBadge(count > 0 ? String(count) : ""))
 ipcMain.on("app:bounce", () => app.dock?.bounce("informational"))
+ipcMain.handle("app:info", () => ({ version: app.getVersion(), packaged: app.isPackaged }))
 
 installThemeIpc()
 

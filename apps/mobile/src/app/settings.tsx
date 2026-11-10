@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Alert, Pressable, Share, Text, TextInput, View } from "react-native"
+import { Alert, Pressable, Share, Switch, Text, TextInput, View } from "react-native"
 import { router, Stack } from "expo-router"
 import * as Clipboard from "expo-clipboard"
 import * as Haptics from "expo-haptics"
@@ -7,6 +7,7 @@ import Constants from "expo-constants"
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller"
 import { backend, gw } from "@kitab/core/backend"
 import { toast } from "@kitab/core/platform"
+import { analyticsOn, setAnalyticsOn } from "@kitab/core/analytics"
 import Ssh from "../../modules/kitab-ssh/src/KitabSshModule"
 import { restartServer } from "@/lib/platform"
 import { serverSettings, useServerSettings } from "@/lib/settings"
@@ -187,8 +188,35 @@ export default function Settings() {
           </Section>
         ) : null}
 
+        <ShareUsage />
+
         <Text style={{ color: c.textMuted, fontSize: 13, textAlign: "center" }}>Kitaab {Constants.expoConfig?.version}</Text>
       </KeyboardAwareScrollView>
     </>
+  )
+}
+
+/** The one switch for usage analytics (lib/analytics.ts). */
+function ShareUsage() {
+  const [on, setOn] = useState(analyticsOn)
+  return (
+    <Section
+      title="Privacy"
+      footer="Sends Kitaab anonymous counts of what gets used, like messages sent and threads marked done, plus crashes. Never your messages, titles, names or hosts."
+    >
+      <Row
+        title="Share usage"
+        last
+        right={
+          <Switch
+            value={on}
+            onValueChange={(v) => {
+              setOn(v)
+              setAnalyticsOn(v)
+            }}
+          />
+        }
+      />
+    </Section>
   )
 }

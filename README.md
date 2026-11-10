@@ -104,6 +104,14 @@ Updates are off when Kitaab runs from source, from a disk image, or from a quara
 
 Kitaab doesn't use electron-updater, because its Mac half (Squirrel.Mac) only accepts updates signed with an Apple Developer ID and Kitaab is ad-hoc signed. See `src/main/updater.ts`.
 
+### Usage analytics
+
+The installed Mac app and Release builds of the iPhone app send [PostHog](https://posthog.com) (EU cloud) anonymous counts of what gets used: the app opening, messages sent or queued (with how many attachments), replies stopped, questions answered (which kind), threads marked done or restored, projects created and switched, and uncaught errors. Never message text, thread or project titles, names, hosts, paths or ids, and nothing is captured on its own (no clicks, screens or recordings). PostHog keeps a random ID per device. Turn it off in Settings → General → Share usage on the Mac, or Settings → Share usage on the iPhone. `pnpm dev`, `pnpm start` and iPhone builds running from Metro send nothing.
+
+The website sends PostHog its page views, clicks and errors, with a random visitor ID in local storage and no cookies.
+
+The events are named in `packages/core/src/backend.ts` (`track(…)`), and the project key and host are in `packages/core/src/analytics.ts` and `site/analytics.js`.
+
 ## Development
 
 ```sh

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { analyticsOn, setAnalyticsOn } from "@kitab/core/analytics"
 import { backend } from "@kitab/core/backend"
 import { useStore } from "@/lib/store"
 import { canCheck, checkForUpdatesLoudly, describeUpdate, runUpdateAction, updateAction, useUpdateState } from "@/lib/updates"
@@ -88,6 +90,7 @@ export function GeneralSection() {
         </div>
       </SettingsGroup>
       <UpdatesGroup />
+      <PrivacyGroup />
     </>
   )
 }
@@ -112,6 +115,29 @@ function UpdatesGroup() {
               {u.status === "checking" ? "Checking…" : "Check for updates"}
             </Button>
           )}
+        </SettingRow>
+      </SettingsCard>
+    </SettingsGroup>
+  )
+}
+
+/** The one switch for usage analytics (lib/analytics.ts). */
+function PrivacyGroup() {
+  const [on, setOn] = useState(analyticsOn)
+  return (
+    <SettingsGroup title="Privacy">
+      <SettingsCard>
+        <SettingRow
+          label="Share usage"
+          description="Sends Kitaab anonymous counts of what gets used, like messages sent and threads marked done, plus crashes. Never your messages, titles, names or hosts."
+        >
+          <Switch
+            checked={on}
+            onCheckedChange={(v) => {
+              setOn(v)
+              setAnalyticsOn(v)
+            }}
+          />
         </SettingRow>
       </SettingsCard>
     </SettingsGroup>

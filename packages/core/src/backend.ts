@@ -17,6 +17,7 @@ import * as projects from "./projects"
 import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 import { readCachedTranscript, writeCachedTranscript } from "./transcript-cache"
+import { track } from "./analytics"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Profile
@@ -1141,8 +1142,10 @@ function begin(threadId: Id, text: string, attachments: Attachment[], how: SendM
   const interrupt = !fresh && replying(threadId)
   if (interrupt && how === "queue") {
     enqueue(threadId, text, attachments)
+    track("message_queued", { attachments: attachments.length })
     return null
   }
+  track("message_sent", { new_thread: fresh, attachments: attachments.length, interrupt })
   const messageId = `u-${Date.now()}-${(sendSeq++).toString(36)}`
   store.updateDetail(threadId, (d) => ({
     ...d,
@@ -1214,6 +1217,7 @@ export const backend: Backend = {
     const { profileId: from, view } = store.get()
     const changed = from !== id
     store.set(changed ? { profileId: id, projectId: projects.savedProject(id) } : { profileId: id })
+    if (changed && from) track("profile_switched")
     if (changed) {
       // Coming back to a project reopens the thread you had open there.
       if (from && view.kind === "thread") {
@@ -1245,6 +1249,7 @@ export const backend: Backend = {
     const p = store.get().profileId
     if (!p) throw new Error("Open a profile first")
     const project = await projects.createProject(gw, p, name, folder)
+    track("project_created")
     backend.selectProject(project.id)
     return project.id
   },
@@ -1265,6 +1270,7 @@ export const backend: Backend = {
     if (store.get().profiles.some((p) => p.id === id)) throw new Error(`A project called ${id} already exists`)
     // Cloned from Default so it starts with the same model, keys and skills.
     await gw.call("profiles.create", { name: id, clone_from: "default" })
+    track("profile_created")
     const { profiles } = await gw.call<{ profiles: any[] }>("profiles.list", { include_sessions: false })
     const row = profiles.find((p) => p.name === id)
     store.set((s) => ({
@@ -1404,6 +1410,7 @@ export const backend: Backend = {
     setPaused(threadId, true)
     const runtimeId = runtimeOf.get(threadId)
     if (!runtimeId) return
+    track("reply_stopped")
     // Says so at once; the reply ending (message.complete) clears it.
     if (replying(threadId)) {
       patchThread(threadId, { stopping: true })
@@ -1444,6 +1451,8 @@ export const backend: Backend = {
   async answer(threadId, question, value) {
     const open = openRequests.get(question.id)
     if (!open) return removePending(threadId, question.id)
+    // Which kind only: never the answer (a secret goes straight to the socket below).
+    track("question_answered", { kind: open.req.method, skipped: value === "" })
     if (open.req.method === "approval") {
       gw.respond(question.id, { choice: value })
     } else if (open.req.method === "secret" || open.req.method === "sudo") {
@@ -1506,6 +1515,7 @@ export const backend: Backend = {
     const run = store.get().runs[routineId]?.find((r) => r.id === runId)
     const title = `${routine?.name ?? "Routine"} · ${new Date(run?.startedAt ?? Date.now()).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`
     await saveThreadMeta(p, runId, { run: { routineId, title, updatedAt: Date.now() } })
+    track("routine_run_replied")
     store.set((s) => ({
       threads: s.threads.some((t) => t.id === runId)
         ? s.threads
@@ -1525,6 +1535,7 @@ export const backend: Backend = {
   async setDone(threadId, done) {
     // A thread that never got made has nothing to archive: it just goes.
     if (isLocalThread(threadId)) return dropUnsavedThread(threadId)
+    track(done ? "thread_done" : "thread_restored")
     const st = store.get()
     const thread = (done ? st.threads : st.done).find((t) => t.id === threadId)
     const p = thread?.profileId ?? runOrigin(threadId)?.profileId ?? profile()
