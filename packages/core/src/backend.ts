@@ -439,8 +439,8 @@ function onEvent(e: GatewayEvent) {
         parts: p.text == null ? breakText(partsOf(m)) : addText(partsOf(m), p.text),
       }))
       break
+    // thinking.delta is Hermes's spinner line ("◉_◉ pondering…") and wait notices, not the model's thinking.
     case "reasoning.delta":
-    case "thinking.delta":
       if (p.text) lastAssistant(threadId, (m) => ({ ...m, reasoning: (m.reasoning ?? "") + p.text, parts: addReasoning(partsOf(m), p.text) }))
       break
     case "tool.start":
