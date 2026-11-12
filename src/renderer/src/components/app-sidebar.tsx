@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -85,8 +84,6 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const view = useStore((s) => s.view)
   const connection = useStore((s) => s.connection)
   const doneCount = useStore((s) => s.doneCount)
-  const threadScope = useStore((s) => s.threadScope)
-  const showRoutineReports = useStore((s) => s.showRoutineReports)
   const [sort, setSortState] = useState<Sort>(readSort)
   const [query, setQuery] = useState("")
 
@@ -158,7 +155,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="flex items-center gap-0.5">
           <SearchField value={query} onChange={setQuery} />
           <DropdownMenu>
-            <IconTip label="Sort and filter threads">
+            <IconTip label="Sort threads">
               <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="text-sidebar-muted-foreground" />}>
                 <ListFilter />
               </DropdownMenuTrigger>
@@ -171,25 +168,6 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Show</DropdownMenuLabel>
-                {/* Conversations started in Telegram, the CLI and the rest, not in Kitaab. */}
-                <DropdownMenuCheckboxItem
-                  checked={threadScope === "all"}
-                  onCheckedChange={(on) => void backend.setThreadScope(on ? "all" : "kitaab")}
-                >
-                  Other apps
-                </DropdownMenuCheckboxItem>
-                {/* Reports routines delivered to Telegram and other chats; they only come from other apps. */}
-                <DropdownMenuCheckboxItem
-                  checked={showRoutineReports && threadScope === "all"}
-                  disabled={threadScope !== "all"}
-                  onCheckedChange={(on) => void backend.setShowRoutineReports(on)}
-                >
-                  Routine reports
-                </DropdownMenuCheckboxItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>

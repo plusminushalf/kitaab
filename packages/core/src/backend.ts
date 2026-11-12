@@ -1,7 +1,7 @@
 import { http, platform, toast } from "./platform"
 import { Gateway, RpcError, type GatewayEvent, type ServerRequest } from "./gateway"
 import { GENERAL, type Attachment, type Id, type Message, type PendingQuestion, type Routine, type Run, type Thread, type ToolCall } from "./model"
-import { store, type Backend, type ModelChoice, type SendMode, type ThreadScope } from "./store"
+import { store, type Backend, type ModelChoice, type SendMode } from "./store"
 import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
 import { claimCreatedSkills, noteToolStart } from "./skills"
@@ -181,17 +181,11 @@ const blobToBase64 = (url: string) => platform().base64(url)
 
 // ---- lists ----------------------------------------------------------------------
 
-/** How Hermes opens a routine's report when it copies one into a chat it delivered to (cron/scheduler_delivery.py). */
-const DELIVERY_TAG = /^\s*\[Cron delivery:\s*([^\]\n]*)\]?\s*/
+/** How Hermes opens a routine's report when it copies one into a chat it delivered to
+ *  (cron/scheduler_delivery.py). That chat is a routine's output, not a conversation. */
+const DELIVERY_TAG = /^\s*\[Cron delivery:/
 
-const withoutDeliveryTag = (text: string) => text.replace(DELIVERY_TAG, "")
-
-/** The routine whose delivered report started this session, if one did. */
-function routineOf(s: any): string | undefined {
-  if (s.source === THREAD_SOURCE || typeof s.preview !== "string") return undefined
-  const m = DELIVERY_TAG.exec(s.preview)
-  return m ? m[1].trim() || "Routine" : undefined
-}
+const isRoutineReport = (s: any) => typeof s.preview === "string" && DELIVERY_TAG.test(s.preview)
 
 /** A session's working folder, when Hermes stored one. */
 const cwdOf = (s: any): string | undefined => (typeof s.cwd === "string" && s.cwd ? s.cwd : undefined)
@@ -201,12 +195,11 @@ const toThread = (p: string, s: any): Thread => ({
   profileId: p,
   projectId: projects.projectFor(store.get().projects[p] ?? [], cwdOf(s)),
   cwd: cwdOf(s),
-  title: s.title || (s.preview ? withoutDeliveryTag(String(s.preview)).slice(0, 80) || "Untitled" : "Untitled"),
+  title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
   cast: threadCast(s.id),
   status: "idle",
-  preview: previewText(typeof s.preview === "string" ? withoutDeliveryTag(s.preview) : s.preview),
-  routine: routineOf(s),
+  preview: previewText(s.preview),
   model: typeof s.model === "string" && s.model ? s.model : undefined,
   provider: typeof s.billing_provider === "string" && s.billing_provider ? s.billing_provider : undefined,
   source: typeof s.source === "string" && s.source ? s.source : undefined,
@@ -283,26 +276,48 @@ async function applyModel(
   return true
 }
 
-/** Hermes stores threads started from Kitaab (Mac or iPhone) as source "desktop". */
-const THREAD_SOURCE = "desktop"
-/** Sessions that are never threads, whichever scope is on: helper agents (shown inside their
- *  thread), Hermes's kanban workers and test runs. Routine runs ("cron") are handled per list. */
-const NEVER_THREADS = ["subagent", "kanban", "test"]
-const SCOPE_KEY = "kitab.threadScope"
+/**
+ * Where a conversation can start: Kitaab (Mac or iPhone, which Hermes records as "desktop") and
+ * the chat apps Hermes's gateway talks to (gateway/config.py, plugins/platforms). Everything else
+ * is left out: terminal and editor sessions (often scripts), routine runs, helper agents, kanban
+ * workers, tests, API and webhook calls, and agent-to-agent or notification feeds.
+ */
+const CHAT_SOURCES = [
+  "desktop",
+  "telegram",
+  "whatsapp",
+  "whatsapp_cloud",
+  "signal",
+  "bluebubbles",
+  "photon",
+  "sms",
+  "email",
+  "discord",
+  "slack",
+  "teams",
+  "google_chat",
+  "mattermost",
+  "matrix",
+  "irc",
+  "simplex",
+  "line",
+  "weixin",
+  "wecom",
+  "wecom_callback",
+  "feishu",
+  "dingtalk",
+  "qqbot",
+  "yuanbao",
+]
 const TOOL_DETAILS_KEY = "kitab.showToolDetails"
-const ROUTINE_REPORTS_KEY = "kitab.showRoutineReports"
 
-/** The `/api/sessions` source filter for the thread lists. `withRuns`: include routine runs. */
-function sourceQuery(withRuns: boolean): string {
-  if (store.get().threadScope === "kitaab") return `sources=${THREAD_SOURCE}${withRuns ? ",cron" : ""}`
-  return `exclude_sources=${[...NEVER_THREADS, ...(withRuns ? [] : ["cron"])].join(",")}`
-}
+/** The `/api/sessions` source filter for the thread lists. `withRuns`: also routine runs, for Done. */
+const sourceQuery = (withRuns: boolean) => `sources=${[...CHAT_SOURCES, ...(withRuns ? ["cron"] : [])].join(",")}`
 
-/** Hermes drops the subagent exclusion when its `sessions.show_subagents` is on; they still aren't threads. */
-const isThreadRow = (s: any) => !NEVER_THREADS.includes(s.source) && (store.get().showRoutineReports || !routineOf(s))
+const isThreadRow = (s: any) => CHAT_SOURCES.includes(s.source) && !isRoutineReport(s)
 
-/** One page of the thread list. With routine reports hidden, a page can be mostly reports, so it
- *  reads on (up to three pages) until there are a page's worth of threads to show. */
+/** One page of the thread list. A page can be mostly routine reports, so it reads on (up to
+ *  three pages) until there are a page's worth of threads to show. */
 async function listThreadRows(p: string): Promise<any[]> {
   const out: any[] = []
   for (let page = 0; page < 3; page++) {
@@ -310,19 +325,14 @@ async function listThreadRows(p: string): Promise<any[]> {
       `/api/sessions?profile=${q(p)}&${sourceQuery(false)}&order=recent&limit=100&offset=${page * 100}&min_messages=1`,
     )
     out.push(...res.sessions.filter(isThreadRow))
-    if (res.sessions.length < 100 || out.length >= 100 || store.get().showRoutineReports) break
+    if (res.sessions.length < 100 || out.length >= 100) break
   }
   return out
 }
 
-function readThreadScope() {
+function readToolDetails() {
   try {
-    const v = platform().storage.get(SCOPE_KEY)
-    if (v === "all" || v === "kitaab") store.set({ threadScope: v })
-    store.set({
-      showToolDetails: platform().storage.get(TOOL_DETAILS_KEY) === "1",
-      showRoutineReports: platform().storage.get(ROUTINE_REPORTS_KEY) === "1",
-    })
+    store.set({ showToolDetails: platform().storage.get(TOOL_DETAILS_KEY) === "1" })
   } catch {}
 }
 
@@ -332,19 +342,12 @@ async function loadDone(p: string) {
     `/api/sessions?profile=${q(p)}&${sourceQuery(true)}&archived=only&order=recent&limit=100&min_messages=1`,
   )
   // Archived routine runs only count if someone turned them into a thread.
-  const rows = res.sessions.filter((s) => isThreadRow(s) && (s.source !== "cron" || runOrigin(s.id)) && settling.get(s.id) !== false)
+  const rows = res.sessions.filter((s) => (s.source === "cron" ? runOrigin(s.id) : isThreadRow(s)) && settling.get(s.id) !== false)
   const cronRows = res.sessions.length - rows.length
   store.set({
     done: rows.map((s) => toThread(p, s)),
     doneCount: Math.max(rows.length, (res.total ?? rows.length) - cronRows),
   })
-}
-
-/** Every thread list showing, again: after changing which threads they show. */
-async function reloadLists() {
-  const p = profile()
-  const shown = new Set([p, ...store.get().threads.map((t) => t.profileId)])
-  await Promise.all([...[...shown].map((id) => loadThreads(id).catch(() => {})), loadDone(p).catch(() => {})])
 }
 
 async function loadThreads(p: string) {
@@ -1276,7 +1279,7 @@ export const backend: Backend = {
   // Single-flight: overlapping calls (StrictMode, menu, reconnect) share one attempt.
   connect() {
     readEnterSends()
-    readThreadScope()
+    readToolDetails()
     connecting ??= connectOnce().finally(() => (connecting = null))
     return connecting
   },
@@ -1524,26 +1527,6 @@ export const backend: Backend = {
       platform().storage.set(TOOL_DETAILS_KEY, on ? "1" : null)
     } catch {}
     track("tool_details_toggled", { on })
-  },
-
-  async setThreadScope(scope: ThreadScope) {
-    if (store.get().threadScope === scope) return
-    store.set({ threadScope: scope })
-    try {
-      platform().storage.set(SCOPE_KEY, scope)
-    } catch {}
-    track("thread_scope_changed", { scope })
-    await reloadLists()
-  },
-
-  async setShowRoutineReports(on) {
-    if (store.get().showRoutineReports === on) return
-    store.set({ showRoutineReports: on })
-    try {
-      platform().storage.set(ROUTINE_REPORTS_KEY, on ? "1" : null)
-    } catch {}
-    track("routine_reports_toggled", { on })
-    await reloadLists()
   },
 
   async answer(threadId, question, value) {

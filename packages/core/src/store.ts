@@ -38,8 +38,6 @@ export type SettingsSection = "general" | "threads" | "appearance" | "shortcuts"
  * "interrupt" stops it and sends right away.
  */
 export type SendMode = "queue" | "interrupt"
-/** Which threads the lists show: every conversation in the profile, or only the ones started in Kitaab. */
-export type ThreadScope = "all" | "kitaab"
 
 /** A message waiting for the running reply to finish. */
 export type QueuedMessage = { id: string; text: string; attachments: Attachment[] }
@@ -89,10 +87,6 @@ export type State = {
   queued: Record<Id, Queue>
   /** What Enter does while a reply is running (⌘Enter does the other). This device only. */
   enterSends: SendMode
-  /** Which threads the lists show. This device only. */
-  threadScope: ThreadScope
-  /** Whether the lists show routine reports delivered to Telegram and other chats. This device only. */
-  showRoutineReports: boolean
   /** Whether the work log lists every tool call's parameters. This device only. */
   showToolDetails: boolean
 }
@@ -143,10 +137,6 @@ export interface Backend {
   unqueue(threadId: Id, queuedId: string): void
   /** What Enter does while a reply is running, saved on this device. */
   setEnterSends(mode: SendMode): void
-  /** Shows every thread in the profile (Telegram, the CLI, …) or only Kitaab's, saved on this device. */
-  setThreadScope(scope: ThreadScope): Promise<void>
-  /** Shows or hides routine reports delivered to Telegram and other chats, saved on this device. */
-  setShowRoutineReports(on: boolean): Promise<void>
   /** Shows every tool call's parameters in the work log (what skill, the exact command), saved on this device. */
   setShowToolDetails(on: boolean): void
   answer(threadId: Id, question: PendingQuestion, value: string): Promise<void>
@@ -194,8 +184,6 @@ const initial: State = {
   settings: null,
   queued: {},
   enterSends: "queue",
-  threadScope: "all",
-  showRoutineReports: false,
   showToolDetails: false,
 }
 
