@@ -4,10 +4,10 @@ import { Image } from "expo-image"
 import * as Clipboard from "expo-clipboard"
 import * as Haptics from "expo-haptics"
 import type { Message, Part, ToolCall } from "@kitab/core/model"
-import { splitTurn } from "@kitab/core/turn"
+import { splitTurn, toolParams } from "@kitab/core/turn"
 import { splitImageTags } from "@kitab/core/user-text"
 import { useStore } from "@/lib/store"
-import { useColors } from "@/lib/theme"
+import { mono, useColors } from "@/lib/theme"
 import { Markdown } from "./markdown"
 import { Avatar, Icon } from "./ui"
 
@@ -115,6 +115,8 @@ function Steps({ work, running }: { work: Part[]; running: boolean }) {
 
 function WorkPart({ part, running }: { part: Extract<Part, { type: "work" }>; running: boolean }) {
   const c = useColors()
+  // Settings → Work log → Tool call details: every call's parameters under its step.
+  const details = useStore((s) => s.showToolDetails)
   const reasoning = part.reasoning?.trim()
   return (
     <View style={{ marginLeft: 4, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: c.border, gap: 8 }}>
@@ -134,7 +136,9 @@ function WorkPart({ part, running }: { part: Extract<Part, { type: "work" }>; ru
             <Icon name={iconFor(g.name)} size={14} color={c.textMuted} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: c.text, fontSize: 13 }}>{describe(g.name, g.calls.length)}</Text>
-              {summary ? (
+              {details ? (
+                g.calls.map((call) => <CallParams key={call.id} call={call} />)
+              ) : summary ? (
                 <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 1 }} numberOfLines={2}>
                   {summary}
                 </Text>
@@ -144,6 +148,32 @@ function WorkPart({ part, running }: { part: Extract<Part, { type: "work" }>; ru
           </View>
         )
       })}
+    </View>
+  )
+}
+
+/** One call, in full: its one-line description, then each parameter it was called with. Long-press copies a value. */
+function CallParams({ call }: { call: ToolCall }) {
+  const c = useColors()
+  const params = toolParams(call)
+  if (!call.summary && !params.length) return null
+  return (
+    <View style={{ marginTop: 4, gap: 3 }}>
+      {call.summary ? (
+        <Text style={{ color: c.textMuted, fontSize: 12 }} numberOfLines={2}>
+          {call.summary}
+        </Text>
+      ) : null}
+      {params.map(({ key, value }) => (
+        <Pressable key={key} onLongPress={() => copy(value)} style={{ flexDirection: "row", gap: 8 }}>
+          <Text style={{ width: 72, color: c.textMuted, fontSize: 11, opacity: 0.7 }} numberOfLines={1}>
+            {key}
+          </Text>
+          <Text style={{ flex: 1, color: c.textMuted, fontSize: 11, fontFamily: mono }} numberOfLines={12}>
+            {value}
+          </Text>
+        </Pressable>
+      ))}
     </View>
   )
 }

@@ -104,7 +104,10 @@ export type Attachment = {
 export type ToolCall = {
   id: Id
   name: string
+  /** One line on what it did: the skill, the command, the file (Hermes's short preview of its arguments). */
   summary?: string
+  /** Everything it was called with, long values cut short (see toolArgs in turn.ts). */
+  args?: Record<string, unknown>
   status: "running" | "done" | "error"
 }
 

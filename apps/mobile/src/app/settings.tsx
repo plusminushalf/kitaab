@@ -188,11 +188,23 @@ export default function Settings() {
           </Section>
         ) : null}
 
+        <ToolDetails />
+
         <ShareUsage />
 
         <Text style={{ color: c.textMuted, fontSize: 13, textAlign: "center" }}>Kitaab {Constants.expoConfig?.version}</Text>
       </KeyboardAwareScrollView>
     </>
+  )
+}
+
+/** Whether the work log lists every tool call's parameters (this iPhone only). */
+function ToolDetails() {
+  const on = useStore((s) => s.showToolDetails)
+  return (
+    <Section title="Work log" footer="List every parameter each step was called with: which skill it opened, the exact command it ran. Off: one short line per step.">
+      <Row title="Tool call details" last right={<Switch value={on} onValueChange={(v) => backend.setShowToolDetails(v)} />} />
+    </Section>
   )
 }
 

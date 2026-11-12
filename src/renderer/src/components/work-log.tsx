@@ -2,7 +2,9 @@ import { useState } from "react"
 import { Brain, ChevronDown, ChevronRight, Globe, SquareTerminal, Wrench, FileText, Code, BookOpen, Split } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import type { Message, Part, ToolCall } from "@kitab/core/model"
+import { toolParams } from "@kitab/core/turn"
 import { Markdown } from "@/components/markdown"
+import { useStore } from "@/lib/store"
 
 // The work behind an answer, the way T3 Code shows it: one "Worked for 3m 8s"
 // line that opens to the thinking, tool calls and the text written between them,
@@ -143,31 +145,57 @@ function ThinkingRow({ text }: { text: string }) {
 }
 
 function ToolGroupRow({ group }: { group: Group }) {
-  const [open, setOpen] = useState(false)
+  // Settings → Threads → Tool call details: every call's parameters, open from the start.
+  const details = useStore((st) => st.showToolDetails)
+  const [picked, setOpen] = useState<boolean | null>(null)
+  const open = picked ?? details
   const Icon = iconFor(group.name)
   const running = group.calls.some((c) => c.status === "running")
   const single = group.calls.length === 1 ? group.calls[0] : null
+  const described = group.calls.filter((c) => c.summary)
+  const expandable = details ? group.calls.some((c) => c.summary || c.args) : !single && described.length > 0
 
   return (
     <div>
       <button
         className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left hover:text-foreground"
-        onClick={() => setOpen(!open)}
+        onClick={() => expandable && setOpen(!open)}
+        aria-expanded={expandable ? open : undefined}
       >
         {running ? <Spinner className="size-4 shrink-0" /> : <Icon className="size-4 shrink-0" />}
         <span className="shrink-0">{describe(group.name, group.calls.length)}</span>
-        {single?.summary && !open && <span className="truncate font-mono text-xs opacity-70">{single.summary}</span>}
-        {!single && <ChevronRight className={"size-3.5 shrink-0 transition-transform " + (open ? "rotate-90" : "")} />}
+        {single?.summary && !(open && expandable) && <span className="truncate font-mono text-xs opacity-70">{single.summary}</span>}
+        {expandable && <ChevronRight className={"size-3.5 shrink-0 transition-transform " + (open ? "rotate-90" : "")} />}
       </button>
-      {open && (
+      {open && expandable && (
         <div className="ml-6 flex flex-col gap-0.5 py-0.5">
-          {group.calls.map((c) => (
-            <div key={c.id} className="selectable truncate font-mono text-xs opacity-80" title={c.summary}>
-              {c.summary || c.name}
-            </div>
-          ))}
+          {details
+            ? group.calls.map((c) => <CallParams key={c.id} call={c} />)
+            : described.map((c) => (
+                <div key={c.id} className="selectable truncate font-mono text-xs opacity-80" title={c.summary}>
+                  {c.summary}
+                </div>
+              ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** One call, in full: its one-line description, then each parameter it was called with. */
+function CallParams({ call }: { call: ToolCall }) {
+  const params = toolParams(call)
+  return (
+    <div className="selectable flex flex-col gap-1 border-b border-foreground/5 py-1.5 text-xs last:border-b-0">
+      {call.summary && <div className="truncate font-mono opacity-80">{call.summary}</div>}
+      {params.map(({ key, value }) => (
+        <div key={key} className="flex min-w-0 gap-2">
+          <span className="w-20 shrink-0 truncate opacity-60" title={key}>
+            {key}
+          </span>
+          <pre className="max-h-48 min-w-0 flex-1 overflow-auto font-mono whitespace-pre-wrap break-words text-foreground/80">{value}</pre>
+        </div>
+      ))}
     </div>
   )
 }

@@ -91,6 +91,8 @@ export type State = {
   enterSends: SendMode
   /** Which threads the lists show. This device only. */
   threadScope: ThreadScope
+  /** Whether the work log lists every tool call's parameters. This device only. */
+  showToolDetails: boolean
 }
 
 /** What the UI needs from a backend. The Hermes adapter implements it. */
@@ -141,6 +143,8 @@ export interface Backend {
   setEnterSends(mode: SendMode): void
   /** Shows every thread in the profile (Telegram, the CLI, …) or only Kitaab's, saved on this device. */
   setThreadScope(scope: ThreadScope): Promise<void>
+  /** Shows every tool call's parameters in the work log (what skill, the exact command), saved on this device. */
+  setShowToolDetails(on: boolean): void
   answer(threadId: Id, question: PendingQuestion, value: string): Promise<void>
   /** Files a routine under one of its profile's projects (GENERAL for none). */
   setRoutineProject(routineId: Id, projectId: Id): Promise<void>
@@ -187,6 +191,7 @@ const initial: State = {
   queued: {},
   enterSends: "queue",
   threadScope: "all",
+  showToolDetails: false,
 }
 
 let state = initial

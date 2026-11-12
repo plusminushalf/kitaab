@@ -1,5 +1,6 @@
 import { ModelPicker } from "@/components/model-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { backend } from "@kitab/core/backend"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { useStore, type SendMode } from "@/lib/store"
@@ -24,6 +25,7 @@ export function ThreadsSection() {
   const providers = useStore((s) => s.models)
   const profile = useStore((s) => s.profiles.find((p) => p.id === s.profileId))
   const enterSends = useStore((s) => s.enterSends)
+  const showToolDetails = useStore((s) => s.showToolDetails)
   const ctrlTab = useCtrlTabMode()
 
   const available = mine ? providers.find((p) => p.slug === mine.provider)?.models.includes(mine.model) : true
@@ -84,6 +86,16 @@ export function ThreadsSection() {
                 ))}
               </SelectContent>
             </Select>
+          </SettingRow>
+        </SettingsCard>
+      </SettingsGroup>
+      <SettingsGroup title="Work log">
+        <SettingsCard>
+          <SettingRow
+            label="Tool call details"
+            description="List every parameter each step was called with: which skill it opened, the exact command it ran, the full search. Off: one short line per step."
+          >
+            <Switch checked={showToolDetails} onCheckedChange={(v) => backend.setShowToolDetails(v)} />
           </SettingRow>
         </SettingsCard>
       </SettingsGroup>

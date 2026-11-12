@@ -14,7 +14,7 @@ import { onSubagentEvent, reconcileSubagents } from "./subagents"
 import { readMyModel, resolveDefault, usableMyModel, writeMyModel } from "./default-model"
 import { inOrder, readProfileOrder, writeProfileOrder } from "./profile-order"
 import * as projects from "./projects"
-import { addReasoning, addText, addTool, breakText, partsOf, updateTool } from "./turn"
+import { addReasoning, addText, addTool, breakText, partsOf, toolArgs, toolSummary, updateTool } from "./turn"
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 import { readCachedTranscript, writeCachedTranscript } from "./transcript-cache"
 import { track } from "./analytics"
@@ -56,6 +56,12 @@ function patchThread(id: Id, patch: Partial<Thread>) {
 }
 
 /** The tool calls of the reply lastAssistant would update (the one running, else this turn's last). */
+/** A tool call once it has ended. What it was called with stays its line; a result count
+ *  ("Found 3 matches") only fills in when there was none. Its final arguments win. */
+function finishTool(t: ToolCall, p: any): ToolCall {
+  return { ...t, status: "done", summary: t.summary ?? toolSummary(p) ?? p.summary ?? undefined, args: toolArgs(p.args) ?? t.args }
+}
+
 function lastAssistantTools(threadId: Id): ToolCall[] {
   const messages = store.get().details[threadId]?.messages ?? []
   const running = messages.findLast((m) => m.role === "assistant" && m.streaming)
@@ -131,7 +137,8 @@ function mapTranscript(rows: any[]): Message[] {
         const call: ToolCall = {
           id: r.tool_call_id ?? `t-${turn.tools!.length}`,
           name: r.name ?? "tool",
-          summary: r.labels?.[0]?.text ?? r.context ?? undefined,
+          summary: toolSummary(r),
+          args: toolArgs(r.args),
           status: "done",
         }
         turn.tools!.push(call)
@@ -269,6 +276,7 @@ const THREAD_SOURCE = "desktop"
  *  thread), Hermes's kanban workers and test runs. Routine runs ("cron") are handled per list. */
 const NEVER_THREADS = ["subagent", "kanban", "test"]
 const SCOPE_KEY = "kitab.threadScope"
+const TOOL_DETAILS_KEY = "kitab.showToolDetails"
 
 /** The `/api/sessions` source filter for the thread lists. `withRuns`: include routine runs. */
 function sourceQuery(withRuns: boolean): string {
@@ -283,6 +291,7 @@ function readThreadScope() {
   try {
     const v = platform().storage.get(SCOPE_KEY)
     if (v === "all" || v === "kitaab") store.set({ threadScope: v })
+    store.set({ showToolDetails: platform().storage.get(TOOL_DETAILS_KEY) === "1" })
   } catch {}
 }
 
@@ -437,7 +446,13 @@ function onEvent(e: GatewayEvent) {
     case "tool.start":
       noteToolStart(threadId, p.name, p.args)
       lastAssistant(threadId, (m) => {
-        const call: ToolCall = { id: p.tool_id ?? String(Date.now()), name: p.name ?? "tool", summary: p.preview ?? undefined, status: "running" }
+        const call: ToolCall = {
+          id: p.tool_id ?? String(Date.now()),
+          name: p.name ?? "tool",
+          summary: toolSummary(p),
+          args: toolArgs(p.args),
+          status: "running",
+        }
         return { ...m, tools: [...(m.tools ?? []), call], parts: addTool(partsOf(m), call) }
       })
       break
@@ -446,10 +461,8 @@ function onEvent(e: GatewayEvent) {
         refreshSoon("routines")
       lastAssistant(threadId, (m) => ({
         ...m,
-        tools: (m.tools ?? []).map((t) =>
-          t.id === p.tool_id ? { ...t, status: "done", summary: p.summary ?? t.summary } : t,
-        ),
-        parts: updateTool(partsOf(m), p.tool_id, (t) => ({ ...t, status: "done", summary: p.summary ?? t.summary })),
+        tools: (m.tools ?? []).map((t) => (t.id === p.tool_id ? finishTool(t, p) : t)),
+        parts: updateTool(partsOf(m), p.tool_id, (t) => finishTool(t, p)),
       }))
       break
     case "message.complete":
@@ -1468,6 +1481,14 @@ export const backend: Backend = {
 
   setEnterSends(mode) {
     writeEnterSends(mode)
+  },
+
+  setShowToolDetails(on) {
+    store.set({ showToolDetails: on })
+    try {
+      platform().storage.set(TOOL_DETAILS_KEY, on ? "1" : null)
+    } catch {}
+    track("tool_details_toggled", { on })
   },
 
   async setThreadScope(scope: ThreadScope) {

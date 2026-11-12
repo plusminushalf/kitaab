@@ -63,3 +63,37 @@ export function splitTurn(m: Message): { work: Part[]; answer: string } {
     .join("\n\n")
   return { work: parts.slice(0, i), answer }
 }
+
+// ---- tool parameters ----------------------------------------------------------
+
+const MAX_ARG = 4000
+
+/** A tool call's arguments, kept small enough to hold in memory and cache: long values are cut. */
+export function toolArgs(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === null || v === undefined || v === "") continue
+    if (typeof v === "string") out[k] = v.length > MAX_ARG ? `${v.slice(0, MAX_ARG)}…` : v
+    else if (typeof v === "number" || typeof v === "boolean") out[k] = v
+    else {
+      const json = JSON.stringify(v)
+      out[k] = json.length > MAX_ARG ? `${json.slice(0, MAX_ARG)}…` : v
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/** The one-line description Hermes sends with a tool call: an app label for connectors, else its argument preview. */
+export function toolSummary(p: { labels?: { text?: string }[]; context?: string; preview?: string }): string | undefined {
+  const s = p.labels?.[0]?.text || p.context || p.preview
+  return typeof s === "string" && s.trim() ? s.trim() : undefined
+}
+
+/** A tool call's parameters to show, one per line, each value as written (objects as JSON). */
+export function toolParams(call: ToolCall): { key: string; value: string }[] {
+  return Object.entries(call.args ?? {}).map(([key, v]) => ({
+    key,
+    value: typeof v === "string" ? v : JSON.stringify(v, null, 2),
+  }))
+}
