@@ -87,6 +87,8 @@ export type Thread = {
   model?: string
   /** Who billed it ("anthropic", "openrouter", …), as Hermes's thread list reports it. */
   provider?: string
+  /** Where it was started, as Hermes records it: "desktop" for Kitaab, else "telegram", "cli", …. */
+  source?: string
 }
 
 export type Attachment = {

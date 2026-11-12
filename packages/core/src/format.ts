@@ -53,3 +53,27 @@ export function bytes(n: number | undefined): string {
 export function homePath(path: string): string {
   return path.replace(/^(?:\/home\/[^/]+|\/Users\/[^/]+|\/root)(?=\/|$)/, "~")
 }
+
+const SOURCE_NAMES: Record<string, string> = {
+  tui: "Terminal",
+  cli: "CLI",
+  acp: "Editor",
+  api_server: "API",
+  webhook: "Webhook",
+  msgraph_webhook: "Microsoft Graph",
+  whatsapp: "WhatsApp",
+  whatsapp_cloud: "WhatsApp",
+  sms: "SMS",
+  email: "Email",
+  bluebubbles: "iMessage",
+  wecom: "WeCom",
+  wecom_callback: "WeCom",
+  qqbot: "QQ",
+  dingtalk: "DingTalk",
+}
+
+/** Where a thread was started, for threads not started in Kitaab ("Telegram", "CLI", …). */
+export function sourceName(source: string | undefined): string | undefined {
+  if (!source || source === "desktop" || source === "cron") return undefined
+  return SOURCE_NAMES[source] ?? source.charAt(0).toUpperCase() + source.slice(1).replace(/_/g, " ")
+}

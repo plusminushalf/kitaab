@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -39,7 +40,7 @@ import { useThreadSwitching } from "@/lib/thread-switching"
 import { useAppearance } from "@/lib/appearance/store"
 import { cn } from "@/lib/utils"
 import { useShortcutLabel, withShortcut } from "@/lib/shortcuts"
-import { homePath, relativeTime } from "@kitab/core/format"
+import { homePath, relativeTime, sourceName } from "@kitab/core/format"
 import { modelName, shortModelName } from "@kitab/core/model-names"
 import { providerIcon, providerTint } from "@/components/model-picker"
 import { Spinner } from "@/components/ui/spinner"
@@ -84,6 +85,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const view = useStore((s) => s.view)
   const connection = useStore((s) => s.connection)
   const doneCount = useStore((s) => s.doneCount)
+  const threadScope = useStore((s) => s.threadScope)
   const [sort, setSortState] = useState<Sort>(readSort)
   const [query, setQuery] = useState("")
 
@@ -155,7 +157,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="flex items-center gap-0.5">
           <SearchField value={query} onChange={setQuery} />
           <DropdownMenu>
-            <IconTip label="Sort threads">
+            <IconTip label="Sort and filter threads">
               <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="text-sidebar-muted-foreground" />}>
                 <ListFilter />
               </DropdownMenuTrigger>
@@ -168,6 +170,16 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                {/* Off: conversations from Telegram, the CLI and the rest show too. */}
+                <DropdownMenuCheckboxItem
+                  checked={threadScope === "kitaab"}
+                  onCheckedChange={(on) => void backend.setThreadScope(on ? "kitaab" : "all")}
+                >
+                  Only threads started in Kitaab
+                </DropdownMenuCheckboxItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -369,7 +381,10 @@ function ThreadRow({
               (keeping its width, so the title doesn't reflow). */}
           <span className="ml-auto flex shrink-0 group-hover/menu-item:invisible">
             {status === "idle" ? (
-              <span className="text-xs text-sidebar-muted-foreground tabular-nums">{relativeTime(t.updatedAt)}</span>
+              <span className="text-xs text-sidebar-muted-foreground tabular-nums">
+                {sourceName(t.source) && `${sourceName(t.source)} · `}
+                {relativeTime(t.updatedAt)}
+              </span>
             ) : (
               <StatusPill status={status} stopping={t.stopping} />
             )}
@@ -415,6 +430,7 @@ function ThreadTile({ thread: t, project, active }: { thread: Thread; project: s
         <span className="flex h-5 items-center gap-2 text-xs text-sidebar-muted-foreground">
           <ProjectBadge name={project} />
           <span className="min-w-0 truncate">{project}</span>
+          {sourceName(t.source) && <span className="shrink-0">· {sourceName(t.source)}</span>}
           {/* On hover the done tick takes this spot. */}
           <span className="ml-auto shrink-0 tabular-nums group-hover/menu-item:invisible">{relativeTime(t.updatedAt)}</span>
         </span>
@@ -726,7 +742,10 @@ function ThreadCard({ thread, place }: { thread: Thread; place?: string }) {
         )}
         <div className="flex items-center gap-2">
           <Clock className="size-3.5 shrink-0" />
-          <span className="truncate">Updated {relativeTime(thread.updatedAt)}</span>
+          <span className="truncate">
+            Updated {relativeTime(thread.updatedAt)}
+            {sourceName(thread.source) && ` · started in ${sourceName(thread.source)}`}
+          </span>
           {status !== "idle" && <StatusPill status={status} stopping={thread.stopping} className="ml-auto" />}
         </div>
       </div>

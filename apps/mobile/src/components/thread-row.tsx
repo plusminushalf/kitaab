@@ -4,7 +4,7 @@ import { router } from "expo-router"
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable"
 import * as Haptics from "expo-haptics"
 import type { Thread } from "@kitab/core/model"
-import { relativeTime } from "@kitab/core/format"
+import { relativeTime, sourceName } from "@kitab/core/format"
 import { shortModelName } from "@kitab/core/model-names"
 import { shownStatus } from "@kitab/core/subagents"
 import { useStore } from "@/lib/store"
@@ -60,7 +60,10 @@ export const ThreadRow = memo(function ThreadRow({ thread: t, action, tint, last
               {t.title}
             </Text>
             <StatusDot status={status} />
-            <Text style={{ color: c.textMuted, fontSize: 13 }}>{relativeTime(t.updatedAt)}</Text>
+            <Text style={{ color: c.textMuted, fontSize: 13 }}>
+              {sourceName(t.source) ? `${sourceName(t.source)} · ` : ""}
+              {relativeTime(t.updatedAt)}
+            </Text>
           </View>
           {t.preview || cast.length ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -107,6 +110,7 @@ export const ThreadCard = memo(function ThreadCard({ thread: t, project, action 
             <ProjectBadge name={project} />
             <Text style={{ flex: 1, color: c.textMuted, fontSize: 13 }} numberOfLines={1}>
               {project}
+              {sourceName(t.source) ? ` · ${sourceName(t.source)}` : ""}
             </Text>
             <Text style={{ color: c.textMuted, fontSize: 13 }}>{relativeTime(t.updatedAt)}</Text>
           </View>

@@ -8,7 +8,7 @@ import { ProjectBadge } from "@/components/project-badge"
 import { providerIcon, providerTint } from "@/components/model-picker"
 import { useProfileProjects } from "@/components/project-menu"
 import { backend } from "@kitab/core/backend"
-import { relativeTime } from "@kitab/core/format"
+import { relativeTime, sourceName } from "@kitab/core/format"
 import { NO_PROJECT, type Thread } from "@kitab/core/model"
 import { modelName, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
@@ -65,6 +65,12 @@ function DoneItem({ thread: t, project }: { thread: Thread; project: string }) {
         <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
           <ProjectBadge name={project} className="size-4 text-[0.5rem]" />
           <span className="min-w-0 truncate">{project}</span>
+          {sourceName(t.source) && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="shrink-0">{sourceName(t.source)}</span>
+            </>
+          )}
           {model && (
             <>
               <span aria-hidden>·</span>

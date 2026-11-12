@@ -30,7 +30,7 @@ import { ProjectBadge } from "@/components/project-badge"
 import { AgentsSection, useActiveAgentCount, useSubagents } from "@/components/thread-agents"
 import { appearance, THREAD_DETAIL_ITEMS, useAppearance } from "@/lib/appearance/store"
 import { backend } from "@kitab/core/backend"
-import { homePath, relativeTime } from "@kitab/core/format"
+import { homePath, relativeTime, sourceName } from "@kitab/core/format"
 import { NO_PROJECT, type Id } from "@kitab/core/model"
 import { EFFORT_LABELS, shortModelName } from "@kitab/core/model-names"
 import { store, useStore } from "@/lib/store"
@@ -201,7 +201,12 @@ function DetailsBody({ threadId }: { threadId: Id }) {
             {messages.length} {messages.length === 1 ? "message" : "messages"}
           </Row>
         )}
-        {show.created && startedAt && <Row icon={CalendarClock}>Started {relativeTime(startedAt)}</Row>}
+        {show.created && (startedAt || sourceName(thread.source)) && (
+          <Row icon={CalendarClock}>
+            Started{startedAt ? ` ${relativeTime(startedAt)}` : ""}
+            {sourceName(thread.source) && ` in ${sourceName(thread.source)}`}
+          </Row>
+        )}
         {show.updated && <Row icon={Clock}>Last activity {relativeTime(thread.updatedAt)}</Row>}
         {show.id && (
           <Row icon={Hash} onClick={copyId} trailing={<Copy className="size-4 text-muted-foreground" />}>

@@ -1,7 +1,7 @@
 import { http, platform, toast } from "./platform"
 import { Gateway, RpcError, type GatewayEvent, type ServerRequest } from "./gateway"
 import { GENERAL, type Attachment, type Id, type Message, type PendingQuestion, type Routine, type Run, type Thread, type ToolCall } from "./model"
-import { store, type Backend, type ModelChoice, type SendMode } from "./store"
+import { store, type Backend, type ModelChoice, type SendMode, type ThreadScope } from "./store"
 import { humanSchedule } from "./schedule"
 import { applySpeakers, castOf, forgetSessions, noteSession, prepareTurn, readLibrary, speakerFor, threadCast } from "./personalities"
 import { claimCreatedSkills, noteToolStart } from "./skills"
@@ -189,6 +189,7 @@ const toThread = (p: string, s: any): Thread => ({
   preview: previewText(s.preview),
   model: typeof s.model === "string" && s.model ? s.model : undefined,
   provider: typeof s.billing_provider === "string" && s.billing_provider ? s.billing_provider : undefined,
+  source: typeof s.source === "string" && s.source ? s.source : undefined,
 })
 
 // ---- models ------------------------------------------------------------------------
@@ -262,17 +263,36 @@ async function applyModel(
   return true
 }
 
-/** Hermes stores threads started from Kitaab (Mac or iPhone) as source "desktop". Sessions from
- *  scripts, the CLI or chat platforms aren't threads, so the lists leave them out. */
+/** Hermes stores threads started from Kitaab (Mac or iPhone) as source "desktop". */
 const THREAD_SOURCE = "desktop"
+/** Sessions that are never threads, whichever scope is on: helper agents (shown inside their
+ *  thread), Hermes's kanban workers and test runs. Routine runs ("cron") are handled per list. */
+const NEVER_THREADS = ["subagent", "kanban", "test"]
+const SCOPE_KEY = "kitab.threadScope"
+
+/** The `/api/sessions` source filter for the thread lists. `withRuns`: include routine runs. */
+function sourceQuery(withRuns: boolean): string {
+  if (store.get().threadScope === "kitaab") return `sources=${THREAD_SOURCE}${withRuns ? ",cron" : ""}`
+  return `exclude_sources=${[...NEVER_THREADS, ...(withRuns ? [] : ["cron"])].join(",")}`
+}
+
+/** Hermes drops the subagent exclusion when its `sessions.show_subagents` is on; they still aren't threads. */
+const isThreadRow = (s: any) => !NEVER_THREADS.includes(s.source)
+
+function readThreadScope() {
+  try {
+    const v = platform().storage.get(SCOPE_KEY)
+    if (v === "all" || v === "kitaab") store.set({ threadScope: v })
+  } catch {}
+}
 
 /** Done threads are Hermes's archived sessions. */
 async function loadDone(p: string) {
   const res = await api<{ sessions: any[]; total?: number }>(
-    `/api/sessions?profile=${q(p)}&sources=${THREAD_SOURCE},cron&archived=only&order=recent&limit=100&min_messages=1`,
+    `/api/sessions?profile=${q(p)}&${sourceQuery(true)}&archived=only&order=recent&limit=100&min_messages=1`,
   )
   // Archived routine runs only count if someone turned them into a thread.
-  const rows = res.sessions.filter((s) => (s.source !== "cron" || runOrigin(s.id)) && settling.get(s.id) !== false)
+  const rows = res.sessions.filter((s) => isThreadRow(s) && (s.source !== "cron" || runOrigin(s.id)) && settling.get(s.id) !== false)
   const cronRows = res.sessions.length - rows.length
   store.set({
     done: rows.map((s) => toThread(p, s)),
@@ -282,8 +302,9 @@ async function loadDone(p: string) {
 
 async function loadThreads(p: string) {
   const res = await api<{ sessions: any[] }>(
-    `/api/sessions?profile=${q(p)}&sources=${THREAD_SOURCE}&order=recent&limit=100&min_messages=1`,
+    `/api/sessions?profile=${q(p)}&${sourceQuery(false)}&order=recent&limit=100&min_messages=1`,
   )
+  res.sessions = res.sessions.filter(isThreadRow)
   void migrateLocal(p, res.sessions.map((s) => s.id))
   const fromRuns = runThreads(p).filter((r) => !r.run.done)
   const threads: Thread[] = [
@@ -1207,6 +1228,7 @@ export const backend: Backend = {
   // Single-flight: overlapping calls (StrictMode, menu, reconnect) share one attempt.
   connect() {
     readEnterSends()
+    readThreadScope()
     connecting ??= connectOnce().finally(() => (connecting = null))
     return connecting
   },
@@ -1446,6 +1468,18 @@ export const backend: Backend = {
 
   setEnterSends(mode) {
     writeEnterSends(mode)
+  },
+
+  async setThreadScope(scope: ThreadScope) {
+    if (store.get().threadScope === scope) return
+    store.set({ threadScope: scope })
+    try {
+      platform().storage.set(SCOPE_KEY, scope)
+    } catch {}
+    track("thread_scope_changed", { scope })
+    const p = profile()
+    const shown = new Set([p, ...store.get().threads.map((t) => t.profileId)])
+    await Promise.all([...[...shown].map((id) => loadThreads(id).catch(() => {})), loadDone(p).catch(() => {})])
   },
 
   async answer(threadId, question, value) {

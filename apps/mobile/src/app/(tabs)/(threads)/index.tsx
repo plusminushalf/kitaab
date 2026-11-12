@@ -5,6 +5,7 @@ import { MenuView } from "@expo/ui/community/menu"
 import * as Haptics from "expo-haptics"
 import { backend } from "@kitab/core/backend"
 import { GENERAL, NO_PROJECT, type Thread } from "@kitab/core/model"
+import type { ThreadScope } from "@kitab/core/store"
 import { useStore } from "@/lib/store"
 import { useColors } from "@/lib/theme"
 import { adoptUnknown, setPrefs, sortThreads, toggleCollapsed, usePrefs, type ThreadSort } from "@/lib/prefs"
@@ -33,6 +34,7 @@ export default function Threads() {
   const all = useStore((s) => s.threads)
   const doneCount = useStore((s) => s.doneCount)
   const connected = useStore((s) => s.connection.state === "connected")
+  const threadScope = useStore((s) => s.threadScope)
   const { layout, sort, collapsed } = usePrefs()
   const [query, setQuery] = useState("")
   const [refreshing, setRefreshing] = useState(false)
@@ -101,7 +103,7 @@ export default function Threads() {
           headerLeft: () => <ProfileMenu />,
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
-              <ListMenu sort={sort} connected={connected} />
+              <ListMenu sort={sort} scope={threadScope} connected={connected} />
               <HeaderButton icon="gearshape" label="Settings" onPress={() => router.push("/settings")} />
               <HeaderButton icon="square.and.pencil" label="New thread" onPress={startNewThread} />
             </View>
@@ -141,8 +143,8 @@ export default function Threads() {
   )
 }
 
-/** The list's options: how threads are sorted, and adding a project. */
-function ListMenu({ sort, connected }: { sort: ThreadSort; connected: boolean }) {
+/** The list's options: how threads are sorted, which ones show, and adding a project. */
+function ListMenu({ sort, scope, connected }: { sort: ThreadSort; scope: ThreadScope; connected: boolean }) {
   return (
     <MenuView
       actions={[
@@ -152,18 +154,29 @@ function ListMenu({ sort, connected }: { sort: ThreadSort; connected: boolean })
           displayInline: true,
           subactions: SORTS.map((s) => ({ id: `sort:${s.id}`, title: s.title, state: s.id === sort ? ("on" as const) : ("off" as const) })),
         },
+        {
+          id: "filter",
+          title: "",
+          displayInline: true,
+          // Off: conversations from Telegram, the CLI and the rest show too.
+          subactions: [{ id: "only-kitaab", title: "Only threads started in Kitaab", state: scope === "kitaab" ? ("on" as const) : ("off" as const) }],
+        },
         { id: "new-project", title: "Add project…", image: "folder.badge.plus", attributes: { disabled: !connected } },
       ]}
       onPressAction={({ nativeEvent }) => {
         const id = nativeEvent.event
         if (id === "new-project") return promptNewProject(true)
+        if (id === "only-kitaab") {
+          void Haptics.selectionAsync()
+          return void backend.setThreadScope(scope === "kitaab" ? "all" : "kitaab")
+        }
         if (id.startsWith("sort:")) {
           void Haptics.selectionAsync()
           setPrefs({ sort: id.slice(5) as ThreadSort })
         }
       }}
     >
-      <View style={{ padding: 4 }} accessibilityLabel="Sort and add project">
+      <View style={{ padding: 4 }} accessibilityLabel="Sort, filter and add project">
         <Icon name="line.3.horizontal.decrease" size={20} />
       </View>
     </MenuView>
