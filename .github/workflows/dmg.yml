@@ -10,9 +10,16 @@
 # app's updater refuse anything that doesn't verify, so a tagged release fails
 # without that secret. Installed apps pick up a new tag within about half an hour.
 #
-# Apple signing and notarization are optional. Without the secrets below the app is
-# ad-hoc signed, and people who download it must allow it in
-# System Settings → Privacy & Security the first time they open it.
+# The app is signed with Kitaab's own self-signed certificate (secrets KITAAB_SIGNING_P12,
+# base64 of the .p12, and KITAAB_SIGNING_PASSWORD). It isn't trusted by Apple, but it is
+# the same certificate every release, so macOS sees each update as the same app and an
+# "Always Allow" on the "Kitaab Safe Storage" keychain prompt keeps working. Ad-hoc signing
+# (the fallback without those secrets) changes the app's identity on every build, so the
+# keychain asks again after each update.
+#
+# Apple signing and notarization are optional and win when set. Without them, people who
+# download the DMG in a browser must allow it in System Settings → Privacy & Security the
+# first time they open it.
 #   APPLE_CERTIFICATE_P12       base64 of a "Developer ID Application" .p12
 #   APPLE_CERTIFICATE_PASSWORD  the .p12's password
 #   APPLE_ID                    Apple ID email, for notarization
@@ -58,26 +65,37 @@ jobs:
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KITAAB_SIGNING_P12: ${{ secrets.KITAAB_SIGNING_P12 }}
+          KITAAB_SIGNING_PASSWORD: ${{ secrets.KITAAB_SIGNING_PASSWORD }}
         run: |
-          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
-            echo "No signing certificate; the app will be ad-hoc signed."
+          # Developer ID when there is one, else Kitaab's self-signed certificate.
+          if [ -n "$APPLE_CERTIFICATE_P12" ]; then
+            P12="$APPLE_CERTIFICATE_P12"; P12_PASSWORD="$APPLE_CERTIFICATE_PASSWORD"; NAME="Developer ID Application"
+          elif [ -n "$KITAAB_SIGNING_P12" ]; then
+            P12="$KITAAB_SIGNING_P12"; P12_PASSWORD="$KITAAB_SIGNING_PASSWORD"; NAME="Kitaab Release Signing"
+          else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::warning::No signing certificate; the app will be ad-hoc signed and the keychain will ask again after this update."
+            fi
             exit 0
           fi
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
-          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/cert.p12"
-          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/ { print $2; exit }')"
+          # Not -v: a self-signed certificate is never "valid" (trusted), but codesign signs with it.
+          IDENTITY="$(security find-identity -p codesigning "$KEYCHAIN" | awk -v name="$NAME" 'index($0, name) { print $2; exit }')"
           if [ -z "$IDENTITY" ]; then
-            echo "::error::No Developer ID Application identity in APPLE_CERTIFICATE_P12"
+            echo "::error::No \"$NAME\" signing identity in the certificate secret"
             exit 1
           fi
+          echo "Signing as $NAME ($IDENTITY)"
           echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build the DMG

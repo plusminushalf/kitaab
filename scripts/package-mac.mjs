@@ -1,7 +1,7 @@
 // Builds a standalone Kitaab.app from the electron-vite output: a copy of
 // Electron.app renamed Kitaab, with our icon and the built app in
 // Contents/Resources/app. With --install it also replaces /Applications/Kitaab.app.
-// The app is ad-hoc signed, which is enough to run it on this Mac.
+// Signs with APPLE_SIGNING_IDENTITY when set (CI uses the release certificate), else ad hoc.
 import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from "node:fs"
 import { createRequire } from "node:module"
@@ -54,9 +54,10 @@ writeFileSync(
 )
 
 // Editing the bundle breaks Electron's signature, so sign it again. With
-// APPLE_SIGNING_IDENTITY set (a Developer ID Application identity in the keychain)
-// it is signed for distribution: hardened runtime, secure timestamp, and the
-// entitlements Electron needs. Otherwise it is signed ad hoc, for this Mac only.
+// APPLE_SIGNING_IDENTITY set (Developer ID, or Kitaab's self-signed release certificate;
+// see .github/workflows/dmg.yml) it is signed for distribution: hardened runtime, secure
+// timestamp, and the entitlements Electron needs. Otherwise it is signed ad hoc, for this
+// Mac only, and its identity changes with every build.
 const identity = process.env.APPLE_SIGNING_IDENTITY
 if (identity) {
   execFileSync(
@@ -72,7 +73,7 @@ if (identity) {
 } else {
   execFileSync("codesign", ["--force", "--deep", "--sign", "-", app], { stdio: "ignore" })
 }
-console.log(`[package] ${app}${identity ? " (Developer ID)" : " (ad hoc)"}`)
+console.log(`[package] ${app}${identity ? ` (signed by ${identity})` : " (ad hoc)"}`)
 
 if (process.argv.includes("--install")) {
   const target = `/Applications/${NAME}.app`
