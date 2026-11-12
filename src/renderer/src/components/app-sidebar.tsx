@@ -86,6 +86,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const connection = useStore((s) => s.connection)
   const doneCount = useStore((s) => s.doneCount)
   const threadScope = useStore((s) => s.threadScope)
+  const showRoutineReports = useStore((s) => s.showRoutineReports)
   const [sort, setSortState] = useState<Sort>(readSort)
   const [query, setQuery] = useState("")
 
@@ -173,12 +174,21 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                {/* Off: conversations from Telegram, the CLI and the rest show too. */}
+                <DropdownMenuLabel>Show</DropdownMenuLabel>
+                {/* Conversations started in Telegram, the CLI and the rest, not in Kitaab. */}
                 <DropdownMenuCheckboxItem
-                  checked={threadScope === "kitaab"}
-                  onCheckedChange={(on) => void backend.setThreadScope(on ? "kitaab" : "all")}
+                  checked={threadScope === "all"}
+                  onCheckedChange={(on) => void backend.setThreadScope(on ? "all" : "kitaab")}
                 >
-                  Only threads started in Kitaab
+                  Other apps
+                </DropdownMenuCheckboxItem>
+                {/* Reports routines delivered to Telegram and other chats; they only come from other apps. */}
+                <DropdownMenuCheckboxItem
+                  checked={showRoutineReports && threadScope === "all"}
+                  disabled={threadScope !== "all"}
+                  onCheckedChange={(on) => void backend.setShowRoutineReports(on)}
+                >
+                  Routine reports
                 </DropdownMenuCheckboxItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>

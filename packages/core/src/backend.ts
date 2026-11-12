@@ -181,6 +181,18 @@ const blobToBase64 = (url: string) => platform().base64(url)
 
 // ---- lists ----------------------------------------------------------------------
 
+/** How Hermes opens a routine's report when it copies one into a chat it delivered to (cron/scheduler_delivery.py). */
+const DELIVERY_TAG = /^\s*\[Cron delivery:\s*([^\]\n]*)\]?\s*/
+
+const withoutDeliveryTag = (text: string) => text.replace(DELIVERY_TAG, "")
+
+/** The routine whose delivered report started this session, if one did. */
+function routineOf(s: any): string | undefined {
+  if (s.source === THREAD_SOURCE || typeof s.preview !== "string") return undefined
+  const m = DELIVERY_TAG.exec(s.preview)
+  return m ? m[1].trim() || "Routine" : undefined
+}
+
 /** A session's working folder, when Hermes stored one. */
 const cwdOf = (s: any): string | undefined => (typeof s.cwd === "string" && s.cwd ? s.cwd : undefined)
 
@@ -189,11 +201,12 @@ const toThread = (p: string, s: any): Thread => ({
   profileId: p,
   projectId: projects.projectFor(store.get().projects[p] ?? [], cwdOf(s)),
   cwd: cwdOf(s),
-  title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
+  title: s.title || (s.preview ? withoutDeliveryTag(String(s.preview)).slice(0, 80) || "Untitled" : "Untitled"),
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
   cast: threadCast(s.id),
   status: "idle",
-  preview: previewText(s.preview),
+  preview: previewText(typeof s.preview === "string" ? withoutDeliveryTag(s.preview) : s.preview),
+  routine: routineOf(s),
   model: typeof s.model === "string" && s.model ? s.model : undefined,
   provider: typeof s.billing_provider === "string" && s.billing_provider ? s.billing_provider : undefined,
   source: typeof s.source === "string" && s.source ? s.source : undefined,
@@ -277,6 +290,7 @@ const THREAD_SOURCE = "desktop"
 const NEVER_THREADS = ["subagent", "kanban", "test"]
 const SCOPE_KEY = "kitab.threadScope"
 const TOOL_DETAILS_KEY = "kitab.showToolDetails"
+const ROUTINE_REPORTS_KEY = "kitab.showRoutineReports"
 
 /** The `/api/sessions` source filter for the thread lists. `withRuns`: include routine runs. */
 function sourceQuery(withRuns: boolean): string {
@@ -285,13 +299,30 @@ function sourceQuery(withRuns: boolean): string {
 }
 
 /** Hermes drops the subagent exclusion when its `sessions.show_subagents` is on; they still aren't threads. */
-const isThreadRow = (s: any) => !NEVER_THREADS.includes(s.source)
+const isThreadRow = (s: any) => !NEVER_THREADS.includes(s.source) && (store.get().showRoutineReports || !routineOf(s))
+
+/** One page of the thread list. With routine reports hidden, a page can be mostly reports, so it
+ *  reads on (up to three pages) until there are a page's worth of threads to show. */
+async function listThreadRows(p: string): Promise<any[]> {
+  const out: any[] = []
+  for (let page = 0; page < 3; page++) {
+    const res = await api<{ sessions: any[] }>(
+      `/api/sessions?profile=${q(p)}&${sourceQuery(false)}&order=recent&limit=100&offset=${page * 100}&min_messages=1`,
+    )
+    out.push(...res.sessions.filter(isThreadRow))
+    if (res.sessions.length < 100 || out.length >= 100 || store.get().showRoutineReports) break
+  }
+  return out
+}
 
 function readThreadScope() {
   try {
     const v = platform().storage.get(SCOPE_KEY)
     if (v === "all" || v === "kitaab") store.set({ threadScope: v })
-    store.set({ showToolDetails: platform().storage.get(TOOL_DETAILS_KEY) === "1" })
+    store.set({
+      showToolDetails: platform().storage.get(TOOL_DETAILS_KEY) === "1",
+      showRoutineReports: platform().storage.get(ROUTINE_REPORTS_KEY) === "1",
+    })
   } catch {}
 }
 
@@ -309,11 +340,15 @@ async function loadDone(p: string) {
   })
 }
 
+/** Every thread list showing, again: after changing which threads they show. */
+async function reloadLists() {
+  const p = profile()
+  const shown = new Set([p, ...store.get().threads.map((t) => t.profileId)])
+  await Promise.all([...[...shown].map((id) => loadThreads(id).catch(() => {})), loadDone(p).catch(() => {})])
+}
+
 async function loadThreads(p: string) {
-  const res = await api<{ sessions: any[] }>(
-    `/api/sessions?profile=${q(p)}&${sourceQuery(false)}&order=recent&limit=100&min_messages=1`,
-  )
-  res.sessions = res.sessions.filter(isThreadRow)
+  const res = { sessions: await listThreadRows(p) }
   void migrateLocal(p, res.sessions.map((s) => s.id))
   const fromRuns = runThreads(p).filter((r) => !r.run.done)
   const threads: Thread[] = [
@@ -1498,9 +1533,17 @@ export const backend: Backend = {
       platform().storage.set(SCOPE_KEY, scope)
     } catch {}
     track("thread_scope_changed", { scope })
-    const p = profile()
-    const shown = new Set([p, ...store.get().threads.map((t) => t.profileId)])
-    await Promise.all([...[...shown].map((id) => loadThreads(id).catch(() => {})), loadDone(p).catch(() => {})])
+    await reloadLists()
+  },
+
+  async setShowRoutineReports(on) {
+    if (store.get().showRoutineReports === on) return
+    store.set({ showRoutineReports: on })
+    try {
+      platform().storage.set(ROUTINE_REPORTS_KEY, on ? "1" : null)
+    } catch {}
+    track("routine_reports_toggled", { on })
+    await reloadLists()
   },
 
   async answer(threadId, question, value) {

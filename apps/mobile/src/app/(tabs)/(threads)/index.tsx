@@ -35,6 +35,7 @@ export default function Threads() {
   const doneCount = useStore((s) => s.doneCount)
   const connected = useStore((s) => s.connection.state === "connected")
   const threadScope = useStore((s) => s.threadScope)
+  const showRoutineReports = useStore((s) => s.showRoutineReports)
   const { layout, sort, collapsed } = usePrefs()
   const [query, setQuery] = useState("")
   const [refreshing, setRefreshing] = useState(false)
@@ -103,7 +104,7 @@ export default function Threads() {
           headerLeft: () => <ProfileMenu />,
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 18, alignItems: "center" }}>
-              <ListMenu sort={sort} scope={threadScope} connected={connected} />
+              <ListMenu sort={sort} scope={threadScope} reports={showRoutineReports} connected={connected} />
               <HeaderButton icon="gearshape" label="Settings" onPress={() => router.push("/settings")} />
               <HeaderButton icon="square.and.pencil" label="New thread" onPress={startNewThread} />
             </View>
@@ -144,7 +145,8 @@ export default function Threads() {
 }
 
 /** The list's options: how threads are sorted, which ones show, and adding a project. */
-function ListMenu({ sort, scope, connected }: { sort: ThreadSort; scope: ThreadScope; connected: boolean }) {
+function ListMenu({ sort, scope, reports, connected }: { sort: ThreadSort; scope: ThreadScope; reports: boolean; connected: boolean }) {
+  const on = (b: boolean) => (b ? ("on" as const) : ("off" as const))
   return (
     <MenuView
       actions={[
@@ -155,20 +157,28 @@ function ListMenu({ sort, scope, connected }: { sort: ThreadSort; scope: ThreadS
           subactions: SORTS.map((s) => ({ id: `sort:${s.id}`, title: s.title, state: s.id === sort ? ("on" as const) : ("off" as const) })),
         },
         {
-          id: "filter",
-          title: "",
+          id: "show",
+          title: "Show",
           displayInline: true,
-          // Off: conversations from Telegram, the CLI and the rest show too.
-          subactions: [{ id: "only-kitaab", title: "Only threads started in Kitaab", state: scope === "kitaab" ? ("on" as const) : ("off" as const) }],
+          subactions: [
+            // Conversations started in Telegram, the CLI and the rest, not in Kitaab.
+            { id: "other-apps", title: "Other apps", state: on(scope === "all") },
+            // Reports routines delivered to Telegram and other chats; they only come from other apps.
+            { id: "routine-reports", title: "Routine reports", state: on(reports && scope === "all"), attributes: { disabled: scope !== "all" } },
+          ],
         },
         { id: "new-project", title: "Add project…", image: "folder.badge.plus", attributes: { disabled: !connected } },
       ]}
       onPressAction={({ nativeEvent }) => {
         const id = nativeEvent.event
         if (id === "new-project") return promptNewProject(true)
-        if (id === "only-kitaab") {
+        if (id === "other-apps") {
           void Haptics.selectionAsync()
-          return void backend.setThreadScope(scope === "kitaab" ? "all" : "kitaab")
+          return void backend.setThreadScope(scope === "all" ? "kitaab" : "all")
+        }
+        if (id === "routine-reports") {
+          void Haptics.selectionAsync()
+          return void backend.setShowRoutineReports(!reports)
         }
         if (id.startsWith("sort:")) {
           void Haptics.selectionAsync()

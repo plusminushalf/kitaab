@@ -89,6 +89,8 @@ export type Thread = {
   provider?: string
   /** Where it was started, as Hermes records it: "desktop" for Kitaab, else "telegram", "cli", …. */
   source?: string
+  /** Set when it began as a routine's report Hermes copied into a chat it delivered to: the routine's name. */
+  routine?: string
 }
 
 export type Attachment = {

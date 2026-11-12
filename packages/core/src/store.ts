@@ -91,6 +91,8 @@ export type State = {
   enterSends: SendMode
   /** Which threads the lists show. This device only. */
   threadScope: ThreadScope
+  /** Whether the lists show routine reports delivered to Telegram and other chats. This device only. */
+  showRoutineReports: boolean
   /** Whether the work log lists every tool call's parameters. This device only. */
   showToolDetails: boolean
 }
@@ -143,6 +145,8 @@ export interface Backend {
   setEnterSends(mode: SendMode): void
   /** Shows every thread in the profile (Telegram, the CLI, …) or only Kitaab's, saved on this device. */
   setThreadScope(scope: ThreadScope): Promise<void>
+  /** Shows or hides routine reports delivered to Telegram and other chats, saved on this device. */
+  setShowRoutineReports(on: boolean): Promise<void>
   /** Shows every tool call's parameters in the work log (what skill, the exact command), saved on this device. */
   setShowToolDetails(on: boolean): void
   answer(threadId: Id, question: PendingQuestion, value: string): Promise<void>
@@ -191,6 +195,7 @@ const initial: State = {
   queued: {},
   enterSends: "queue",
   threadScope: "all",
+  showRoutineReports: false,
   showToolDetails: false,
 }
 
