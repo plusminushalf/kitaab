@@ -13,6 +13,7 @@ import { store } from "@/lib/store"
 import { serverSettings } from "@/lib/settings"
 import { useColors } from "@/lib/theme"
 import { Toasts } from "@/components/toasts"
+import { ImageViewer } from "@/components/image-viewer"
 
 startAnalytics()
 
@@ -70,6 +71,7 @@ export default function Root() {
             <Stack.Screen name="settings" options={{ presentation: "modal", headerStyle: { backgroundColor: c.surfaceRaised }, contentStyle: { backgroundColor: c.surfaceRaised }, title: "Settings" }} />
           </Stack>
           <Toasts />
+          <ImageViewer />
         </ThemeProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>

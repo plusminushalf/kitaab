@@ -4,6 +4,7 @@ import { EnrichedMarkdownText } from "react-native-enriched-markdown"
 import { mono, useColors } from "@/lib/theme"
 import { isKitabLink } from "@kitab/core/links"
 import { openKitabLink } from "@/lib/links"
+import { openImage } from "@/lib/image-viewer"
 import { withServerImages } from "@kitab/core/server-files"
 
 const DELIMITER_ROW = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
@@ -48,6 +49,7 @@ export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
       flavor="github"
       markdown={markdown}
       onLinkPress={({ url }) => void (isKitabLink(url) ? openKitabLink(url) : Linking.openURL(url))}
+      onImagePress={({ url, altText }) => openImage({ uri: url, alt: altText || undefined })}
       enableTaskListItemToggle={false}
       markdownStyle={{
         paragraph: { fontSize: size, lineHeight: size * 1.45, color: c.text, marginBottom: 10 },

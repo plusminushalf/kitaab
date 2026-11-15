@@ -7,6 +7,7 @@ import type { Message, Part, ToolCall } from "@kitab/core/model"
 import { splitTurn, toolParams } from "@kitab/core/turn"
 import { splitImageTags } from "@kitab/core/user-text"
 import { useStore } from "@/lib/store"
+import { openImage } from "@/lib/image-viewer"
 import { mono, useColors } from "@/lib/theme"
 import { Markdown } from "./markdown"
 import { Avatar, Icon } from "./ui"
@@ -195,7 +196,9 @@ export const MessageRow = memo(function MessageRow({ message: m }: { message: Me
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "flex-end", marginBottom: 6, maxWidth: "85%" }}>
             {m.attachments.map((a, i) =>
               a.kind === "image" && a.url ? (
-                <Image key={i} source={{ uri: a.url }} style={{ width: 120, height: 120, borderRadius: 12, backgroundColor: c.secondary }} contentFit="cover" />
+                <Pressable key={i} onPress={() => openImage({ uri: a.url! })} accessibilityRole="imagebutton" accessibilityLabel={`View ${a.name || "image"}`}>
+                  <Image source={{ uri: a.url }} style={{ width: 120, height: 120, borderRadius: 12, backgroundColor: c.secondary }} contentFit="cover" />
+                </Pressable>
               ) : (
                 <View key={i} style={{ flexDirection: "row", gap: 6, alignItems: "center", backgroundColor: c.secondary, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
                   <Icon name="doc" size={13} color={c.textMuted} />

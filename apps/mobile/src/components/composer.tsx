@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics"
 import type { Attachment, Id, Personality } from "@kitab/core/model"
 import { shortModelName } from "@kitab/core/model-names"
 import { useColors } from "@/lib/theme"
+import { openImage } from "@/lib/image-viewer"
 import { Icon } from "./ui"
 import { ModelMenu, useModelChoice } from "./model-menu"
 
@@ -96,7 +97,9 @@ export function Composer({
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 10, paddingTop: 6 }}>
             {attachments.map((a, i) => (
               <View key={i}>
-                <Image source={{ uri: a.url }} style={{ width: 56, height: 56, borderRadius: 10 }} />
+                <Pressable onPress={() => openImage({ uri: a.url! })} accessibilityLabel="View image">
+                  <Image source={{ uri: a.url }} style={{ width: 56, height: 56, borderRadius: 10 }} />
+                </Pressable>
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAttachments((list) => list.filter((_, j) => j !== i))}
