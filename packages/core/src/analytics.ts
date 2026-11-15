@@ -8,9 +8,13 @@
 
 import { platform } from "./platform"
 
-/** Kitaab's PostHog project (EU), sent through PostHog's managed reverse proxy on our own domain. The key is public. */
+/**
+ * PostHog (EU): the same project as Pitwall (its `bun run deploy`), told apart by the `app`
+ * property on every event (kitaab-mac, kitaab-iphone, kitaab-site). Sent through PostHog's
+ * managed reverse proxy on our own domain. The key is public.
+ */
 export const POSTHOG = {
-  key: "",
+  key: "phc_qosvcXSBRKprBFgedSNp2Lx9PUegnZsqspyWoTDCPdm2",
   host: "https://a.pitwall.plusminushalf.com",
   ui: "https://eu.posthog.com",
 }

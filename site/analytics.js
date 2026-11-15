@@ -4,9 +4,10 @@
 // The key is public, every event sends it. Nothing is sent from localhost or a file on disk.
 // PostHog keeps a random visitor ID in localStorage, no cookie.
 //
-// Kitaab's project key, the same one as POSTHOG.key in packages/core/src/analytics.ts.
+// Pitwall's PostHog project, the same key as POSTHOG.key in packages/core/src/analytics.ts; every
+// event says app: "kitaab-site".
 ;(function () {
-  var KEY = ""
+  var KEY = "phc_qosvcXSBRKprBFgedSNp2Lx9PUegnZsqspyWoTDCPdm2"
   var HOST = "https://a.pitwall.plusminushalf.com"
   var LOCAL = /^(localhost|127(\.\d+){3}|\[::1\])$|\.localhost$/
   if (!KEY || location.protocol === "file:" || LOCAL.test(location.hostname)) return

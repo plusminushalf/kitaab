@@ -113,7 +113,7 @@ The installed Mac app and Release builds of the iPhone app send [PostHog](https:
 
 The website sends PostHog its page views, clicks and errors, with a random visitor ID in local storage and no cookies.
 
-The events are named in `packages/core/src/backend.ts` (`track(…)`), and the project key and host are in `packages/core/src/analytics.ts` and `site/analytics.js`.
+Events go to the same PostHog project as Pitwall, each tagged with `app` (`kitaab-mac`, `kitaab-iphone` or `kitaab-site`). They're named in `packages/core/src/backend.ts` (`track(…)`), and the project key and host are in `packages/core/src/analytics.ts` and `site/analytics.js`.
 
 ## Development
 
