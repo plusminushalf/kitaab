@@ -75,6 +75,8 @@ export type Thread = {
   cwd?: string
   title: string
   updatedAt: number
+  /** When you last wrote in it (ms), when known. The thread list is ordered by it (last-sent.ts). */
+  lastSentAt?: number
   /** Personality ids; the first one is the host. */
   cast: Id[]
   /** Set when the thread grew out of a routine run. */

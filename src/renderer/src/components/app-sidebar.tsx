@@ -44,6 +44,7 @@ import { modelName, shortModelName } from "@kitab/core/model-names"
 import { providerIcon, providerTint } from "@/components/model-picker"
 import { Spinner } from "@/components/ui/spinner"
 import { shownStatus } from "@kitab/core/subagents"
+import { sentAt } from "@kitab/core/last-sent"
 import { GENERAL, NO_PROJECT, type Id, type Project, type Thread } from "@kitab/core/model"
 import { confirmRemoveProject, openNewProject, openRenameProject, startNewThread, useProfileProjects } from "@/components/project-menu"
 
@@ -68,8 +69,8 @@ function arrange(list: Thread[], query: string, sort: Sort): Thread[] {
     sort === "title"
       ? a.title.localeCompare(b.title)
       : sort === "status"
-        ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.updatedAt - a.updatedAt
-        : b.updatedAt - a.updatedAt,
+        ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || sentAt(b) - sentAt(a)
+        : sentAt(b) - sentAt(a),
   )
 }
 
@@ -164,7 +165,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Sort threads by</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={sort} onValueChange={(v) => setSort(v as Sort)}>
-                  <DropdownMenuRadioItem value="activity">Last activity</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="activity">Your last message</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="status">Status</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="title">Title</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import type { Id, Thread } from "@kitab/core/model"
+import { sentAt } from "@kitab/core/last-sent"
 import { kv } from "./kv"
 
 // This iPhone's own list preferences (not synced): how the threads list is laid out and
@@ -51,8 +52,8 @@ export function sortThreads(list: Thread[], sort: ThreadSort): Thread[] {
     sort === "title"
       ? a.title.localeCompare(b.title)
       : sort === "status"
-        ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.updatedAt - a.updatedAt
-        : b.updatedAt - a.updatedAt,
+        ? STATUS_RANK[a.status] - STATUS_RANK[b.status] || sentAt(b) - sentAt(a)
+        : sentAt(b) - sentAt(a),
   )
 }
 

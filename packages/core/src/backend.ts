@@ -18,6 +18,7 @@ import { addReasoning, addText, addTool, breakText, partsOf, toolArgs, toolSumma
 import { enqueue, isPaused, putBack, readEnterSends, setPaused, take, writeEnterSends } from "./queue"
 import { readCachedTranscript, writeCachedTranscript } from "./transcript-cache"
 import { track } from "./analytics"
+import { lastSentAt, noteSent, readLastSent } from "./last-sent"
 
 // Hermes adapter. Translates Hermes into the app's vocabulary:
 //   profile            → Profile
@@ -197,6 +198,7 @@ const toThread = (p: string, s: any): Thread => ({
   cwd: cwdOf(s),
   title: s.title || (s.preview ? String(s.preview).slice(0, 80) : "Untitled"),
   updatedAt: (s.last_active ?? s.started_at ?? 0) * 1000,
+  lastSentAt: lastSentAt(s.id),
   cast: threadCast(s.id),
   status: "idle",
   preview: previewText(s.preview),
@@ -391,6 +393,10 @@ async function loadThreads(p: string) {
       }),
     ],
   }))
+  // The list is ordered by when you last wrote; threads that moved get it read again.
+  void readLastSent(p, fresh.filter((t) => !t.fromRun)).then((got) => {
+    if (got.size) store.set((s) => ({ threads: s.threads.map((t) => (got.has(t.id) ? { ...t, lastSentAt: got.get(t.id) } : t)) }))
+  })
 }
 
 async function loadRoutines() {
@@ -1225,7 +1231,7 @@ function begin(threadId: Id, text: string, attachments: Attachment[], how: SendM
     messages: [...d.messages, { id: messageId, role: "user", text, attachments, createdAt: Date.now(), delivery: "sending" }],
   }))
   // Interrupting: the running reply stays "working" until it has stopped (deliver waits for that).
-  patchThread(threadId, interrupt ? { updatedAt: Date.now() } : { status: "working", updatedAt: Date.now() })
+  patchThread(threadId, interrupt ? { updatedAt: Date.now(), lastSentAt: Date.now() } : { status: "working", updatedAt: Date.now(), lastSentAt: Date.now() })
   return { threadId, messageId, text, attachments, interrupt }
 }
 
@@ -1246,7 +1252,7 @@ async function deliver(o: Outgoing): Promise<Id> {
   }
   // Sending again picks the queue back up after a Stop.
   setPaused(id, false)
-  patchThread(id, { status: "working", updatedAt: Date.now() })
+  patchThread(id, { status: "working", updatedAt: Date.now(), lastSentAt: noteSent(id) })
   // Who answers: the @mentioned personality, else the thread's host.
   const cast = await prepareTurn(id, runtimeId, profileOfThread(id), o.text)
   patchThread(id, { cast })
@@ -1429,7 +1435,7 @@ export const backend: Backend = {
     if (!m) return
     const interrupt = replying(threadId)
     setDelivery(threadId, messageId, "sending")
-    if (!interrupt) patchThread(threadId, { status: "working", updatedAt: Date.now() })
+    if (!interrupt) patchThread(threadId, { status: "working", updatedAt: Date.now(), lastSentAt: Date.now() })
     const o: Outgoing = { threadId, messageId, text: m.text, attachments: m.attachments ?? [], interrupt }
     // The notice about it failing is old news now.
     toast.dismiss(unsentToastId(messageId))

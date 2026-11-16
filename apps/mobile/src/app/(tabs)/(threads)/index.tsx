@@ -15,7 +15,7 @@ import { ThreadCard, ThreadRow, type RowAction } from "@/components/thread-row"
 import { Empty, HeaderButton, Icon } from "@/components/ui"
 
 const SORTS: { id: ThreadSort; title: string }[] = [
-  { id: "activity", title: "Last activity" },
+  { id: "activity", title: "Your last message" },
   { id: "status", title: "Status" },
   { id: "title", title: "Title" },
 ]
